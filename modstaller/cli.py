@@ -323,7 +323,8 @@ async def _jit(args) -> int:
 
     async with ServiceProvider(args.udid) as sp:
         result = await enable_jit(sp, bundle_id,
-                                 on_step=lambda m: print(f"  {m}", flush=True))
+                                 on_step=lambda m: print(f"  {m}", flush=True),
+                                 verbose=args.debug)
 
     print()
     print(result.summary)

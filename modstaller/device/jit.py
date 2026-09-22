@@ -109,13 +109,19 @@ async def _prepare_region(gdb: GdbClient, address: int, size: int) -> int:
 class Jit26Session:
     """Fuehrt das Gespraech mit der App, bis sie sich abmeldet."""
 
-    def __init__(self, gdb: GdbClient, result: JitResult, on_step) -> None:
+    def __init__(self, gdb: GdbClient, result: JitResult, on_step,
+                 verbose: bool = False) -> None:
         self._gdb = gdb
         self._result = result
         self._say = on_step
+        self._verbose = verbose
         self._detached = False
         #: Manche Apps lassen den Debugger nach der ersten Anfrage gehen.
         self._detach_after_first = False
+
+    def _trace(self, message: str) -> None:
+        if self._verbose:
+            self._say(f"    {message}")
 
     async def run(self) -> None:
         handled = 0
@@ -142,6 +148,11 @@ class Jit26Session:
 
         instruction = int.from_bytes(await self._gdb.read_memory(pc, 4),
                                      "little")
+        self._trace(
+            f"Halt bei pc=0x{pc:x} instr=0x{instruction:08x} "
+            f"x0=0x{stop.register(REG_X0) or 0:x} "
+            f"x1=0x{stop.register(REG_X1) or 0:x} "
+            f"x16=0x{stop.register(REG_X16) or 0:x}")
         if not _is_brk(instruction):
             # Ein gewoehnliches Signal - unveraendert durchreichen, sonst
             # verschluckt der Debugger einen Absturz der App.
@@ -150,6 +161,7 @@ class Jit26Session:
             return
 
         immediate = _brk_immediate(instruction)
+        self._trace(f"Haltepunkt 0x{immediate:x}")
         # Ueber den Haltepunkt hinwegsetzen, sonst haelt die App dort erneut.
         await self._gdb.set_register(REG_PC, pc + 4, thread)
 
@@ -217,12 +229,14 @@ class Jit26Session:
         if not size:
             return
         address = await self._gdb.allocate(size, "rx")
+        self._trace(f"0x{size:x} Byte angefordert -> 0x{address:x}")
         pages = await _prepare_region(self._gdb, address, size)
         self._result.prepared_regions += 1
         self._result.prepared_bytes += size
         self._say(f"Bereich {self._result.prepared_regions}: "
                   f"{size // 1024} KB in {pages} Seiten freigegeben")
         await self._gdb.set_register(REG_X0, address, thread)
+        self._trace(f"x0 := 0x{address:x} zurueckgemeldet")
 
         if self._detach_after_first:
             self._say("Die App laesst den Debugger gehen - JIT steht.")
@@ -238,6 +252,7 @@ class Jit26Session:
         nachruestet, sind hier fest eingebaut. Deshalb genuegt es, die
         Anfrage anzunehmen und weiterzumachen.
         """
+        self._trace("Die App bietet eine Debugger-Erweiterung an")
         address = stop.register(REG_X0) or 0
         size = min(stop.register(REG_X1) or 0, _CHUNK)
         if address and size:
@@ -266,7 +281,8 @@ class Jit26Session:
 
 
 async def enable_jit(sp, bundle_id: str, *,
-                     on_step=lambda msg: None) -> JitResult:
+                     on_step=lambda msg: None,
+                     verbose: bool = False) -> JitResult:
     """Startet die App und begleitet sie, bis JIT steht."""
     from pymobiledevice3.exceptions import (
         AlreadyMountedError, DeveloperDiskImageNotFoundError,
@@ -325,7 +341,7 @@ async def enable_jit(sp, bundle_id: str, *,
 
         on_step("Warte auf Anfragen der App … (jetzt im Programm die "
                 "Instanz starten)")
-        await Jit26Session(gdb, result, on_step).run()
+        await Jit26Session(gdb, result, on_step, verbose=verbose).run()
     finally:
         try:
             if not result.detached_cleanly:
