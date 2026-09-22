@@ -307,6 +307,29 @@ async def _refresh(args) -> int:
     return 0
 
 
+async def _jit(args) -> int:
+    from .device.connection import ServiceProvider
+    from .device.jit import enable_jit
+    from .state import store
+
+    bundle_id = args.bundle_id
+    if bundle_id is None:
+        apps = store.all_installs()
+        if len(apps) != 1:
+            print("Bitte die Bundle-ID angeben (modstaller list zeigt sie).",
+                  file=sys.stderr)
+            return 2
+        bundle_id = apps[0].bundle_id
+
+    async with ServiceProvider(args.udid) as sp:
+        result = await enable_jit(sp, bundle_id,
+                                 on_step=lambda m: print(f"  {m}", flush=True))
+    print(f"\nJIT ist fuer {result.bundle_id} aktiv (Prozess {result.pid}).")
+    print("Die Freischaltung gilt nur fuer diesen Start - nach dem Beenden "
+          "der App\nmuss sie erneut erfolgen.")
+    return 0
+
+
 async def _uninstall(args) -> int:
     from .device.connection import ServiceProvider
     from .device.install import uninstall_app
@@ -389,6 +412,12 @@ def build_parser() -> argparse.ArgumentParser:
     ref.add_argument("--threshold", type=float,
                      help="Tage vor Ablauf, ab denen erneuert wird")
     ref.set_defaults(afunc=_refresh)
+
+    jit = sub.add_parser("jit", help="JIT fuer eine App freischalten "
+                                     "(noetig fuer Java- und Emulator-Apps)")
+    jit.add_argument("bundle_id", nargs="?",
+                     help="Bundle-ID (Default: die einzige installierte)")
+    jit.set_defaults(afunc=_jit)
 
     uni = sub.add_parser("uninstall", help="App vom iPhone entfernen")
     uni.add_argument("bundle_id", help="Bundle-ID der App")

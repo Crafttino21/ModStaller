@@ -53,7 +53,23 @@ modstaller list                   # was laeuft, und wie lange noch
 modstaller refresh                # vor dem 7-Tage-Ablauf erneuern
 modstaller uninstall <bundle-id>  # App entfernen, macht einen Platz frei
 modstaller certs                  # Zertifikate anzeigen/widerrufen
+modstaller jit <bundle-id>        # JIT freischalten (Java-/Emulator-Apps)
 ```
+
+## JIT
+
+Java- und Emulator-Apps erzeugen Maschinencode zur Laufzeit. iOS verbietet
+das - solche Apps bleiben beim Start haengen ("Warte auf JIT").
+
+Die Ausnahme: haengt ein Debugger am Prozess, setzt der Kernel `CS_DEBUGGED`,
+und dann darf er kompilieren. Das ueberlebt das Loesen des Debuggers.
+`modstaller jit` startet die App deshalb angehalten, haengt ueber den
+RSD-Tunnel einen Debugger an und loest ihn sofort wieder.
+
+Zwei Einschraenkungen: die App braucht `get-task-allow` (development-signierte
+haben es, App-Store-Apps nie), und die Freischaltung gilt nur fuer *diesen*
+Start - nach dem Beenden der App erneut ausfuehren. Auf iOS 26 und 27 hat
+Apple das zusaetzlich eingeschraenkt; es gelingt nicht mehr fuer jede App.
 
 Bei einem Gratis-Account werden App-Extensions per Default entfernt: jede
 kostet eine App-ID aus einem Kontingent von zehn pro Woche, und die App

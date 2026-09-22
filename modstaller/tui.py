@@ -277,12 +277,16 @@ async def action_manage(st: Status) -> None:
 
 async def _app_menu(app) -> None:
     what = await select(f"{app.name} · {app.expiry_text}", [
+        Choice("Starten und JIT freischalten (fuer Java- und Emulator-Apps)",
+               value="jit"),
         Choice("Jetzt erneuern (neu signieren und installieren)",
                value="refresh"),
         Choice("Vom iPhone entfernen", value="uninstall"),
         Choice("Zurueck", value=None),
     ])
-    if what == "refresh":
+    if what == "jit":
+        await _enable_jit(app)
+    elif what == "refresh":
         await _refresh(app.bundle_id)
     elif what == "uninstall":
         if not await confirm(f"{app.name} wirklich vom iPhone entfernen?"):
@@ -298,6 +302,25 @@ async def _app_menu(app) -> None:
         except ModStallerError as exc:
             fail(exc)
         await pause()
+
+
+async def _enable_jit(app) -> None:
+    from .device.connection import ServiceProvider
+    from .device.jit import enable_jit
+
+    console.print()
+    try:
+        async with ServiceProvider() as sp:
+            await enable_jit(sp, app.bundle_id,
+                             on_step=lambda m: console.print(
+                                 Text(f"  {m}", style=DIM)))
+        done(f"JIT laeuft fuer {app.name}")
+        console.print(Text(
+            "Gilt nur fuer diesen Start - nach dem Beenden der App erneut "
+            "freischalten.", style=DIM))
+    except ModStallerError as exc:
+        fail(exc)
+    await pause()
 
 
 async def _refresh(bundle_id: str | None) -> None:
