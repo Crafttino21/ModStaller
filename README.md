@@ -107,8 +107,13 @@ Keine davon ist ein Fehler von ModStaller; sie kommen von Apple:
   `modstaller refresh` sie neu signiert.
 * **Hoechstens 3 sideloadete Apps gleichzeitig** pro Geraet. Die vierte lehnt
   das iPhone ab; `modstaller uninstall <bundle-id>` macht Platz.
-* **10 App-IDs pro Woche.** Jede App-Extension braucht eine eigene, deshalb
-  entfernt ModStaller Extensions bei kostenlosen Accounts per Default.
+* **10 App-IDs pro Woche.** Gezaehlt werden *neu angelegte*, nicht die
+  vorhandenen - eine zu loeschen gibt also kein Kontingent zurueck. Ist das
+  Fenster voll, weicht ModStaller auf eine vorhandene, ungenutzte App-ID aus;
+  die App laeuft dann unter deren Bundle-ID. App-IDs installierter Apps und
+  ihrer Extensions bleiben dabei unangetastet. Jede Extension braucht eine
+  eigene App-ID, deshalb werden sie bei kostenlosen Accounts per Default
+  entfernt.
 * **Nur ein Development-Zertifikat.** Zwei Sideload-Werkzeuge parallel
   verdraengen sich zwangslaeufig gegenseitig, weil der private Schluessel
   jeweils beim anfordernden Werkzeug liegt.

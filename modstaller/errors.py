@@ -86,9 +86,11 @@ BENIGN_CODES = frozenset({DEVICE_ALREADY_REGISTERED, CERTIFICATE_NOT_FOUND})
 #: Klartext-Hinweise, die dem Nutzer sagen, was er *tun* kann.
 REMEDIES: dict[int, str] = {
     APP_ID_QUOTA_EXCEEDED: (
-        "Das Wochenkontingent von 10 App-IDs ist aufgebraucht. ModStaller kann "
-        "eine alte, ungenutzte App-ID recyceln (--recycle-app-ids) oder du "
-        "wartest, bis das rollierende 7-Tage-Fenster wieder aufgeht."
+        "Apple laesst pro Woche zehn *neu angelegte* App-IDs zu. Vorhandene zu "
+        "loeschen hilft nicht - das Fenster zaehlt die Anlage, nicht den "
+        "Bestand. ModStaller weicht deshalb auf eine vorhandene, ungenutzte "
+        "App-ID aus; gibt es keine, hilft nur warten, bis das rollierende "
+        "Sieben-Tage-Fenster wieder aufgeht."
     ),
     APP_ID_UNAVAILABLE: (
         "Dieser Bundle-Identifier ist bereits von einem anderen Apple-Account "

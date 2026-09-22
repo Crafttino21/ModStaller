@@ -99,9 +99,27 @@ async def install(
                  f"(spart {len(info.extensions)} App-ID(s) vom Wochenkontingent)")
 
         # 7. App-ID und Profil.
-        new_id = derive_bundle_id(info.bundle_id, team.team_id)
-        _say(f"\nApp-ID {new_id} …")
-        app_id = ensure_app_id(api, team, new_id, info.name, recycle=True)
+        #
+        # Die installierten Apps schuetzen ihre App-IDs vor dem Recycling -
+        # sonst verliert irgendwann eine fremde App die Moeglichkeit, erneuert
+        # zu werden, weil ModStaller ihre App-ID freigegeben hat.
+        protected: set[str] = set()
+        try:
+            from .device.install import list_apps
+            protected = set(await list_apps(sp))
+        except Exception:
+            pass
+
+        wanted = derive_bundle_id(info.bundle_id, team.team_id)
+        _say(f"\nApp-ID {wanted} …")
+        app_id = ensure_app_id(api, team, wanted, info.name,
+                               reuse_when_exhausted=True, protected=protected)
+        new_id = app_id.identifier
+        if new_id != wanted:
+            _say(f"  Wochenkontingent ausgeschoepft - ModStaller benutzt die "
+                 f"freie App-ID\n  {new_id} weiter. Die App laeuft darunter "
+                 f"voellig normal; nur\n  die interne Kennung passt nicht zum "
+                 f"Namen.")
         profile_path = fetch_profile(api, team, app_id)
         prof = profile_info(profile_path)
         caps = caps.reconcile(prof)

@@ -245,34 +245,53 @@ def _machine_id() -> str:
 
 
 def ensure_app_id(api: DeveloperServices, team: Team, identifier: str,
-                  name: str, *, recycle: bool = False) -> AppID:
-    """Legt die App-ID an oder findet die vorhandene."""
-    for existing in api.list_app_ids(team.team_id):
-        if existing.identifier == identifier:
-            return existing
+                  name: str, *, reuse_when_exhausted: bool = False,
+                  protected: set[str] | None = None) -> AppID:
+    """Besorgt die App-ID. Die Rueckgabe kann einen anderen Identifier tragen.
+
+    Apple zaehlt **neu angelegte** App-IDs in einem rollierenden
+    Sieben-Tage-Fenster, nicht die vorhandenen. Eine zu loeschen gibt also
+    kein Kontingent zurueck - es waere reiner Schaden, weil damit eine fremde
+    App die Moeglichkeit verliert, erneuert zu werden.
+
+    Ist das Fenster ausgeschoepft, weichen wir deshalb auf eine vorhandene,
+    ungenutzte App-ID aus. Die App laeuft dann unter deren Bundle-ID; fuer
+    iOS ist das eine eigenstaendige App, und der Name auf dem Homescreen
+    bleibt davon unberuehrt.
+    """
+    existing = api.list_app_ids(team.team_id)
+    for candidate in existing:
+        if candidate.identifier == identifier:
+            return candidate
 
     try:
         return api.add_app_id(team.team_id, identifier, name)
     except AppleAPIError as exc:
         if exc.code == APP_ID_UNAVAILABLE:
-            # Identifier gehoert jemand anderem - Suffix variieren.
-            alt = f"{identifier}.ms"
-            return api.add_app_id(team.team_id, alt, name)
-        if exc.code == APP_ID_QUOTA_EXCEEDED and recycle:
-            freed = _recycle_app_id(api, team)
-            if freed:
-                return api.add_app_id(team.team_id, identifier, name)
+            # Identifier gehoert einem anderen Account - Suffix variieren.
+            return api.add_app_id(team.team_id, f"{identifier}.ms", name)
+        if exc.code == APP_ID_QUOTA_EXCEEDED and reuse_when_exhausted:
+            spare = spare_app_id(existing, protected or set())
+            if spare is not None:
+                return spare
         raise
 
 
-def _recycle_app_id(api: DeveloperServices, team: Team) -> bool:
-    """Gibt eine von ModStaller angelegte App-ID frei, um Platz zu schaffen."""
-    ours = [a for a in api.list_app_ids(team.team_id)
-            if a.identifier.lower().endswith(team.team_id.lower())]
-    if not ours:
-        return False
-    api.delete_app_id(team.team_id, ours[0].app_id_id)
-    return True
+def spare_app_id(existing: list[AppID], protected: set[str]) -> AppID | None:
+    """Eine vorhandene App-ID, die zu keiner installierten App gehoert.
+
+    ``protected`` sind die Bundle-IDs auf dem Geraet. Geschuetzt ist auch,
+    was darunter liegt: die App-ID einer Extension traegt die der App als
+    Praefix, und ohne sie laesst sich die App nicht mehr vollstaendig
+    signieren.
+    """
+    for candidate in existing:
+        ident = candidate.identifier.lower()
+        if any(ident == p.lower() or ident.startswith(p.lower() + ".")
+               for p in protected):
+            continue
+        return candidate
+    return None
 
 
 def fetch_profile(api: DeveloperServices, team: Team, app_id: AppID) -> Path:
