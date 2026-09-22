@@ -10,15 +10,17 @@ Getestet gegen: iPhone 16 Pro Max (iPhone17,2), iOS 27.0, CachyOS/Arch.
 
 | Meilenstein | Inhalt | Status |
 |---|---|---|
-| M0 | Geruest, `doctor`, Device-Verbindung | steht |
-| M1 | Anisette + GSA-Login | Transport bewiesen, Login ungetestet |
-| M2 | Zertifikat, App-ID, Provisioning-Profil | gebaut, ungetestet |
-| M3 | Signieren und installieren | gebaut, ungetestet |
-| M4 | `refresh` gegen den 7-Tage-Ablauf | gebaut, ungetestet |
+| M0 | Geruest, `doctor`, Device-Verbindung | laeuft |
+| M1 | Anisette + GSA-Login inkl. 2FA | laeuft |
+| M2 | Zertifikat, App-ID, Provisioning-Profil | laeuft |
+| M3 | Signieren und installieren | laeuft |
+| M4 | `refresh`, `uninstall`, `certs` | gebaut, Refresh noch ungetestet |
 | M5 | systemd-Timer fuer automatischen Refresh | offen |
 
-"Ungetestet" heisst: gegen Apple laeuft bisher nur der Transport, nicht der
-Login mit echten Zugangsdaten. Der erste `modstaller login` ist der Test.
+Erster vollstaendiger Durchlauf am 23.09.2026: PojavLauncher 2.2 (17
+injizierte dylibs, 4 Frameworks) signiert und auf iPhone 16 Pro Max unter
+iOS 27.0 installiert. Transportweg: lockdown - der RSD-Tunnel wird auf
+iOS 27 fuer die Installation also nicht gebraucht.
 
 ## Setup
 
@@ -84,6 +86,25 @@ und das SRP-Cookie dabei nicht verbraucht wird.
 Diagnose und Messmethode stammen aus den Untersuchungen von SideStore
 (Issue #1557) und OpenTagViewer (Issue #226); die Umsetzung hier ist eigener
 Code.
+
+## Grenzen kostenloser Apple-Accounts
+
+Keine davon ist ein Fehler von ModStaller; sie kommen von Apple:
+
+* **Profile laufen nach 7 Tagen ab.** Danach startet die App nicht mehr, bis
+  `modstaller refresh` sie neu signiert.
+* **Hoechstens 3 sideloadete Apps gleichzeitig** pro Geraet. Die vierte lehnt
+  das iPhone ab; `modstaller uninstall <bundle-id>` macht Platz.
+* **10 App-IDs pro Woche.** Jede App-Extension braucht eine eigene, deshalb
+  entfernt ModStaller Extensions bei kostenlosen Accounts per Default.
+* **Nur ein Development-Zertifikat.** Zwei Sideload-Werkzeuge parallel
+  verdraengen sich zwangslaeufig gegenseitig, weil der private Schluessel
+  jeweils beim anfordernden Werkzeug liegt.
+
+Ob ein Account kostenlos ist, laesst sich Apple nicht direkt entlocken: es
+meldet auch bezahlte Einzelaccounts als `Individual`. ModStaller nimmt im
+Zweifel "kostenlos" an und korrigiert sich an der tatsaechlichen Laufzeit des
+ersten Profils - 7 Tage heisst kostenlos, ein Jahr heisst bezahlt.
 
 ## Sicherheit
 
