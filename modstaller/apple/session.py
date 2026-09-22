@@ -30,6 +30,7 @@ class Session:
     idms_token: str
     identity_token: str
     created_at: float
+    app_token: str = ""
 
     @property
     def age(self) -> float:
@@ -37,7 +38,13 @@ class Session:
 
     @property
     def probably_valid(self) -> bool:
-        return self.age < SESSION_MAX_AGE
+        return self.age < SESSION_MAX_AGE and self.usable
+
+    @property
+    def usable(self) -> bool:
+        """Ohne App-Token weist developerservices2 jede Anfrage als
+        abgelaufen zurueck. Sitzungen aus aelteren Versionen haben keins."""
+        return bool(self.app_token)
 
     @property
     def auth_headers(self) -> dict[str, str]:
@@ -56,9 +63,10 @@ class Session:
         if not SESSION_FILE.exists():
             return None
         try:
-            return cls(**json.loads(read_secret(SESSION_FILE)))
+            session = cls(**json.loads(read_secret(SESSION_FILE)))
         except Exception:
             return None  # kaputt oder altes Format - einfach neu anmelden
+        return session if session.usable else None
 
     @classmethod
     def clear(cls) -> None:
@@ -67,7 +75,8 @@ class Session:
     @classmethod
     def from_gsa(cls, result: GSAResult) -> "Session":
         return cls(adsid=result.adsid, idms_token=result.idms_token,
-                   identity_token=result.identity_token, created_at=time.time())
+                   identity_token=result.identity_token,
+                   app_token=result.app_token, created_at=time.time())
 
 
 def login(apple_id: str, password: str, anisette,

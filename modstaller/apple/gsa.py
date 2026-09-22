@@ -9,8 +9,11 @@ Ablauf:
                   Plist mit ``adsid`` und ``GsIdmsToken``.
 3. Ggf. 2FA     - Apple schickt einen Code auf die vertrauten Geraete, wir
                   validieren ihn und wiederholen Schritt 1-2.
-4. ``apptokens``- wir tauschen das Ergebnis gegen ein Token fuer
-                  ``com.apple.gs.xcode.auth``, mit dem developerservices2 redet.
+4. ``apptokens``- das Login-Token allein reicht developerservices2 nicht
+                  ("Your session has expired"). Es muss gegen ein
+                  app-spezifisches Token fuer ``com.apple.gs.xcode.auth``
+                  getauscht werden. Der Tausch wird mit dem Session-Key aus
+                  dem entschluesselten Login beglaubigt.
 
 Das Passwort verlaesst den Rechner nie: SRP beweist seine Kenntnis, ohne es
 zu uebertragen.
@@ -52,7 +55,10 @@ _MESSAGES = {
 class GSAResult:
     adsid: str
     idms_token: str
-    #: Basis fuer X-Apple-GS-Token gegenueber developerservices2.
+    #: Das app-spezifische Token fuer developerservices2. *Nicht* das
+    #: Login-Token - damit weist Apple jede Anfrage als abgelaufen zurueck.
+    app_token: str
+    #: Basis fuer X-Apple-GS-Token: base64("<adsid>:<app_token>").
     identity_token: str
 
     @property
@@ -79,6 +85,34 @@ def _decrypt_spd(srp_key: bytes, blob: bytes) -> dict:
         pad = plain[-1]
         if 0 < pad <= 16:
             plain = plain[:-pad]
+    return plistlib.loads(_PLIST_HEADER + plain)
+
+
+#: Apple stellt dem verschluesselten Token eine Versionskennung voran und
+#: nimmt sie zugleich als zusaetzliche authentifizierte Daten.
+_TOKEN_VERSION = b"XYZ"
+
+
+def _decrypt_app_token(session_key: bytes, blob: bytes) -> dict:
+    """Entschluesselt die ``et``-Antwort (AES-GCM).
+
+    Aufbau: 3 Byte Version, 16 Byte IV, Geheimtext, 16 Byte Pruefsumme.
+    """
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    if not blob.startswith(_TOKEN_VERSION):
+        raise AppleError(
+            "Apples Token hat eine unerwartete Version "
+            f"({blob[:3]!r} statt {_TOKEN_VERSION!r})."
+        )
+    try:
+        plain = AESGCM(session_key).decrypt(blob[3:19], blob[19:],
+                                            _TOKEN_VERSION)
+    except Exception as exc:
+        raise AppleError(
+            "Apples App-Token liess sich nicht entschluesseln - der "
+            "Session-Key passt nicht zur Antwort."
+        ) from exc
     return plistlib.loads(_PLIST_HEADER + plain)
 
 
@@ -162,11 +196,56 @@ class GSAClient:
         if not adsid or not token:
             raise AppleError("GSA lieferte keine adsid/GsIdmsToken - "
                              "Login unvollstaendig.")
+
+        app_token = self._fetch_app_token(spd, adsid, token)
         return GSAResult(
             adsid=adsid,
             idms_token=token,
-            identity_token=b64encode(f"{adsid}:{token}".encode()).decode(),
+            app_token=app_token,
+            identity_token=b64encode(f"{adsid}:{app_token}".encode()).decode(),
         )
+
+    def _fetch_app_token(self, spd: dict, adsid: str, idms_token: str) -> str:
+        """Tauscht das Login-Token gegen eines fuer die Entwickler-API."""
+        session_key = spd.get("sk")
+        cookie = spd.get("c")
+        if not session_key or cookie is None:
+            raise AppleError(
+                "GSA lieferte keinen Session-Key - ohne den laesst sich kein "
+                "Token fuer die Entwickler-API anfordern."
+            )
+
+        # Beglaubigt die Anfrage: nur wer den Session-Key kennt, kann sie
+        # stellen. Reihenfolge ist Teil des Protokolls.
+        mac = hmac.new(bytes(session_key), digestmod=hashlib.sha256)
+        mac.update(b"apptokens")
+        mac.update(adsid.encode())
+        mac.update(XCODE_APP.encode())
+
+        resp = self._check(self._request({
+            "u": adsid,
+            "app": [XCODE_APP],
+            "c": cookie,
+            "t": idms_token,
+            "checksum": mac.digest(),
+            "o": "apptokens",
+        }))
+
+        encrypted = resp.get("et")
+        if not encrypted:
+            raise AppleError("Apple lieferte kein App-Token zurueck.")
+
+        tokens = _decrypt_app_token(bytes(session_key), bytes(encrypted))
+        entry = (tokens.get("t") or {}).get(XCODE_APP) or {}
+        app_token = entry.get("token")
+        if not app_token:
+            raise AppleError(
+                f"Apple hat kein Token fuer {XCODE_APP} ausgestellt. "
+                "Meist fehlt dem Account die Entwickler-Registrierung - "
+                "einmal auf developer.apple.com anmelden und die Bedingungen "
+                "akzeptieren."
+            )
+        return app_token
 
     def _handshake(self, apple_id: str, password: str) -> tuple[dict, bytes]:
         srp = SRPClient(apple_id)
