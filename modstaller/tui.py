@@ -311,13 +311,23 @@ async def _enable_jit(app) -> None:
     console.print()
     try:
         async with ServiceProvider() as sp:
-            await enable_jit(sp, app.bundle_id,
-                             on_step=lambda m: console.print(
-                                 Text(f"  {m}", style=DIM)))
-        done(f"JIT laeuft fuer {app.name}")
-        console.print(Text(
-            "Gilt nur fuer diesen Start - nach dem Beenden der App erneut "
-            "freischalten.", style=DIM))
+            result = await enable_jit(sp, app.bundle_id,
+                                      on_step=lambda m: console.print(
+                                          Text(f"  {m}", style=DIM)))
+        console.print()
+        if result.prepared_regions:
+            done(f"{app.name}: {result.summary}")
+            console.print(Text(
+                "Gilt nur fuer diesen Start - nach dem Beenden der App "
+                "erneut freischalten.", style=DIM))
+        else:
+            console.print(Text(result.summary, style=WARN))
+            console.print(Text(
+                "Im Programm muss waehrend des Wartens eine Instanz "
+                "gestartet werden - erst dann fragt es nach Speicher.",
+                style=DIM))
+        for note in result.notes:
+            console.print(Text(f"  {note}", style=DIM))
     except ModStallerError as exc:
         fail(exc)
     await pause()

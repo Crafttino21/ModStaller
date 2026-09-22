@@ -324,8 +324,23 @@ async def _jit(args) -> int:
     async with ServiceProvider(args.udid) as sp:
         result = await enable_jit(sp, bundle_id,
                                  on_step=lambda m: print(f"  {m}", flush=True))
-    print(f"\nJIT ist fuer {result.bundle_id} aktiv (Prozess {result.pid}).")
-    print("Die Freischaltung gilt nur fuer diesen Start - nach dem Beenden "
+
+    print()
+    print(result.summary)
+    for note in result.notes:
+        print(f"  Hinweis: {note}")
+
+    if not result.prepared_regions:
+        print("\nDie App hat waehrend des Wartens keinen Speicher angefordert.\n"
+              "Moegliche Gruende:\n"
+              "  - Im Programm wurde keine Instanz gestartet. Der Bedarf "
+              "entsteht erst dann.\n"
+              "  - Die App fragt nicht ueber das Haltepunkt-Verfahren, das "
+              "iOS 26+ verlangt.\n"
+              "Die Freischaltung gilt ohnehin nur fuer diesen Start der App.")
+        return 1
+
+    print("\nDie Freischaltung gilt nur fuer diesen Start - nach dem Beenden "
           "der App\nmuss sie erneut erfolgen.")
     return 0
 

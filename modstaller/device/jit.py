@@ -1,135 +1,228 @@
-"""JIT fuer eine sideloadete App freischalten.
+"""JIT freischalten - auch auf iOS 26 und 27.
 
-iOS verbietet Programmen, zur Laufzeit Maschinencode zu erzeugen. Genau das
-braucht aber jede Java- oder Emulator-App - ohne JIT bleiben sie beim Start
-haengen ("Warte auf JIT").
+Bis iOS 18 genuegte es, einen Debugger anzuhaengen: der Kernel setzt dann
+``CS_DEBUGGED``, und der Prozess darf Speicher ausfuehrbar machen. Das
+ueberlebte das Loesen des Debuggers.
 
-Die Ausnahme: haengt ein Debugger am Prozess, setzt der Kernel ``CS_DEBUGGED``,
-und dann darf er Speicher ausfuehrbar machen. Das ueberlebt das Loesen des
-Debuggers. Der Ablauf ist deshalb: App angehalten starten, Debugger anhaengen,
-sofort wieder loesen - die App laeuft weiter und darf jetzt kompilieren.
+Auf Geraeten mit TXM/SPTM - allen neueren iPhones - reicht das nicht mehr.
+Dort kann eine Seite nur noch ausfuehrbar werden, wenn ein *angehaengter*
+Debugger von aussen hineinschreibt: ein Byte je 16-KB-Seite, und genau dieser
+Zugriff erteilt das Recht.
 
-Vorausgesetzt ist die ``get-task-allow``-Berechtigung. Development-signierte
-Apps haben sie; App-Store-Apps nicht, weshalb JIT dort nie funktioniert.
+Damit ist JIT keine einmalige Freischaltung mehr, sondern ein Gespraech. Die
+App bittet ueber einen Haltepunkt (``brk #0xf00d``) um Vorbereitung einzelner
+Bereiche; der Befehl steht in ``x16``, Adresse und Laenge in ``x0``/``x1``.
+Der Debugger bereitet vor, traegt die Adresse in ``x0`` ein und laesst
+weiterlaufen - bis die App sich abmeldet.
 
-Ab iOS 17 liegt der Debugger-Dienst hinter dem RSD-Tunnel. Ueber den
-Userspace-Tunnel ist die Geraeteadresse nur im eigenen Prozess erreichbar -
-ein gewoehnlicher Socket kaeme nicht an, deshalb laeuft alles ueber die
-Verbindung, die pymobiledevice3 selbst aufbaut.
+**Die App muss mitspielen.** Wer diesen Haltepunkt nicht auslöst, bekommt
+auch kein JIT, egal welcher Debugger anhaengt. Amethyst bringt die
+Unterstuetzung mit (``UniversalJIT26.js`` im Bundle).
 """
 
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..errors import DeviceError
+from .gdb import REG_PC, REG_X0, REG_X1, REG_X16, GdbClient
 
 #: Der Debugger-Dienst hinter dem RSD-Tunnel (iOS 17+).
 DEBUGPROXY = "com.apple.internal.dt.remote.debugproxy"
 
-#: Wie lange wir auf eine Antwort des Debuggers warten.
-REPLY_TIMEOUT = 15.0
+#: Der Haltepunkt, mit dem eine App um JIT bittet.
+BRK_JIT = 0xF00D
+#: Aeltere Haltepunkte, die noch vorkommen.
+BRK_SCRIPT = 0x68
+BRK_LEGACY = 0x69
+
+#: Befehle in x16.
+CMD_DETACH = 0
+CMD_PREPARE_REGION = 1
+CMD_NEW_BREAKPOINTS = 2
+
+#: Seitengroesse. Je Seite genuegt ein Byte-Zugriff.
+PAGE_SIZE = 16 * 1024
+
+#: Muster einer ARM64-BRK-Instruktion.
+_BRK_MASK = 0xFFE0001F
+_BRK_OPCODE = 0xD4200000
+
+#: Wie lange wir auf die naechste Anfrage der App warten. Grosszuegig, weil
+#: die App erst beim Start einer Instanz nach JIT fragt - der Nutzer muss
+#: dazwischen im Programm navigieren.
+WAIT_FOR_APP = 300.0
+
+#: Schutz gegen ein Programm, das endlos Haltepunkte ausloest.
+MAX_BREAKPOINTS = 5000
 
 
 @dataclass
 class JitResult:
     bundle_id: str
     pid: int
+    prepared_regions: int = 0
+    prepared_bytes: int = 0
+    detached_cleanly: bool = False
+    notes: list[str] = field(default_factory=list)
+
+    @property
+    def summary(self) -> str:
+        if not self.prepared_regions:
+            return ("Der Debugger hing an, die App hat aber keinen Bereich "
+                    "angefordert.")
+        mb = self.prepared_bytes / (1024 * 1024)
+        return (f"{self.prepared_regions} Speicherbereich(e) freigegeben "
+                f"({mb:.1f} MB).")
 
 
-def _packet(payload: str) -> bytes:
-    """Ein Paket im GDB-Remote-Protokoll: ``$<Inhalt>#<Pruefsumme>``."""
-    checksum = sum(payload.encode()) & 0xFF
-    return f"${payload}#{checksum:02x}".encode()
+def _is_brk(instruction: int) -> bool:
+    return (instruction & _BRK_MASK) == _BRK_OPCODE
 
 
-async def _read_packet(conn, timeout: float = REPLY_TIMEOUT) -> str:
-    """Liest bis zum naechsten vollstaendigen Paket.
+def _brk_immediate(instruction: int) -> int:
+    return (instruction >> 5) & 0xFFFF
 
-    Der Debugger schickt Empfangsbestaetigungen (``+``) getrennt vom
-    eigentlichen Paket, teils in eigenen Segmenten. Wer nur einmal liest,
-    haelt die Bestaetigung faelschlich fuer die Antwort - und meldet einen
-    Fehlschlag, wo gerade alles funktioniert hat.
+
+async def _prepare_region(gdb: GdbClient, address: int, size: int) -> int:
+    """Erteilt einem Speicherbereich das Ausfuehrungsrecht.
+
+    Auf TXM/SPTM-Geraeten geschieht das allein dadurch, dass der angehaengte
+    Debugger in jede Seite schreibt. Wir lesen deshalb ein Byte und schreiben
+    dasselbe Byte zurueck - der Inhalt bleibt unveraendert, das Recht wird
+    erteilt.
     """
-    buffer = ""
-    deadline = asyncio.get_running_loop().time() + timeout
-    while True:
-        remaining = deadline - asyncio.get_running_loop().time()
-        if remaining <= 0:
-            return buffer
-        try:
-            chunk = await asyncio.wait_for(conn.recv_any(), timeout=remaining)
-        except asyncio.TimeoutError:
-            return buffer
-        if not chunk:
-            return buffer
-        buffer += chunk.decode("utf-8", "replace")
-
-        start = buffer.find("$")
-        if start < 0:
-            continue  # bisher nur Bestaetigungen
-        end = buffer.find("#", start)
-        if end >= 0 and len(buffer) >= end + 3:
-            return buffer[start:end + 3]
+    written = 0
+    for page in range(address, address + size, PAGE_SIZE):
+        current = await gdb.read_memory(page, 1)
+        await gdb.write_memory(page, current)
+        written += 1
+    return written
 
 
-async def _exchange(conn, payload: str, *, expect_reply: bool = True) -> str:
-    await conn.sendall(_packet(payload))
-    if not expect_reply:
-        return ""
-    return await _read_packet(conn)
+class Jit26Session:
+    """Fuehrt das Gespraech mit der App, bis sie sich abmeldet."""
 
+    def __init__(self, gdb: GdbClient, result: JitResult, on_step) -> None:
+        self._gdb = gdb
+        self._result = result
+        self._say = on_step
+        self._detached = False
 
-def _attached(reply: str) -> bool:
-    """Hat sich der Debugger angehaengt?
+    async def run(self) -> None:
+        handled = 0
+        while not self._detached:
+            if handled >= MAX_BREAKPOINTS:
+                self._result.notes.append(
+                    "Abbruch: die App hat ungewoehnlich viele Haltepunkte "
+                    "ausgeloest.")
+                return
+            stop = await self._gdb.cont(timeout=WAIT_FOR_APP)
+            if not stop.is_stop:
+                self._result.notes.append(
+                    "Die App hat sich nicht mehr gemeldet - vermutlich lief "
+                    "sie einfach weiter.")
+                return
+            handled += 1
+            await self._handle(stop)
 
-    Der Debugger meldet den angehaltenen Zustand als ``T``- oder ``S``-Paket.
-    Ein ``E`` ist eine Absage, Leeres ein Zeitablauf, ein blosses ``+`` nur
-    die Empfangsbestaetigung - und damit noch keine Antwort.
-    """
-    body = reply.lstrip("+-$")
-    return bool(body) and body[0] in ("T", "S")
+    async def _handle(self, stop) -> None:
+        pc = stop.register(REG_PC)
+        thread = stop.thread
+        if pc is None or thread is None:
+            return
+
+        instruction = int.from_bytes(await self._gdb.read_memory(pc, 4),
+                                     "little")
+        if not _is_brk(instruction):
+            # Ein gewoehnliches Signal - unveraendert durchreichen, sonst
+            # verschluckt der Debugger einen Absturz der App.
+            if stop.signal:
+                await self._gdb.cont_with_signal(stop.signal, thread)
+            return
+
+        immediate = _brk_immediate(instruction)
+        # Ueber den Haltepunkt hinwegsetzen, sonst haelt die App dort erneut.
+        await self._gdb.set_register(REG_PC, pc + 4, thread)
+
+        if immediate == BRK_JIT:
+            await self._dispatch(stop, thread)
+        elif immediate == BRK_LEGACY:
+            # Alter Haltepunkt: als "nicht unterstuetzt" beantworten.
+            await self._gdb.set_register(REG_X0, 0xE0000069, thread)
+        elif immediate == BRK_SCRIPT:
+            self._result.notes.append(
+                "Die App wollte dem Debugger ein eigenes Skript unterschieben "
+                "- das unterstuetzt ModStaller nicht.")
+        else:
+            self._result.notes.append(
+                f"Unbekannter Haltepunkt 0x{immediate:x} uebersprungen.")
+
+    async def _dispatch(self, stop, thread: str) -> None:
+        command = stop.register(REG_X16)
+        if command == CMD_DETACH:
+            self._say("Die App meldet sich ab - JIT steht.")
+            await self._gdb.detach()
+            self._detached = True
+            self._result.detached_cleanly = True
+            return
+
+        if command == CMD_PREPARE_REGION:
+            address = stop.register(REG_X0) or 0
+            size = stop.register(REG_X1) or 0
+            if not size:
+                return
+            if address == 0:
+                # Die App ueberlaesst dem Debugger die Wahl der Adresse.
+                address = await self._gdb.allocate(size, "rx")
+            pages = await _prepare_region(self._gdb, address, size)
+            self._result.prepared_regions += 1
+            self._result.prepared_bytes += size
+            self._say(f"Bereich {self._result.prepared_regions}: "
+                      f"{size // 1024} KB in {pages} Seiten freigegeben")
+            await self._gdb.set_register(REG_X0, address, thread)
+            return
+
+        if command == CMD_NEW_BREAKPOINTS:
+            self._result.notes.append(
+                "Die App wollte den Debugger um eigene Befehle erweitern - "
+                "das unterstuetzt ModStaller nicht.")
+            return
+
+        self._result.notes.append(f"Unbekannter Befehl {command} uebersprungen.")
 
 
 async def enable_jit(sp, bundle_id: str, *,
                      on_step=lambda msg: None) -> JitResult:
-    """Startet die App und schaltet JIT frei."""
+    """Startet die App und begleitet sie, bis JIT steht."""
+    from pymobiledevice3.exceptions import (
+        AlreadyMountedError, DeveloperDiskImageNotFoundError,
+    )
     from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
     from pymobiledevice3.services.dvt.instruments.process_control import (
         ProcessControl,
     )
-    from pymobiledevice3.exceptions import (
-        AlreadyMountedError, DeveloperDiskImageNotFoundError,
-    )
     from pymobiledevice3.services.mobile_image_mounter import auto_mount
 
-    # 1. Das Developer Disk Image traegt den Debugger-Dienst. Ohne das Abbild
-    #    gibt es keinen Debugger, und ohne Debugger kein JIT.
     on_step("Developer Disk Image bereitstellen …")
     try:
         await auto_mount(sp.lockdown)
     except AlreadyMountedError:
-        pass  # genau der Zustand, den wir wollten
+        pass
     except DeveloperDiskImageNotFoundError as exc:
         raise DeviceError(
-            "Kein passendes Developer Disk Image gefunden.\n"
-            f"Fuer iOS-Versionen, die neuer sind als der Datenbestand von "
-            f"pymobiledevice3, gibt es noch keins. ({exc})"
+            "Kein passendes Developer Disk Image gefunden - fuer sehr neue "
+            f"iOS-Versionen gibt es noch keins. ({exc})"
         ) from exc
     except Exception as exc:
-        # Die Ausnahmen des Mounters tragen nicht immer einen Text - dann
-        # sagt wenigstens der Typ, was passiert ist.
-        detail = str(exc) or type(exc).__name__
         raise DeviceError(
-            f"Developer Disk Image liess sich nicht laden: {detail}\n"
-            "Ohne das Abbild gibt es keinen Debugger auf dem Geraet."
+            f"Developer Disk Image liess sich nicht laden: "
+            f"{exc or type(exc).__name__}"
         ) from exc
 
     rsd = await sp.rsd()
 
-    # 2. Angehalten starten: der Debugger soll sich anhaengen koennen, bevor
-    #    die App ueberhaupt dazu kommt, JIT anzufordern.
     on_step("App angehalten starten …")
     try:
         async with DvtProvider(rsd) as dvt, ProcessControl(dvt) as control:
@@ -137,45 +230,36 @@ async def enable_jit(sp, bundle_id: str, *,
                                        start_suspended=True)
     except Exception as exc:
         raise DeviceError(
-            f"{bundle_id} liess sich nicht starten: {exc}\n"
-            "Ist die App installiert und mit einem Entwickler-Zertifikat "
-            "signiert?"
+            f"{bundle_id} liess sich nicht starten: {exc}"
         ) from exc
 
-    # 3. Anhaengen und sofort wieder loesen.
-    on_step(f"Debugger anhaengen (Prozess {pid}) …")
+    result = JitResult(bundle_id=bundle_id, pid=pid)
+
     try:
         port = rsd.get_service_port(DEBUGPROXY)
     except Exception as exc:
         raise DeviceError(
-            f"Der Debugger-Dienst ist nicht erreichbar: {exc}\n"
-            "Das deutet darauf hin, dass das Developer Disk Image nicht "
-            "geladen ist."
+            f"Der Debugger-Dienst ist nicht erreichbar: {exc}"
         ) from exc
 
     conn = await rsd.create_service_connection(port)
+    gdb = GdbClient(conn)
     try:
-        # Ohne Bestaetigungen ist der Austausch unempfindlich gegen
-        # Paket-Pruefsummen, die uns hier nichts nuetzen.
-        await _exchange(conn, "QStartNoAckMode")
-        await _exchange(conn, "QSetDetachOnError:1")
-
-        reply = await _exchange(conn, f"vAttach;{pid:x}")
-        if not _attached(reply):
+        await gdb.start_no_ack_mode()
+        on_step(f"Debugger anhaengen (Prozess {pid}) …")
+        if not (await gdb.attach(pid)).is_stop:
             raise DeviceError(
-                "Der Debugger konnte sich nicht an die App haengen "
-                f"(Antwort: {reply.strip() or 'keine'}).\n"
-                "Auf iOS 26 und 27 hat Apple die Freischaltung eingeschraenkt; "
-                "sie gelingt dort nicht mehr fuer jede App."
-            )
+                "Der Debugger konnte sich nicht an die App haengen.")
 
-        # Loesen laesst die App weiterlaufen - die Markierung bleibt.
-        await _exchange(conn, "D", expect_reply=False)
+        on_step("Warte auf Anfragen der App … (jetzt im Programm die "
+                "Instanz starten)")
+        await Jit26Session(gdb, result, on_step).run()
     finally:
         try:
+            if not result.detached_cleanly:
+                await gdb.detach()
             await conn.close()
         except Exception:
             pass
 
-    on_step("JIT ist aktiv.")
-    return JitResult(bundle_id=bundle_id, pid=pid)
+    return result

@@ -61,15 +61,33 @@ modstaller jit <bundle-id>        # JIT freischalten (Java-/Emulator-Apps)
 Java- und Emulator-Apps erzeugen Maschinencode zur Laufzeit. iOS verbietet
 das - solche Apps bleiben beim Start haengen ("Warte auf JIT").
 
-Die Ausnahme: haengt ein Debugger am Prozess, setzt der Kernel `CS_DEBUGGED`,
-und dann darf er kompilieren. Das ueberlebt das Loesen des Debuggers.
-`modstaller jit` startet die App deshalb angehalten, haengt ueber den
-RSD-Tunnel einen Debugger an und loest ihn sofort wieder.
+Bis iOS 18 genuegte es, einen Debugger anzuhaengen: der Kernel setzt dann
+`CS_DEBUGGED`, und das ueberlebte sogar das Loesen des Debuggers.
 
-Zwei Einschraenkungen: die App braucht `get-task-allow` (development-signierte
-haben es, App-Store-Apps nie), und die Freischaltung gilt nur fuer *diesen*
-Start - nach dem Beenden der App erneut ausfuehren. Auf iOS 26 und 27 hat
-Apple das zusaetzlich eingeschraenkt; es gelingt nicht mehr fuer jede App.
+**Auf Geraeten mit TXM/SPTM - allen neueren iPhones - reicht das nicht mehr.**
+Dort wird eine Speicherseite nur ausfuehrbar, wenn ein *angehaengter* Debugger
+hineinschreibt: ein Byte je 16-KB-Seite, und dieser Zugriff selbst erteilt das
+Recht. JIT ist damit kein Schalter mehr, sondern ein Gespraech:
+
+    App:      brk #0xf00d, x16=1, x0=Adresse, x1=Laenge   "bereite das vor"
+    Debugger: schreibt in jede Seite, traegt die Adresse in x0 ein
+    App:      baut ihren Compiler-Speicher auf
+    App:      brk #0xf00d, x16=0                          "fertig, du kannst gehen"
+
+`modstaller jit` startet die App angehalten, haengt sich ueber den RSD-Tunnel
+an und bedient diese Anfragen, bis die App sich abmeldet.
+
+Drei Einschraenkungen:
+
+* **Die App muss mitspielen.** Wer diesen Haltepunkt nicht ausloest, bekommt
+  kein JIT, egal welcher Debugger anhaengt.
+* Die App braucht `get-task-allow` - development-signierte haben es,
+  App-Store-Apps nie.
+* Die Freischaltung gilt nur fuer *diesen* Start der App.
+
+Der Bedarf entsteht erst, wenn die App tatsaechlich kompilieren will. Bei
+einem Minecraft-Launcher heisst das: waehrend `modstaller jit` wartet, muss
+im Programm eine Instanz gestartet werden.
 
 Bei einem Gratis-Account werden App-Extensions per Default entfernt: jede
 kostet eine App-ID aus einem Kontingent von zehn pro Woche, und die App
