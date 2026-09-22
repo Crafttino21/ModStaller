@@ -284,6 +284,7 @@ async def _install(args) -> int:
     outcome = await run_install(
         Path(args.ipa), udid=args.udid, team_id=args.team,
         strip_extensions=False if args.keep_extensions else None,
+        revoke_conflicting_cert=args.revoke_conflicting_cert,
         progress=progress,
     )
     print(f"\r  Installiert ueber {outcome.transport}.")
@@ -303,6 +304,19 @@ async def _refresh(args) -> int:
     )
     if results:
         print(f"\r  {len(results)} App(s) erneuert.")
+    return 0
+
+
+async def _uninstall(args) -> int:
+    from .device.connection import ServiceProvider
+    from .device.install import uninstall_app
+    from .state import store
+
+    async with ServiceProvider(args.udid) as sp:
+        transport = await uninstall_app(sp, args.bundle_id)
+    print(f"{args.bundle_id} entfernt (Transport: {transport}).")
+    if store.forget(args.bundle_id):
+        print("Aus der Refresh-Liste ausgetragen.")
     return 0
 
 
@@ -360,6 +374,10 @@ def build_parser() -> argparse.ArgumentParser:
                      help="IPA ist bereits signiert, nur installieren")
     ins.add_argument("--keep-extensions", action="store_true",
                      help="App-Extensions behalten (kostet je eine App-ID)")
+    ins.add_argument("--revoke-conflicting-cert", action="store_true",
+                     help="fremde Development-Zertifikate widerrufen, falls "
+                          "Apples Limit ein eigenes verhindert (Apps, die "
+                          "damit signiert wurden, starten danach nicht mehr)")
     ins.set_defaults(afunc=_install)
 
     ref = sub.add_parser("refresh",
@@ -369,6 +387,10 @@ def build_parser() -> argparse.ArgumentParser:
     ref.add_argument("--threshold", type=float,
                      help="Tage vor Ablauf, ab denen erneuert wird")
     ref.set_defaults(afunc=_refresh)
+
+    uni = sub.add_parser("uninstall", help="App vom iPhone entfernen")
+    uni.add_argument("bundle_id", help="Bundle-ID der App")
+    uni.set_defaults(afunc=_uninstall)
 
     crt = sub.add_parser("certs", help="Development-Zertifikate anzeigen")
     crt.add_argument("--team", help="Team-ID, falls mehrere vorhanden")

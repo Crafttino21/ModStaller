@@ -105,11 +105,18 @@ def pick_team(teams: list[Team], preferred: str | None = None) -> Team:
 
 
 def ensure_certificate(api: DeveloperServices, team: Team,
-                       machine_name: str) -> tuple[Path, str]:
-    """Liefert eine gueltige PKCS#12-Identitaet fuer zsign.
+                       machine_name: str,
+                       *, revoke_conflicting: bool = False) -> tuple[Path, str]:
+    """Liefert eine PKCS#12-Identitaet fuer zsign.
 
-    Vorhandene wird wiederverwendet - ein Gratis-Account vertraegt nur
-    wenige Zertifikate, und jedes neue macht die alten ungueltig.
+    Die Reihenfolge ist wichtig, weil Apple pro Account nur sehr wenige
+    Development-Zertifikate zulaesst und jedes neue ein altes verdraengt:
+
+    1. Eine lokal fertige Identitaet wiederverwenden.
+    2. Sonst pruefen, ob bei Apple schon ein Zertifikat zu *unserem*
+       Schluessel liegt - dann nur neu zusammensetzen, ohne Kontingent
+       anzufassen.
+    3. Erst dann ein neues anfordern.
     """
     existing = csrmod.load_p12(team.team_id)
     if existing:
@@ -117,8 +124,21 @@ def ensure_certificate(api: DeveloperServices, team: Team,
         if expiry and expiry > datetime.now(timezone.utc):
             return existing
 
-    keypair = csrmod.load_keypair(team.team_id) or csrmod.KeyPair.generate()
-    csrmod.save_keypair(team.team_id, keypair)
+    keypair = csrmod.load_keypair(team.team_id)
+
+    # Schritt 2: Gehoert ein vorhandenes Zertifikat zu unserem Schluessel?
+    if keypair is not None:
+        content = _fetch_own_certificate(api, team, keypair)
+        if content:
+            return csrmod.build_p12(team.team_id, keypair, content)
+
+    # Schritt 3: neues anfordern.
+    if keypair is None:
+        keypair = csrmod.KeyPair.generate()
+        csrmod.save_keypair(team.team_id, keypair)
+
+    if revoke_conflicting:
+        _revoke_foreign_certificates(api, team, keypair)
 
     try:
         cert = api.submit_csr(
@@ -128,30 +148,89 @@ def ensure_certificate(api: DeveloperServices, team: Team,
             machine_name=machine_name,
         )
     except AppleAPIError as exc:
-        # Apple begrenzt die Zahl der Development-Zertifikate. Wir koennen ein
-        # vorhandenes nicht mitbenutzen - der private Schluessel liegt bei dem
-        # Werkzeug, das es angefordert hat, und ohne ihn ist es wertlos.
-        existing = []
+        listing = ""
         try:
-            existing = api.list_certificates(team.team_id)
+            listing = "\n".join(f"    {c}"
+                                for c in api.list_certificates(team.team_id))
         except Exception:
             pass
-        listing = "\n".join(f"    {c}" for c in existing)
         raise AppleError(
             f"Apple hat kein Zertifikat ausgestellt: {exc}\n\n"
-            + (f"Vorhandene Zertifikate:\n{listing}\n\n" if existing else "")
-            + "ModStaller braucht ein eigenes, weil der private Schluessel zu "
-              "den vorhandenen bei den Werkzeugen liegt, die sie angefordert "
-              "haben.\n"
-              "Anzeigen mit:  modstaller certs\n"
-              "Platz schaffen: modstaller certs revoke <ID>\n"
+            + (f"Vorhandene Zertifikate:\n{listing}\n\n" if listing else "")
+            + "Apple laesst pro Account nur wenige Development-Zertifikate zu, "
+              "und ein fremdes ist fuer uns wertlos: sein privater Schluessel "
+              "liegt bei dem Werkzeug, das es angefordert hat.\n"
+              "Anzeigen mit:   modstaller certs\n"
+              "Platz schaffen: modstaller install --revoke-conflicting-cert …\n"
               "Achtung: Apps, die mit dem widerrufenen Zertifikat signiert "
               "wurden, starten danach nicht mehr."
         ) from exc
 
-    if not cert.content:
-        raise AppleError("Apple lieferte ein leeres Zertifikat.")
-    return csrmod.build_p12(team.team_id, keypair, cert.content)
+    # Apple liefert den Inhalt nicht immer gleich mit - ausgestellt ist es
+    # trotzdem, dann steht es in der Liste.
+    content = cert.content or _fetch_own_certificate(api, team, keypair)
+    if not content:
+        raise AppleError(
+            "Apple hat ein Zertifikat ausgestellt, liefert seinen Inhalt aber "
+            "weder in der Antwort noch in der Liste. Mit 'modstaller certs' "
+            "nachsehen und erneut versuchen."
+        )
+    return csrmod.build_p12(team.team_id, keypair, content)
+
+
+def _belongs_to(cert_der: bytes, keypair) -> bool:
+    """Passt das Zertifikat zu unserem privaten Schluessel?
+
+    Die Maschinenkennung allein reicht nicht: sie kann sich wiederholen, und
+    ein Zertifikat mit fremdem Schluessel erzeugt spaeter eine Signatur, die
+    das iPhone wortlos ablehnt. Der Vergleich der oeffentlichen Schluessel
+    ist eindeutig.
+    """
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+
+    try:
+        cert = x509.load_der_x509_certificate(cert_der)
+    except ValueError:
+        try:
+            cert = x509.load_pem_x509_certificate(cert_der)
+        except ValueError:
+            return False
+
+    fmt = dict(encoding=serialization.Encoding.DER,
+               format=serialization.PublicFormat.SubjectPublicKeyInfo)
+    return (cert.public_key().public_bytes(**fmt)
+            == keypair.private_key.public_key().public_bytes(**fmt))
+
+
+def _fetch_own_certificate(api: DeveloperServices, team: Team,
+                           keypair) -> bytes:
+    """Sucht bei Apple das Zertifikat, das zu unserem Schluessel gehoert."""
+    for cert in api.list_certificates(team.team_id):
+        if cert.content and _belongs_to(bytes(cert.content), keypair):
+            return bytes(cert.content)
+    return b""
+
+
+def _revoke_foreign_certificates(api: DeveloperServices, team: Team,
+                                 keypair) -> None:
+    """Macht Platz fuer ein eigenes Zertifikat.
+
+    Gratis-Accounts duerfen nur ein Development-Zertifikat halten, und ein
+    fremdes laesst sich nicht mitbenutzen. Wer mit zwei Werkzeugen
+    sideloadet, verdraengt zwangslaeufig das jeweils andere.
+
+    Unser eigenes wird dabei ausgelassen - es zu widerrufen waere genau das
+    Gegenteil dessen, was der Aufruf bezweckt.
+    """
+    for cert in api.list_certificates(team.team_id):
+        if cert.content and _belongs_to(bytes(cert.content), keypair):
+            continue
+        print(f"  Widerrufe fremdes Zertifikat: {cert}")
+        try:
+            api.revoke_certificate(team.team_id, cert.serial)
+        except Exception as exc:
+            print(f"    liess sich nicht widerrufen: {exc}")
 
 
 def _machine_id() -> str:

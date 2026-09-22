@@ -43,6 +43,7 @@ async def install(
     team_id: str | None = None,
     settings: Settings | None = None,
     strip_extensions: bool | None = None,
+    revoke_conflicting_cert: bool = False,
     progress: Callable[[int], None] | None = None,
 ) -> InstallOutcome:
     settings = settings or Settings.load()
@@ -85,7 +86,8 @@ async def install(
 
         # 5. Zertifikat.
         _say("\nZertifikat besorgen …")
-        p12, password = ensure_certificate(api, team, dev.name)
+        p12, password = ensure_certificate(
+            api, team, dev.name, revoke_conflicting=revoke_conflicting_cert)
 
         # 6. Extensions: bei Gratis-Accounts kosten sie je eine App-ID aus
         #    einem Kontingent von zehn pro Woche. Default ist deshalb, sie zu
