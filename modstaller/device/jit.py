@@ -41,6 +41,11 @@ BRK_LEGACY = 0x69
 CMD_DETACH = 0
 CMD_PREPARE_REGION = 1
 CMD_NEW_BREAKPOINTS = 2
+CMD_SET_DETACH_AFTER_FIRST = 3
+CMD_PREPARE_FOR_PATCHING = 4
+
+#: Groesste Menge, die wir in einem Paket lesen oder schreiben.
+_CHUNK = 4096
 
 #: Seitengroesse. Je Seite genuegt ein Byte-Zugriff.
 PAGE_SIZE = 16 * 1024
@@ -109,6 +114,8 @@ class Jit26Session:
         self._result = result
         self._say = on_step
         self._detached = False
+        #: Manche Apps lassen den Debugger nach der ersten Anfrage gehen.
+        self._detach_after_first = False
 
     async def run(self) -> None:
         handled = 0
@@ -149,12 +156,9 @@ class Jit26Session:
         if immediate == BRK_JIT:
             await self._dispatch(stop, thread)
         elif immediate == BRK_LEGACY:
-            # Alter Haltepunkt: als "nicht unterstuetzt" beantworten.
-            await self._gdb.set_register(REG_X0, 0xE0000069, thread)
+            await self._get_jit_mapping(stop, thread)
         elif immediate == BRK_SCRIPT:
-            self._result.notes.append(
-                "Die App wollte dem Debugger ein eigenes Skript unterschieben "
-                "- das unterstuetzt ModStaller nicht.")
+            await self._accept_script(stop, thread)
         else:
             self._result.notes.append(
                 f"Unbekannter Haltepunkt 0x{immediate:x} uebersprungen.")
@@ -185,12 +189,80 @@ class Jit26Session:
             return
 
         if command == CMD_NEW_BREAKPOINTS:
-            self._result.notes.append(
-                "Die App wollte den Debugger um eigene Befehle erweitern - "
-                "das unterstuetzt ModStaller nicht.")
+            await self._accept_script(stop, thread)
+            return
+
+        if command == CMD_SET_DETACH_AFTER_FIRST:
+            self._detach_after_first = bool(stop.register(REG_X0))
+            return
+
+        if command == CMD_PREPARE_FOR_PATCHING:
+            address = stop.register(REG_X0) or 0
+            size = stop.register(REG_X1) or 0
+            if address and size:
+                await self._rewrite(address, size)
+                self._say(f"{size // 1024} KB zum Patchen freigegeben")
             return
 
         self._result.notes.append(f"Unbekannter Befehl {command} uebersprungen.")
+
+    async def _get_jit_mapping(self, stop, thread: str) -> None:
+        """Der aeltere Weg, Speicher anzufordern (``brk #0x69``).
+
+        Hier steht die *Groesse* in ``x0`` - nicht die Adresse. Wer das mit
+        dem neueren Aufruf verwechselt, fordert einen Bereich an der Adresse
+        "Groesse" an und bekommt Unsinn zurueck.
+        """
+        size = stop.register(REG_X0) or 0
+        if not size:
+            return
+        address = await self._gdb.allocate(size, "rx")
+        pages = await _prepare_region(self._gdb, address, size)
+        self._result.prepared_regions += 1
+        self._result.prepared_bytes += size
+        self._say(f"Bereich {self._result.prepared_regions}: "
+                  f"{size // 1024} KB in {pages} Seiten freigegeben")
+        await self._gdb.set_register(REG_X0, address, thread)
+
+        if self._detach_after_first:
+            self._say("Die App laesst den Debugger gehen - JIT steht.")
+            await self._gdb.detach()
+            self._detached = True
+            self._result.detached_cleanly = True
+
+    async def _accept_script(self, stop, thread: str) -> None:
+        """Die App moechte den Debugger um eigene Befehle erweitern.
+
+        Sie schickt dafuer ein JavaScript-Schnipsel. ModStaller fuehrt kein
+        JavaScript aus - die Befehle, die dieses Schnipsel ueblicherweise
+        nachruestet, sind hier fest eingebaut. Deshalb genuegt es, die
+        Anfrage anzunehmen und weiterzumachen.
+        """
+        address = stop.register(REG_X0) or 0
+        size = min(stop.register(REG_X1) or 0, _CHUNK)
+        if address and size:
+            try:
+                raw = await self._gdb.read_memory(address, size)
+                text = raw.split(b"\x00", 1)[0].decode("utf-8", "replace")
+                self._result.notes.append(
+                    "Die App hat eine Debugger-Erweiterung angeboten; die "
+                    "darin ueblichen Befehle sind fest eingebaut."
+                    + (f" (erkannt: {text[:60]!r}…)" if text else ""))
+            except Exception:
+                pass
+
+    async def _rewrite(self, address: int, size: int) -> None:
+        """Liest einen Bereich und schreibt ihn unveraendert zurueck.
+
+        Auch hier erteilt der Schreibzugriff des Debuggers das Recht - nur
+        geht es diesmal um den ganzen Bereich, nicht um eine Seite je 16 KB.
+        """
+        offset = 0
+        while offset < size:
+            length = min(_CHUNK, size - offset)
+            current = await self._gdb.read_memory(address + offset, length)
+            await self._gdb.write_memory(address + offset, current)
+            offset += length
 
 
 async def enable_jit(sp, bundle_id: str, *,

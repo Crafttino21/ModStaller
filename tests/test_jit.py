@@ -152,3 +152,132 @@ async def test_content_is_written_back_unchanged():
 async def test_partial_page_still_gets_touched():
     gdb = RecordingGdb()
     assert await _prepare_region(gdb, 0x100000000, 100) == 1
+
+
+# -- Die Gespraechsfuehrung ------------------------------------------------
+
+from modstaller.device.jit import (  # noqa: E402
+    BRK_JIT, BRK_LEGACY, CMD_DETACH, CMD_PREPARE_REGION,
+    CMD_SET_DETACH_AFTER_FIRST, Jit26Session, JitResult,
+)
+
+
+class ScriptedGdb:
+    """Ein Debugger, der eine vorbereitete Folge von Halten abspielt."""
+
+    ALLOCATED = 0x200000000
+
+    def __init__(self, stops: list[StopReply], instruction: int):
+        self._stops = list(stops)
+        self._instruction = instruction
+        self.registers: dict[int, int] = {}
+        self.prepared: list[tuple[int, int]] = []
+        self.detached = False
+        self.allocations: list[int] = []
+
+    async def cont(self, timeout=None) -> StopReply:
+        return self._stops.pop(0) if self._stops else StopReply("")
+
+    async def read_memory(self, address: int, length: int) -> bytes:
+        if length == 4:
+            return self._instruction.to_bytes(4, "little")
+        return b"\x00" * length
+
+    async def write_memory(self, address: int, data: bytes) -> None:
+        self.prepared.append((address, len(data)))
+
+    async def set_register(self, number: int, value: int, thread: str) -> None:
+        self.registers[number] = value
+
+    async def allocate(self, size: int, permissions: str = "rx") -> int:
+        self.allocations.append(size)
+        return self.ALLOCATED
+
+    async def detach(self) -> None:
+        self.detached = True
+
+
+def _stop(regs: dict[int, int]) -> StopReply:
+    body = "".join(f"{n:02x}:{int_to_le_hex(v)};" for n, v in regs.items())
+    return StopReply(f"T11thread:1f4;{body}")
+
+
+BRK_INSTR = 0xD43E01A0        # brk #0xf00d
+BRK_69_INSTR = 0xD4200D20     # brk #0x69
+
+
+@pytest.mark.asyncio
+async def test_legacy_breakpoint_reads_the_size_from_x0():
+    """Beim alten Aufruf steht in x0 die *Groesse*, nicht die Adresse.
+
+    Wer das mit dem neueren verwechselt, fordert einen Bereich an der Adresse
+    "Groesse" an - die App bekommt Unsinn und wartet weiter auf JIT.
+    """
+    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X0: 0x400000, REG_X1: 0})],
+                      BRK_69_INSTR)
+    result = JitResult("x", 1)
+    await Jit26Session(gdb, result, lambda m: None).run()
+
+    assert gdb.allocations == [0x400000], "Groesse muss aus x0 kommen"
+    assert gdb.registers[REG_X0] == ScriptedGdb.ALLOCATED, \
+        "die zugeteilte Adresse muss zurueckgemeldet werden"
+    assert result.prepared_regions == 1
+
+
+@pytest.mark.asyncio
+async def test_new_call_reads_address_from_x0_and_size_from_x1():
+    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X16: CMD_PREPARE_REGION,
+                                REG_X0: 0x140000000, REG_X1: PAGE_SIZE})],
+                      BRK_INSTR)
+    result = JitResult("x", 1)
+    await Jit26Session(gdb, result, lambda m: None).run()
+
+    assert gdb.allocations == [], "mit gegebener Adresse wird nichts zugeteilt"
+    assert gdb.prepared == [(0x140000000, 1)]
+    assert result.prepared_bytes == PAGE_SIZE
+
+
+@pytest.mark.asyncio
+async def test_zero_address_lets_the_debugger_choose():
+    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X16: CMD_PREPARE_REGION,
+                                REG_X0: 0, REG_X1: PAGE_SIZE})], BRK_INSTR)
+    await Jit26Session(gdb, JitResult("x", 1), lambda m: None).run()
+    assert gdb.allocations == [PAGE_SIZE]
+
+
+@pytest.mark.asyncio
+async def test_detach_ends_the_conversation():
+    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X16: CMD_DETACH})],
+                      BRK_INSTR)
+    result = JitResult("x", 1)
+    await Jit26Session(gdb, result, lambda m: None).run()
+    assert gdb.detached and result.detached_cleanly
+
+
+@pytest.mark.asyncio
+async def test_detach_after_first_request_is_honoured():
+    """Manche Apps lassen den Debugger nach der ersten Anfrage gehen."""
+    gdb = ScriptedGdb([
+        _stop({REG_PC: 0x1000, REG_X16: CMD_SET_DETACH_AFTER_FIRST,
+                 REG_X0: 1}),
+        _stop({REG_PC: 0x1000, REG_X0: 0x8000, REG_X1: 0}),
+    ], BRK_INSTR)
+    # Der zweite Halt ist ein 0x69 - dafuer braucht es die andere Instruktion.
+    gdb._instruction = BRK_INSTR
+    result = JitResult("x", 1)
+    session = Jit26Session(gdb, result, lambda m: None)
+    # Ersten Halt verarbeiten, dann auf den alten Haltepunkt umschalten.
+    await session._handle(gdb._stops.pop(0))
+    assert session._detach_after_first
+    gdb._instruction = BRK_69_INSTR
+    await session._handle(gdb._stops.pop(0))
+    assert gdb.detached, "nach der ersten Anfrage muss geloest werden"
+
+
+@pytest.mark.asyncio
+async def test_program_counter_moves_past_the_breakpoint():
+    """Ohne das haelt die App an derselben Stelle wieder an - endlos."""
+    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X16: CMD_DETACH})],
+                      BRK_INSTR)
+    await Jit26Session(gdb, JitResult("x", 1), lambda m: None).run()
+    assert gdb.registers[REG_PC] == 0x1004
