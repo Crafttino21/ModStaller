@@ -39,7 +39,7 @@ class DeviceInfo:
 async def list_devices() -> list[str]:
     from pymobiledevice3.usbmux import list_devices as _ls
     try:
-        return [d.serial for d in _ls()]
+        return [d.serial for d in await _ls()]
     except Exception:
         # usbmuxd ist socket-aktiviert: ohne Geraet laeuft es gar nicht.
         return []
@@ -55,7 +55,7 @@ async def connect(udid: str | None = None, *, timeout: float = 0.0):
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         try:
-            return create_using_usbmux(serial=udid, label="ModStaller")
+            return await create_using_usbmux(serial=udid, label="ModStaller")
         except NotPairedError as exc:
             raise NotPaired(
                 "Das Geraet ist nicht mit diesem Rechner gepairt. "
@@ -76,11 +76,13 @@ async def connect(udid: str | None = None, *, timeout: float = 0.0):
 
 
 async def device_info(lockdown) -> DeviceInfo:
-    v = lockdown.all_values
+    v = await lockdown.get_value()
     dev_mode = False
     try:
-        dev_mode = bool(lockdown.developer_mode_status)
+        dev_mode = bool(await lockdown.get_developer_mode_status())
     except Exception:
+        # Aeltere Systeme kennen den Schalter nicht - dort gibt es ihn nicht,
+        # und das ist kein Fehler.
         pass
     return DeviceInfo(
         udid=v.get("UniqueDeviceID", ""),
@@ -109,7 +111,7 @@ class ServiceProvider:
 
     async def __aenter__(self) -> "ServiceProvider":
         self.lockdown = await connect(self.udid)
-        self.udid = self.lockdown.all_values.get("UniqueDeviceID", self.udid)
+        self.udid = getattr(self.lockdown, "udid", None) or self.udid
         return self
 
     async def __aexit__(self, *exc) -> None:
@@ -120,7 +122,7 @@ class ServiceProvider:
                 pass
         if self.lockdown is not None:
             try:
-                self.lockdown.close()
+                await self.lockdown.close()
             except Exception:
                 pass
 
