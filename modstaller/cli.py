@@ -216,10 +216,11 @@ async def _certs(args) -> int:
         cert = match[0]
         print(f"Widerrufen: {cert}")
         print("Apps, die damit signiert wurden, starten danach nicht mehr.")
-        if input("Wirklich widerrufen? [ja/NEIN] ").strip().lower() not in (
-                "ja", "j", "yes", "y"):
-            print("Abgebrochen.")
-            return 0
+        if not args.yes:
+            if input("Wirklich widerrufen? [ja/NEIN] ").strip().lower() not in (
+                    "ja", "j", "yes", "y"):
+                print("Abgebrochen.")
+                return 0
         api.revoke_certificate(team.team_id, cert.serial)
         print("Widerrufen.")
         return 0
@@ -373,6 +374,8 @@ def build_parser() -> argparse.ArgumentParser:
     crt.add_argument("--team", help="Team-ID, falls mehrere vorhanden")
     crt.add_argument("--revoke", metavar="ID",
                      help="Zertifikat widerrufen, um Platz zu schaffen")
+    crt.add_argument("--yes", action="store_true",
+                     help="Rueckfrage beim Widerrufen ueberspringen")
     crt.set_defaults(afunc=_certs)
 
     sub.add_parser("list", help="Installierte Apps und Ablaufdaten"
