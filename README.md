@@ -33,6 +33,16 @@ paru -S zsign-bin
 
 ## Benutzung
 
+Ohne Argument startet die interaktive Oberflaeche - sie zeigt oben, ob das
+iPhone haengt, ob du angemeldet bist und was demnaechst ablaeuft, und bietet
+vorrangig an, was gerade dran ist:
+
+```bash
+modstaller
+```
+
+Fuer Skripte und den Refresh-Dienst bleiben die Unterkommandos:
+
 ```bash
 modstaller login                  # einmalig, fragt Apple ID + 2FA-Code
 modstaller account                # Team, Kontingente, angelegte App-IDs
@@ -41,6 +51,8 @@ modstaller device info            # iPhone, iOS-Version, Developer Mode
 modstaller install app.ipa        # signieren und installieren
 modstaller list                   # was laeuft, und wie lange noch
 modstaller refresh                # vor dem 7-Tage-Ablauf erneuern
+modstaller uninstall <bundle-id>  # App entfernen, macht einen Platz frei
+modstaller certs                  # Zertifikate anzeigen/widerrufen
 ```
 
 Bei einem Gratis-Account werden App-Extensions per Default entfernt: jede

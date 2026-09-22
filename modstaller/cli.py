@@ -343,7 +343,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-u", "--udid", help="Zielgeraet (Default: das einzige)")
     p.add_argument("--debug", action="store_true",
                    help="vollen Stacktrace bei unerwarteten Fehlern zeigen")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    # Ohne Unterkommando startet die interaktive Oberflaeche. Die
+    # Unterkommandos bleiben fuer Skripte und den Refresh-Dienst.
+    sub = p.add_subparsers(dest="cmd")
 
     sub.add_parser("doctor", help="Pruefen, ob alles Noetige da ist"
                    ).set_defaults(func=cmd_doctor)
@@ -409,6 +411,11 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     args_debug = getattr(args, "debug", False)
     config.ensure_dirs()
+
+    if args.cmd is None:
+        from .tui import main as tui_main
+        return tui_main()
+
     try:
         if hasattr(args, "afunc"):
             return asyncio.run(args.afunc(args))
