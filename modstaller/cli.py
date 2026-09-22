@@ -174,11 +174,19 @@ async def _account(args) -> int:
     ani = _anisette()
     api = DeveloperServices(session, ani)
     for t in api.list_teams():
+        caps = Capabilities.for_team(t)
         print(t)
-        print(f"  {Capabilities.for_team(t).describe()}")
+        print(f"  {caps.describe()}")
         print(f"  Geraete: {len(api.list_devices(t.team_id))}")
         app_ids = api.list_app_ids(t.team_id)
-        print(f"  App-IDs: {len(app_ids)}")
+        if caps.max_app_ids_per_week:
+            left = caps.max_app_ids_per_week - len(app_ids)
+            note = (f" - noch {left} frei" if left > 0
+                    else " - Kontingent ausgeschoepft, ModStaller recycelt "
+                         "beim naechsten Installieren eine alte")
+            print(f"  App-IDs: {len(app_ids)}/{caps.max_app_ids_per_week}{note}")
+        else:
+            print(f"  App-IDs: {len(app_ids)}")
         for a in app_ids:
             print(f"    {a.identifier}")
     return 0

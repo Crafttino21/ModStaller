@@ -18,10 +18,28 @@ from ..errors import (
     APP_ID_QUOTA_EXCEEDED, APP_ID_UNAVAILABLE, BENIGN_CODES,
     AppleAPIError, AppleError, remedy_for,
 )
-from . import clientinfo, http
+from . import http
 
 #: Xcodes Client-Id. Die API erwartet sie.
 CLIENT_ID = "XABBG36SBA"
+
+#: Xcode-Version, die wir vorgeben.
+XCODE_VERSION = "11.2 (11B41)"
+
+#: Genau die Anisette-Header, die developerservices2 erwartet - eine feste
+#: Liste statt "alles, was mit X- anfaengt", damit klar ist, was hierher
+#: gehoert und was nur die Anmeldung braucht.
+_ANISETTE_HEADERS = (
+    "X-Apple-I-MD",
+    "X-Apple-I-MD-M",
+    "X-Apple-I-MD-LU",
+    "X-Apple-I-MD-RINFO",
+    "X-Apple-I-Client-Time",
+    "X-Apple-I-TimeZone",
+    "X-Apple-Locale",
+    "X-Mme-Device-Id",
+    "X-MMe-Client-Info",
+)
 
 
 @dataclass(frozen=True)
@@ -33,13 +51,16 @@ class Team:
 
     @property
     def is_free(self) -> bool:
-        # Apple nennt Gratis-Teams "Individual" mit Typ "Free"; der Typ ist
-        # das verlaesslichere Signal, wird aber spaeter ohnehin anhand der
-        # echten Profil-Laufzeit gegengeprueft.
+        """Nur verlaesslich, wenn Apple den Typ ausdruecklich "Free" nennt.
+
+        Fuer Einzelaccounts meldet Apple sonst ``Individual`` - unabhaengig
+        davon, ob dafuer bezahlt wurde. Wer hier raet, raet falsch; die Frage
+        beantwortet erst die Laufzeit eines echten Profils.
+        """
         return self.type.lower().startswith("free")
 
     def __str__(self) -> str:
-        return f"{self.name} [{self.team_id}] - {'kostenlos' if self.is_free else 'bezahlt'}"
+        return f"{self.name} [{self.team_id}] - Typ {self.type}"
 
 
 @dataclass(frozen=True)
@@ -81,7 +102,12 @@ class DeveloperServices:
 
     def _post(self, action: str, params: dict[str, Any] | None = None,
               *, team_id: str | None = None) -> dict:
-        url = f"{http.DEV_SERVICES}/{http.PROTOCOL_VERSION}/{action}"
+        # Die Client-Id steht zusaetzlich in der URL. Fehlt sie dort, weist
+        # Apple die Anfrage mit resultCode 1100 ("session has expired") ab -
+        # obwohl die Sitzung frisch ist und der Fehler nichts mit ihr zu tun
+        # hat.
+        url = (f"{http.DEV_SERVICES}/{http.PROTOCOL_VERSION}/{action}"
+               f"?clientId={CLIENT_ID}")
         body: dict[str, Any] = {
             "clientId": CLIENT_ID,
             "protocolVersion": http.PROTOCOL_VERSION,
@@ -92,14 +118,15 @@ class DeveloperServices:
             body["teamId"] = team_id
         body.update(params or {})
 
-        headers = {
-            **self._session.auth_headers,
-            "X-Apple-App-Info": "com.apple.gs.xcode.auth",
-            "X-Xcode-Version": "14.2 (14C18)",
-        }
         ani = self._ani.headers()
-        headers.update({k: v for k, v in ani.items() if k.startswith("X-")})
-        headers["X-MMe-Client-Info"] = clientinfo.sanitize(self._ani.client_info())
+        headers = {
+            "X-Apple-App-Info": "com.apple.gs.xcode.auth",
+            "X-Xcode-Version": XCODE_VERSION,
+            **self._session.auth_headers,
+        }
+        headers.update({k: ani[k] for k in _ANISETTE_HEADERS if k in ani})
+        # Apple erwartet die Sprache unter zwei Namen.
+        headers.setdefault("X-Apple-I-Locale", ani.get("X-Apple-Locale", "en_US"))
 
         resp = self._http.post(url, data=plistlib.dumps(body),
                                headers=headers, timeout=45)

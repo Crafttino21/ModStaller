@@ -37,10 +37,22 @@ class Capabilities:
 
     @classmethod
     def for_team(cls, team: Team) -> "Capabilities":
-        if team.is_free:
-            return cls(is_free=True)
-        return cls(is_free=False, profile_days=365.0,
-                   max_app_ids_per_week=None, max_apps_per_device=None)
+        """Erste Annahme aus dem Team-Typ - bewusst vorsichtig.
+
+        Apple meldet fuer kostenlose *und* bezahlte Einzelaccounts denselben
+        Typ ``Individual``. Aus dem Typ allein laesst sich das also nicht
+        entscheiden. Wir nehmen im Zweifel "kostenlos" an, weil der Irrtum in
+        diese Richtung billig ist (eine Extension wird entfernt), in die
+        andere aber teuer: dann ist das Wochenkontingent von zehn App-IDs
+        verbraucht, bevor die App installiert ist.
+
+        :meth:`reconcile` korrigiert die Annahme, sobald ein echtes Profil
+        vorliegt und seine Laufzeit die Frage beantwortet.
+        """
+        if team.type.lower().startswith(("company", "organization")):
+            return cls(is_free=False, profile_days=365.0,
+                       max_app_ids_per_week=None, max_apps_per_device=None)
+        return cls(is_free=True)
 
     def reconcile(self, profile: Profile) -> "Capabilities":
         """Korrigiert die Annahme anhand der tatsaechlichen Laufzeit."""
@@ -71,7 +83,11 @@ def derive_bundle_id(original: str, team_id: str) -> str:
     wuerde.
     """
     base = _ID_SAFE.sub("-", original or "com.modstaller.app").strip(".")
-    return f"{base}.{team_id.lower()}"
+    # Team-ID in Originalschreibweise anhaengen. Das ist die Konvention, die
+    # auch die uebrigen Werkzeuge im Umfeld benutzen - dadurch findet
+    # ensure_app_id eine bereits vorhandene App-ID wieder, statt eine neue
+    # anzulegen und Kontingent zu verbrauchen.
+    return f"{base}.{team_id}"
 
 
 def pick_team(teams: list[Team], preferred: str | None = None) -> Team:
@@ -158,7 +174,7 @@ def ensure_app_id(api: DeveloperServices, team: Team, identifier: str,
 def _recycle_app_id(api: DeveloperServices, team: Team) -> bool:
     """Gibt eine von ModStaller angelegte App-ID frei, um Platz zu schaffen."""
     ours = [a for a in api.list_app_ids(team.team_id)
-            if a.identifier.endswith(team.team_id.lower())]
+            if a.identifier.lower().endswith(team.team_id.lower())]
     if not ours:
         return False
     api.delete_app_id(team.team_id, ours[0].app_id_id)

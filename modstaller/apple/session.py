@@ -48,9 +48,16 @@ class Session:
 
     @property
     def auth_headers(self) -> dict[str, str]:
+        """Beglaubigung gegenueber developerservices2.
+
+        ``X-Apple-GS-Token`` traegt das App-Token **roh** - nicht als
+        base64("<adsid>:<token>"). Mit der kodierten Form antwortet Apple auf
+        jede Anfrage mit "Your session has expired", obwohl die Anmeldung
+        gerade erfolgreich war.
+        """
         return {
             "X-Apple-I-Identity-Id": self.adsid,
-            "X-Apple-GS-Token": self.identity_token,
+            "X-Apple-GS-Token": self.app_token,
         }
 
     # -- Persistenz --------------------------------------------------------
