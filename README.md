@@ -67,6 +67,24 @@ Store scheitert jede Verbindung. Die Kette liegt in
 `modstaller/apple/certs/apple-gsa-ca.pem` - wir verifizieren dagegen, statt
 die Pruefung abzuschalten.
 
+**Ein Request pro Verbindung.** Apples Edge laesst an `GsService2` nur den
+ersten Request einer TCP-Verbindung durch; jeder weitere bekommt HTTP 429.
+Gemessen:
+
+    Verbindung wiederverwendet:  404, 429, 429, 429, 429, 429
+    Connection: close:           404, 404, 404, 404, 404, 429
+
+Ein Login besteht aus zwei Requests (`init`, `complete`) - mit Keep-Alive
+scheitert also *jeder* Login am zweiten, und es sieht aus wie eine Sperre des
+Accounts. ModStaller erzwingt pro Request eine frische Verbindung. Der
+verbleibende sporadische 429 ist ein Budget pro IP-Adresse und wird begrenzt
+wiederholt; das ist unbedenklich, weil die Edge vor dem Auth-Dienst abweist
+und das SRP-Cookie dabei nicht verbraucht wird.
+
+Diagnose und Messmethode stammen aus den Untersuchungen von SideStore
+(Issue #1557) und OpenTagViewer (Issue #226); die Umsetzung hier ist eigener
+Code.
+
 ## Sicherheit
 
 Das Apple-Passwort wird nie gespeichert und nie uebertragen: SRP-6a beweist

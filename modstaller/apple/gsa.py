@@ -116,12 +116,13 @@ class GSAClient:
 
         body = {"Header": {"Version": "1.0.1"},
                 "Request": {"cpd": self._cpd(), **params}}
-        resp = self._session.post(http.GSA_URL, data=plistlib.dumps(body),
-                                  headers={"X-MMe-Client-Info": ci}, timeout=30)
-        # Vor dem Parsen: ist das ueberhaupt eine Antwort, oder eine
-        # Abweisung? Beide sehen wie Serverfehler aus, sind aber keine.
-        http.check_edge_rejection(resp, ci)
-        http.check_rate_limit(resp, what="Apples Anmeldedienst")
+        # gsa_request sorgt fuer eine frische Verbindung: Apples Edge laesst
+        # pro TCP-Verbindung nur einen Request an GsService2 durch, und
+        # "complete" waere sonst der zweite.
+        resp = http.gsa_request(
+            self._session, "POST", http.GSA_URL, client_info=ci,
+            headers={"X-MMe-Client-Info": ci}, data=plistlib.dumps(body),
+        )
         resp.raise_for_status()
         try:
             return plistlib.loads(resp.content)["Response"]
@@ -226,18 +227,20 @@ class GSAClient:
         headers = self._two_factor_headers(spd)
 
         # Code an die vertrauten Geraete schicken.
-        self._session.get("https://gsa.apple.com/auth/verify/trusteddevice",
-                          headers=headers, timeout=30)
+        http.gsa_request(self._session, "GET",
+                         "https://gsa.apple.com/auth/verify/trusteddevice",
+                         client_info=headers["X-MMe-Client-Info"],
+                         headers=headers)
 
         code = self._prompt().strip()
         if not code:
             raise AppleError("Kein 2FA-Code eingegeben.")
 
-        resp = self._session.get(
+        resp = http.gsa_request(
+            self._session, "GET",
             "https://gsa.apple.com/grandslam/GsService2/validate",
-            headers={**headers, "security-code": code}, timeout=30)
-        http.check_edge_rejection(resp, headers["X-MMe-Client-Info"])
-        http.check_rate_limit(resp, what="Apples 2FA-Pruefung")
+            client_info=headers["X-MMe-Client-Info"],
+            headers={**headers, "security-code": code})
         try:
             self._check(plistlib.loads(resp.content))
         except plistlib.InvalidFileException:

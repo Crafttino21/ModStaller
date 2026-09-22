@@ -13,6 +13,8 @@ Zwei Eigenheiten von Apples Endpunkten, die hier zentral behandelt werden:
 
 from __future__ import annotations
 
+import time
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -69,6 +71,23 @@ _NO_RETRY: tuple[int, ...] = ()
 _DEV_RETRY: tuple[int, ...] = (500, 502, 504)
 
 
+#: Apples Edge erlaubt pro TCP-Verbindung genau *einen* Request an
+#: GsService2. Jeder weitere auf derselben Verbindung bekommt HTTP 429 -
+#: gemessen: [404, 429, 429, 429, 429, 429] bei Wiederverwendung gegenueber
+#: [404, 404, 404, 404, 404, 429] mit ``Connection: close``.
+#:
+#: Genau daran scheitert ein Login sonst reproduzierbar: ``init`` ist der
+#: erste Request und geht durch, ``complete`` der zweite und wird abgewiesen.
+#: Das sieht nach Drosselung des Accounts aus, ist aber keine.
+_FORCE_CLOSE = {"Connection": "close"}
+
+#: Der Rest-429 ist ein rollendes Budget pro IP-Adresse und klart von selbst
+#: auf. Weil die Edge *vor* dem Auth-Dienst abweist, wird das SRP-Cookie dabei
+#: nicht verbraucht - ein erneuter Versuch ist deshalb unbedenklich.
+GSA_MAX_ATTEMPTS = 4
+GSA_RETRY_DELAY = 2.0
+
+
 def gsa_session() -> requests.Session:
     s = _GuardedSession()
     s.verify = str(GSA_CA_BUNDLE)
@@ -76,11 +95,42 @@ def gsa_session() -> requests.Session:
         "Content-Type": "text/x-xml-plist",
         "Accept": "*/*",
         "User-Agent": USER_AGENT_AKD,
-        "X-Mme-Nas-Qualify": "true",
         "Accept-Language": "en-us",
+        **_FORCE_CLOSE,
     })
     s.mount("https://", _retrying_adapter(retry_statuses=_NO_RETRY))
     return s
+
+
+def gsa_request(session: requests.Session, method: str, url: str,
+                *, client_info: str, headers: dict[str, str] | None = None,
+                timeout: float = 30.0, **kwargs) -> requests.Response:
+    """Ein GSA-Request auf frischer Verbindung, mit begrenzter Wiederholung.
+
+    Wiederholt wird ausschliesslich bei HTTP 429 der Edge - und bewusst hier
+    von Hand statt ueber urllib3, damit die Wiederholung immer eine neue
+    Verbindung bekommt und die Anzahl klar begrenzt bleibt.
+    """
+    merged = {**(headers or {}), **_FORCE_CLOSE}
+    last: requests.Response | None = None
+
+    for attempt in range(1, GSA_MAX_ATTEMPTS + 1):
+        # Verbindungspool leeren: die naechste Anfrage soll eine eigene
+        # TCP-Verbindung bekommen, sonst antwortet die Edge wieder mit 429.
+        session.close()
+        response = session.request(method, url, headers=merged,
+                                   timeout=timeout, **kwargs)
+        check_edge_rejection(response, client_info)
+        if response.status_code != 429:
+            return response
+        last = response
+        if attempt < GSA_MAX_ATTEMPTS:
+            time.sleep(GSA_RETRY_DELAY * attempt)
+
+    assert last is not None
+    check_rate_limit(last, what="Apples Anmeldedienst",
+                     attempts=GSA_MAX_ATTEMPTS)
+    return last
 
 
 def dev_session() -> requests.Session:
@@ -117,11 +167,13 @@ def check_edge_rejection(response: requests.Response, client_info: str) -> None:
     )
 
 
-def check_rate_limit(response: requests.Response, *, what: str = "Apple") -> None:
+def check_rate_limit(response: requests.Response, *, what: str = "Apple",
+                     attempts: int = 1) -> None:
     """Uebersetzt HTTP 429 in eine Ansage mit Wartezeit.
 
-    Apple drosselt Anmeldeversuche pro Account und IP. Dagegen hilft nur
-    warten - weitere Versuche verlaengern die Sperre.
+    Erst relevant, wenn auch frische Verbindungen abgewiesen werden - dann
+    ist das Budget der IP-Adresse aufgebraucht, das sich alle Anmeldungen im
+    selben Netz teilen.
     """
     if response.status_code != 429:
         return
@@ -143,9 +195,9 @@ def check_rate_limit(response: requests.Response, *, what: str = "Apple") -> Non
             detail += f"\n{header}: {response.headers[header]}"
 
     raise AppleRateLimited(
-        f"{what} hat die Anfrage gedrosselt (HTTP 429).{wait}\n"
-        "Das passiert nach mehreren Anmeldeversuchen in kurzer Zeit. "
-        "Weitere Versuche verlaengern die Sperre - am besten 15-60 Minuten "
-        "warten und es dann genau einmal erneut versuchen."
+        f"{what} hat auch nach {attempts} Versuchen auf frischer Verbindung "
+        f"gedrosselt (HTTP 429).{wait}\n"
+        "Apple fuehrt ein Budget pro IP-Adresse, das sich alle Anmeldungen im "
+        "selben Netz teilen. Ein paar Minuten warten und erneut versuchen."
         + detail
     )
