@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modstaller"
+version = "0.1.0"
+description = "iOS-Sideloader fuer Linux: IPAs signieren und aufs iPhone installieren"
+requires-python = ">=3.12"
+dependencies = [
+    "pymobiledevice3>=11.17",
+    "anisette>=1.2.4",
+    "cryptography>=43",
+    "requests>=2.31",
+]
+
+[project.scripts]
+modstaller = "modstaller.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["modstaller*"]
+
+[tool.setuptools.package-data]
+"modstaller.apple" = ["certs/*.pem"]
