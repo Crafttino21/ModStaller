@@ -138,7 +138,8 @@ async def _login(args) -> int:
         return input("2FA-Code von deinem iPhone: ").strip()
 
     print("Bei Apple anmelden …", flush=True)
-    session = login(apple_id, password, ani, code_prompt=prompt_code)
+    session = login(apple_id, password, ani, code_prompt=prompt_code,
+                    debug=args.debug)
     print("\nAngemeldet.")
 
     print("\nTeams:")

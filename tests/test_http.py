@@ -135,3 +135,37 @@ def test_rate_limit_reports_retry_after():
         http.check_rate_limit(_FakeResponse(429, b"", {"Retry-After": "600"}),
                               attempts=4)
     assert "10 Minuten" in str(exc.value)
+
+
+# -- 2FA-Erkennung ---------------------------------------------------------
+
+from modstaller.apple.gsa import GSAClient, _describe  # noqa: E402
+
+
+@pytest.mark.parametrize("complete, spd, expected", [
+    ({"Status": {"au": "trustedDeviceSecondaryAuth"}}, {}, True),
+    ({"au": "secondaryAuth"}, {}, True),
+    ({}, {"au": "smsSecondaryAuth"}, True),
+    ({"Status": {"ec": 0}}, {"adsid": "x"}, False),
+    ({}, {}, False),
+])
+def test_two_factor_detected_wherever_apple_puts_it(complete, spd, expected):
+    """Apple legt den Hinweis in Status.au ab, nicht im verschluesselten spd.
+
+    Wird das uebersehen, laeuft der Login scheinbar durch und der
+    anschliessende Token-Tausch scheitert mit "Enter the correct password" -
+    ein Wortlaut, der in die voellig falsche Richtung zeigt.
+    """
+    assert GSAClient._needs_2fa(complete, spd) is expected
+
+
+def test_describe_never_leaks_secrets():
+    out = _describe({
+        "sk": b"\x01" * 32, "spd": b"\x02" * 64, "GsIdmsToken": "geheim",
+        "Status": {"ec": 0, "au": "trustedDeviceSecondaryAuth"},
+        "ptxid": "harmlos",
+    }, "test")
+    assert "geheim" not in out
+    assert "trustedDeviceSecondaryAuth" in out, "Diagnose muss brauchbar bleiben"
+    assert "harmlos" in out
+    assert "<verborgen>" in out or "Byte>" in out

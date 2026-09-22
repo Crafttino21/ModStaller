@@ -45,9 +45,29 @@ _PLIST_HEADER = (
 #: Status-Codes, die Apple in ``Status.ec`` zurueckgibt.
 ERR_INVALID_CREDENTIALS = -20101
 ERR_INVALID_CODE = -21669
+#: Apple meldet diese beiden waehrend des Token-Tauschs, wenn die Sitzung
+#: nicht vollstaendig bestaetigt ist. Der Wortlaut ("falsches Passwort")
+#: fuehrt dabei zuverlaessig in die Irre.
+ERR_NOT_FULLY_AUTHENTICATED = -22406
+ERR_TEMPORARILY_BLOCKED = -22411
+
 _MESSAGES = {
     ERR_INVALID_CREDENTIALS: "Apple-ID oder Passwort ist falsch.",
     ERR_INVALID_CODE: "Der 2FA-Code wurde nicht akzeptiert.",
+}
+
+_HINTS = {
+    ERR_NOT_FULLY_AUTHENTICATED: (
+        "Apple nennt das ein falsches Passwort, meint aber meist eine nicht "
+        "vollstaendig bestaetigte Sitzung - typischerweise eine ausstehende "
+        "Zwei-Faktor-Bestaetigung. Falls das Passwort sicher stimmt, hilft "
+        "oft: modstaller logout --forget-device, dann neu anmelden."
+    ),
+    ERR_TEMPORARILY_BLOCKED: (
+        "Apple blockt diesen Account gerade voruebergehend, meist nach "
+        "mehreren fehlgeschlagenen Versuchen kurz hintereinander. Etwa eine "
+        "Stunde warten; weitere Versuche verlaengern die Sperre."
+    ),
 }
 
 
@@ -116,6 +136,36 @@ def _decrypt_app_token(session_key: bytes, blob: bytes) -> dict:
     return plistlib.loads(_PLIST_HEADER + plain)
 
 
+#: Felder, die niemals ausgegeben werden duerfen - auch nicht im
+#: Diagnosemodus. Schluesselmaterial, Beweise und Tokens.
+_NEVER_PRINT = frozenset({
+    "sk", "spd", "M1", "M2", "B", "A2k", "c", "et", "checksum", "s",
+    "GsIdmsToken", "token", "pet", "adsid", "DsPrsId", "acname", "altDSID",
+})
+
+
+def _describe(data: dict, label: str) -> str:
+    """Beschreibt eine Antwort, ohne ihren Inhalt preiszugeben.
+
+    Bei der Fehlersuche ist fast immer entscheidend, *welche* Felder Apple
+    schickt - nicht, was drinsteht. Werte werden deshalb nur fuer
+    unverfaengliche Felder gezeigt.
+    """
+    lines = [f"  [{label}] Felder: {', '.join(sorted(data))}"]
+    for key in sorted(data):
+        if key in _NEVER_PRINT:
+            value = f"<{len(data[key])} Byte>" if isinstance(
+                data[key], (bytes, bytearray)) else "<verborgen>"
+        elif isinstance(data[key], dict):
+            value = "{" + ", ".join(
+                f"{k}={v!r}" if k not in _NEVER_PRINT else f"{k}=<verborgen>"
+                for k, v in sorted(data[key].items())) + "}"
+        else:
+            value = repr(data[key])
+        lines.append(f"      {key}: {value[:220]}")
+    return "\n".join(lines)
+
+
 class GSAClient:
     """Fuehrt den GrandSlam-Handshake durch.
 
@@ -126,10 +176,16 @@ class GSAClient:
             dass ein Daemon auf stdin blockiert.
     """
 
-    def __init__(self, anisette, code_prompt: Callable[[], str] | None = None):
+    def __init__(self, anisette, code_prompt: Callable[[], str] | None = None,
+                 debug: bool = False):
         self._ani = anisette
         self._prompt = code_prompt
+        self._debug = debug
         self._session = http.gsa_session()
+
+    def _trace(self, data: dict, label: str) -> None:
+        if self._debug:
+            print(_describe(data, label), flush=True)
 
     # -- Transport ---------------------------------------------------------
 
@@ -159,7 +215,9 @@ class GSAClient:
         )
         resp.raise_for_status()
         try:
-            return plistlib.loads(resp.content)["Response"]
+            parsed = plistlib.loads(resp.content)["Response"]
+            self._trace(parsed, params.get("o", "?"))
+            return parsed
         except Exception as exc:
             raise AppleError(
                 f"Unerwartete GSA-Antwort (HTTP {resp.status_code}): "
@@ -172,20 +230,25 @@ class GSAClient:
         code = status.get("ec", 0)
         if code:
             msg = _MESSAGES.get(code) or status.get("em") or f"GSA-Fehler {code}"
-            raise AppleError(f"{msg} (Code {code})")
+            hint = _HINTS.get(code)
+            raise AppleError(f"{msg} (Code {code})"
+                             + (f"\n\n{hint}" if hint else ""))
         return resp
 
     # -- Ablauf ------------------------------------------------------------
 
     def authenticate(self, apple_id: str, password: str) -> GSAResult:
-        spd, srp_key = self._handshake(apple_id, password)
+        spd, srp_key, complete = self._handshake(apple_id, password)
+        self._trace(spd, "spd (entschluesselt)")
 
-        if self._needs_2fa(spd):
+        if self._needs_2fa(complete, spd):
+            if self._debug:
+                print("  -> Apple verlangt eine Zweit-Bestaetigung.", flush=True)
             self._do_two_factor(spd)
             # Nach bestandener 2FA gilt der Handshake neu - Apple haengt die
             # Vertrauensstellung an die ADI-Identitaet, nicht an die Session.
-            spd, srp_key = self._handshake(apple_id, password)
-            if self._needs_2fa(spd):
+            spd, srp_key, complete = self._handshake(apple_id, password)
+            if self._needs_2fa(complete, spd):
                 raise AppleError(
                     "Apple verlangt nach der 2FA-Bestaetigung erneut einen Code. "
                     "Meist hilft es, den Provisioning-State zurueckzusetzen: "
@@ -247,7 +310,14 @@ class GSAClient:
             )
         return app_token
 
-    def _handshake(self, apple_id: str, password: str) -> tuple[dict, bytes]:
+    def _handshake(self, apple_id: str,
+                   password: str) -> tuple[dict, bytes, dict]:
+        """Returns: entschluesseltes ``spd``, SRP-Key, rohe ``complete``-Antwort.
+
+        Die rohe Antwort wird gebraucht, weil Apple den Hinweis auf eine
+        noetige Zwei-Faktor-Bestaetigung in ``Status.au`` unterbringt - also
+        *neben* dem verschluesselten spd, nicht darin.
+        """
         srp = SRPClient(apple_id)
         init = self._check(self._request({
             "A2k": srp.A_bytes,
@@ -273,14 +343,30 @@ class GSAClient:
                 "den Schluessel nicht belegen - Verbindung nicht vertrauen."
             )
         assert srp.K is not None
-        return _decrypt_spd(srp.K, complete["spd"]), srp.K
+        return _decrypt_spd(srp.K, complete["spd"]), srp.K, complete
 
     # -- Zwei-Faktor -------------------------------------------------------
 
-    @staticmethod
-    def _needs_2fa(spd: dict) -> bool:
-        return spd.get("au") in ("trustedDeviceSecondaryAuth",
-                                 "secondaryAuth", "smsSecondaryAuth")
+    #: Werte, mit denen Apple eine Zweit-Bestaetigung anfordert.
+    _SECOND_FACTOR = ("trustedDeviceSecondaryAuth", "secondaryAuth",
+                      "smsSecondaryAuth")
+
+    @classmethod
+    def _needs_2fa(cls, complete: dict, spd: dict) -> bool:
+        """Sucht den 2FA-Hinweis an allen Stellen, an denen Apple ihn ablegt.
+
+        Primaer ``Status.au`` in der ``complete``-Antwort. Wird das
+        uebersehen, laeuft der Login scheinbar durch, liefert aber eine nur
+        halb gueltige Sitzung - und Apple beantwortet den anschliessenden
+        Token-Tausch mit "Enter the correct password", was in die voellig
+        falsche Richtung zeigt.
+        """
+        candidates = (
+            (complete.get("Status") or {}).get("au"),
+            complete.get("au"),
+            spd.get("au"),
+        )
+        return any(c in cls._SECOND_FACTOR for c in candidates if c)
 
     def _two_factor_headers(self, spd: dict) -> dict[str, str]:
         identity = b64encode(
