@@ -128,10 +128,25 @@ def ensure_certificate(api: DeveloperServices, team: Team,
             machine_name=machine_name,
         )
     except AppleAPIError as exc:
+        # Apple begrenzt die Zahl der Development-Zertifikate. Wir koennen ein
+        # vorhandenes nicht mitbenutzen - der private Schluessel liegt bei dem
+        # Werkzeug, das es angefordert hat, und ohne ihn ist es wertlos.
+        existing = []
+        try:
+            existing = api.list_certificates(team.team_id)
+        except Exception:
+            pass
+        listing = "\n".join(f"    {c}" for c in existing)
         raise AppleError(
-            f"Apple hat kein Zertifikat ausgestellt: {exc}\n"
-            "Bei einem Gratis-Account hilft oft, in Xcode/auf dem Mac "
-            "ungenutzte Zertifikate zu widerrufen."
+            f"Apple hat kein Zertifikat ausgestellt: {exc}\n\n"
+            + (f"Vorhandene Zertifikate:\n{listing}\n\n" if existing else "")
+            + "ModStaller braucht ein eigenes, weil der private Schluessel zu "
+              "den vorhandenen bei den Werkzeugen liegt, die sie angefordert "
+              "haben.\n"
+              "Anzeigen mit:  modstaller certs\n"
+              "Platz schaffen: modstaller certs revoke <ID>\n"
+              "Achtung: Apps, die mit dem widerrufenen Zertifikat signiert "
+              "wurden, starten danach nicht mehr."
         ) from exc
 
     if not cert.content:

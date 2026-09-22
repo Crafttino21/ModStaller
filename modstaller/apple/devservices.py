@@ -67,8 +67,17 @@ class Team:
 class Certificate:
     cert_id: str
     serial: str
+    #: Name des Rechners, der das Zertifikat angefordert hat - das einzige
+    #: brauchbare Unterscheidungsmerkmal, weil Apple allen denselben Namen
+    #: "iOS Development: <Person>" gibt.
     name: str
     content: bytes
+    expires_at: object = None
+    machine_id: str = ""
+
+    def __str__(self) -> str:
+        when = f", laeuft ab {self.expires_at:%d.%m.%Y}" if self.expires_at else ""
+        return f"{self.name} [{self.cert_id}]{when}"
 
 
 @dataclass(frozen=True)
@@ -192,9 +201,19 @@ class DeveloperServices:
             content=req.get("certificatePage") or req.get("certContent") or b"",
         )
 
-    def list_certificates(self, team_id: str) -> list[dict]:
+    def list_certificates(self, team_id: str) -> list[Certificate]:
         data = self._post("ios/listAllDevelopmentCerts.action", team_id=team_id)
-        return data.get("certificates", [])
+        return [
+            Certificate(
+                cert_id=c.get("certificateId", ""),
+                serial=c.get("serialNumber", ""),
+                name=c.get("machineName") or c.get("name", "?"),
+                content=c.get("certContent") or b"",
+                expires_at=c.get("expirationDate"),
+                machine_id=c.get("machineId", ""),
+            )
+            for c in data.get("certificates", [])
+        ]
 
     def revoke_certificate(self, team_id: str, serial: str) -> None:
         self._post("ios/revokeDevelopmentCert.action",

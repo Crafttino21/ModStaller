@@ -192,6 +192,49 @@ async def _account(args) -> int:
     return 0
 
 
+async def _certs(args) -> int:
+    from .apple.devservices import DeveloperServices
+    from .apple.session import Session
+    from .provisioning import pick_team
+
+    session = Session.load()
+    if session is None:
+        print("Nicht angemeldet. Zuerst: modstaller login", file=sys.stderr)
+        return 3
+    ani = _anisette()
+    api = DeveloperServices(session, ani)
+    team = pick_team(api.list_teams(), args.team)
+    certs = api.list_certificates(team.team_id)
+
+    if args.revoke:
+        match = [c for c in certs
+                 if args.revoke in (c.cert_id, c.serial, c.name)]
+        if not match:
+            print(f"Kein Zertifikat mit {args.revoke!r} gefunden.",
+                  file=sys.stderr)
+            return 2
+        cert = match[0]
+        print(f"Widerrufen: {cert}")
+        print("Apps, die damit signiert wurden, starten danach nicht mehr.")
+        if input("Wirklich widerrufen? [ja/NEIN] ").strip().lower() not in (
+                "ja", "j", "yes", "y"):
+            print("Abgebrochen.")
+            return 0
+        api.revoke_certificate(team.team_id, cert.serial)
+        print("Widerrufen.")
+        return 0
+
+    if not certs:
+        print("Keine Development-Zertifikate im Account.")
+        return 0
+    print(f"{len(certs)} Development-Zertifikat(e):\n")
+    for c in certs:
+        print(f"  {c}")
+    print("\nModStaller kann keins davon mitbenutzen - der private "
+          "Schluessel\nliegt bei dem Werkzeug, das es angefordert hat.")
+    return 0
+
+
 # -- Geraet ----------------------------------------------------------------
 
 
@@ -325,6 +368,12 @@ def build_parser() -> argparse.ArgumentParser:
     ref.add_argument("--threshold", type=float,
                      help="Tage vor Ablauf, ab denen erneuert wird")
     ref.set_defaults(afunc=_refresh)
+
+    crt = sub.add_parser("certs", help="Development-Zertifikate anzeigen")
+    crt.add_argument("--team", help="Team-ID, falls mehrere vorhanden")
+    crt.add_argument("--revoke", metavar="ID",
+                     help="Zertifikat widerrufen, um Platz zu schaffen")
+    crt.set_defaults(afunc=_certs)
 
     sub.add_parser("list", help="Installierte Apps und Ablaufdaten"
                    ).set_defaults(afunc=_list)
