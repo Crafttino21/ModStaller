@@ -241,6 +241,18 @@ async def _install(args) -> int:
     return 0
 
 
+async def _refresh(args) -> int:
+    from .pipeline import refresh as run_refresh
+
+    results = await run_refresh(
+        udid=args.udid, only=args.bundle_id,
+        threshold_days=args.threshold, progress=_progress_printer(),
+    )
+    if results:
+        print(f"\r  {len(results)} App(s) erneuert.")
+    return 0
+
+
 async def _list(args) -> int:
     from .state import store
     rows = store.all_installs()
@@ -294,6 +306,14 @@ def build_parser() -> argparse.ArgumentParser:
     ins.add_argument("--keep-extensions", action="store_true",
                      help="App-Extensions behalten (kostet je eine App-ID)")
     ins.set_defaults(afunc=_install)
+
+    ref = sub.add_parser("refresh",
+                         help="Ablaufende Apps neu signieren und installieren")
+    ref.add_argument("bundle_id", nargs="?",
+                     help="nur diese App (Default: alle faelligen)")
+    ref.add_argument("--threshold", type=float,
+                     help="Tage vor Ablauf, ab denen erneuert wird")
+    ref.set_defaults(afunc=_refresh)
 
     sub.add_parser("list", help="Installierte Apps und Ablaufdaten"
                    ).set_defaults(afunc=_list)

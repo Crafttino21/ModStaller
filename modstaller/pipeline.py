@@ -141,3 +141,48 @@ async def install(
                           transport=result.transport,
                           days_valid=prof.days_left,
                           stripped_extensions=strip)
+
+
+async def refresh(
+    *,
+    udid: str | None = None,
+    settings: Settings | None = None,
+    threshold_days: float | None = None,
+    only: str | None = None,
+    progress: Callable[[int], None] | None = None,
+) -> list[InstallOutcome]:
+    """Erneuert Apps, deren Profil bald ablaeuft.
+
+    Nutzt die beim Installieren gemerkte Original-IPA, damit die Bundle-ID
+    stabil bleibt - sonst gilt die App fuer iOS als andere App und die
+    gespeicherten Daten waeren weg.
+    """
+    settings = settings or Settings.load()
+    threshold = (settings.renew_threshold_days if threshold_days is None
+                 else threshold_days)
+
+    if only:
+        due = [r for r in store.all_installs() if r.bundle_id == only
+               or r.original_bundle_id == only]
+        if not due:
+            raise SigningError(f"Nichts unter {only!r} installiert.")
+    else:
+        due = store.due_for_refresh(threshold)
+
+    if not due:
+        _say(f"Nichts faellig (Schwelle: {threshold:.0f} Tage).")
+        return []
+
+    results: list[InstallOutcome] = []
+    for rec in due:
+        source = Path(rec.source_ipa)
+        if not source.is_file():
+            _say(f"\n{rec.name}: Original-IPA fehlt ({source}) - uebersprungen.")
+            continue
+        _say(f"\n=== {rec.name} erneuern ({rec.expiry_text}) ===")
+        results.append(await install(
+            source, udid=udid or rec.udid, team_id=rec.team_id,
+            settings=settings, strip_extensions=rec.strip_extensions,
+            progress=progress,
+        ))
+    return results

@@ -12,9 +12,13 @@ Getestet gegen: iPhone 16 Pro Max (iPhone17,2), iOS 27.0, CachyOS/Arch.
 |---|---|---|
 | M0 | Geruest, `doctor`, Device-Verbindung | steht |
 | M1 | Anisette + GSA-Login | Transport bewiesen, Login ungetestet |
-| M2 | Zertifikat, App-ID, Provisioning-Profil | offen |
-| M3 | Signieren und installieren | offen |
-| M4/M5 | Politur, Auto-Refresh-Daemon | offen |
+| M2 | Zertifikat, App-ID, Provisioning-Profil | gebaut, ungetestet |
+| M3 | Signieren und installieren | gebaut, ungetestet |
+| M4 | `refresh` gegen den 7-Tage-Ablauf | gebaut, ungetestet |
+| M5 | systemd-Timer fuer automatischen Refresh | offen |
+
+"Ungetestet" heisst: gegen Apple laeuft bisher nur der Transport, nicht der
+Login mit echten Zugangsdaten. Der erste `modstaller login` ist der Test.
 
 ## Setup
 
@@ -24,6 +28,26 @@ python -m venv .venv
 paru -S zsign-bin
 .venv/bin/modstaller doctor
 ```
+
+## Benutzung
+
+```bash
+modstaller login                  # einmalig, fragt Apple ID + 2FA-Code
+modstaller account                # Team, Kontingente, angelegte App-IDs
+modstaller device info            # iPhone, iOS-Version, Developer Mode
+
+modstaller install app.ipa        # signieren und installieren
+modstaller list                   # was laeuft, und wie lange noch
+modstaller refresh                # vor dem 7-Tage-Ablauf erneuern
+```
+
+Bei einem Gratis-Account werden App-Extensions per Default entfernt: jede
+kostet eine App-ID aus einem Kontingent von zehn pro Woche, und die App
+selbst laeuft ohne sie. Mit `--keep-extensions` behaeltst du sie.
+
+`refresh` nutzt die beim Installieren gemerkte Original-IPA und haelt die
+Bundle-ID stabil - sonst waere die App fuer iOS eine andere und die
+gespeicherten Daten weg.
 
 ## Zwei Fallstricke, die hier geloest sind
 
