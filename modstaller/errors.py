@@ -103,3 +103,9 @@ REMEDIES: dict[int, str] = {
 
 def remedy_for(code: int) -> str:
     return REMEDIES.get(code, "")
+
+
+class AppleRateLimited(AppleError):
+    """Apple hat gedrosselt (HTTP 429). Weitere Versuche verschlimmern es."""
+
+    exit_code = 7

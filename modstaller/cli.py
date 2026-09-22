@@ -274,6 +274,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="modstaller",
         description="iOS-Sideloader fuer Linux: IPAs signieren und installieren.")
     p.add_argument("-u", "--udid", help="Zielgeraet (Default: das einzige)")
+    p.add_argument("--debug", action="store_true",
+                   help="vollen Stacktrace bei unerwarteten Fehlern zeigen")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("doctor", help="Pruefen, ob alles Noetige da ist"
@@ -322,6 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    args_debug = getattr(args, "debug", False)
     config.ensure_dirs()
     try:
         if hasattr(args, "afunc"):
@@ -331,7 +334,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nFehler: {exc}", file=sys.stderr)
         return exc.exit_code
     except KeyboardInterrupt:
+        print("\nAbgebrochen.", file=sys.stderr)
         return 130
+    except Exception as exc:
+        # Netz- und Bibliotheksfehler sollen nicht als Traceback erscheinen.
+        # Der volle Stack bleibt ueber --debug erreichbar.
+        import requests
+        if isinstance(exc, requests.exceptions.RetryError):
+            print("\nFehler: Apple hat wiederholt abgewiesen und der Versuch "
+                  "wurde aufgegeben.\nMeist Drosselung - 15-60 Minuten warten.",
+                  file=sys.stderr)
+        elif isinstance(exc, requests.exceptions.SSLError):
+            print(f"\nFehler: TLS-Verbindung zu Apple fehlgeschlagen.\n{exc}",
+                  file=sys.stderr)
+        elif isinstance(exc, requests.exceptions.RequestException):
+            print(f"\nFehler: Netzwerkproblem im Kontakt mit Apple.\n{exc}",
+                  file=sys.stderr)
+        else:
+            if args_debug:
+                raise
+            print(f"\nUnerwarteter Fehler: {type(exc).__name__}: {exc}\n"
+                  "Vollen Stack mit --debug anzeigen.", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

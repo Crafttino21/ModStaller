@@ -18,7 +18,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from ..config import GSA_CA_BUNDLE
-from ..errors import AnisetteClientInfoRejected
+from ..errors import AnisetteClientInfoRejected, AppleRateLimited
 from . import clientinfo
 
 GSA_HOST = "gsa.apple.com"
@@ -48,13 +48,25 @@ class _GuardedSession(requests.Session):
         return super().request(method, url, **kwargs)
 
 
-def _retrying_adapter() -> HTTPAdapter:
-    # Bewusst *ohne* 503: ein 503 von GSA ist meist die Client-Info-Ablehnung,
-    # und die wegzuretryen verschleiert nur die Ursache.
+def _retrying_adapter(*, retry_statuses: tuple[int, ...]) -> HTTPAdapter:
     retry = Retry(total=3, backoff_factor=0.5,
-                  status_forcelist=(429, 500, 502, 504),
+                  status_forcelist=retry_statuses,
                   allowed_methods=frozenset({"GET", "POST"}))
     return HTTPAdapter(max_retries=retry)
+
+
+#: Beim Anmelden wird **nichts** automatisch wiederholt.
+#:
+#: 429 nicht, weil ein Retry Apples Drosselung nur eskalieren laesst - und
+#: weil der ``complete``-Schritt ein Einmal-Cookie aus ``init`` traegt, das
+#: erneut zu senden einem Replay gleichkommt.
+#: 503 nicht, weil das bei GSA praktisch immer die Client-Info-Ablehnung ist.
+_NO_RETRY: tuple[int, ...] = ()
+
+#: Bei der Entwickler-API sind echte Serverfehler wiederholbar - dort gibt es
+#: keinen Handshake-Zustand, der dabei kaputtgehen koennte. 429 bleibt auch
+#: hier aussen vor.
+_DEV_RETRY: tuple[int, ...] = (500, 502, 504)
 
 
 def gsa_session() -> requests.Session:
@@ -67,7 +79,7 @@ def gsa_session() -> requests.Session:
         "X-Mme-Nas-Qualify": "true",
         "Accept-Language": "en-us",
     })
-    s.mount("https://", _retrying_adapter())
+    s.mount("https://", _retrying_adapter(retry_statuses=_NO_RETRY))
     return s
 
 
@@ -81,7 +93,7 @@ def dev_session() -> requests.Session:
         "Accept": "text/x-xml-plist",
         "Accept-Language": "en-us",
     })
-    s.mount("https://", _retrying_adapter())
+    s.mount("https://", _retrying_adapter(retry_statuses=_DEV_RETRY))
     return s
 
 
@@ -102,4 +114,38 @@ def check_edge_rejection(response: requests.Response, client_info: str) -> None:
         "Ablehnung des Client-Info-Strings. Gesendet wurde:\n"
         f"  {client_info}\n"
         f"Erwartet wird ein String mit {clientinfo.AKD_IDENTIFIER!r}."
+    )
+
+
+def check_rate_limit(response: requests.Response, *, what: str = "Apple") -> None:
+    """Uebersetzt HTTP 429 in eine Ansage mit Wartezeit.
+
+    Apple drosselt Anmeldeversuche pro Account und IP. Dagegen hilft nur
+    warten - weitere Versuche verlaengern die Sperre.
+    """
+    if response.status_code != 429:
+        return
+    retry_after = response.headers.get("Retry-After", "")
+    wait = ""
+    if retry_after.isdigit():
+        secs = int(retry_after)
+        wait = (f" Apple nennt {secs // 60} Minuten." if secs >= 60
+                else f" Apple nennt {secs} Sekunden.")
+
+    # Apple legt gelegentlich einen Grund bei. Mitnehmen - beim naechsten
+    # Versuch ist das der einzige Anhaltspunkt, den wir haben.
+    detail = ""
+    body = (response.content or b"")[:400].decode("utf-8", "replace").strip()
+    if body:
+        detail = f"\nApples Antwort: {body}"
+    for header in ("X-Apple-I-Request-ID", "X-Apple-Edge-Response", "X-Apple-Jingle-Correlation-Key"):
+        if header in response.headers:
+            detail += f"\n{header}: {response.headers[header]}"
+
+    raise AppleRateLimited(
+        f"{what} hat die Anfrage gedrosselt (HTTP 429).{wait}\n"
+        "Das passiert nach mehreren Anmeldeversuchen in kurzer Zeit. "
+        "Weitere Versuche verlaengern die Sperre - am besten 15-60 Minuten "
+        "warten und es dann genau einmal erneut versuchen."
+        + detail
     )

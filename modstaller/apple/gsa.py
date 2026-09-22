@@ -118,8 +118,10 @@ class GSAClient:
                 "Request": {"cpd": self._cpd(), **params}}
         resp = self._session.post(http.GSA_URL, data=plistlib.dumps(body),
                                   headers={"X-MMe-Client-Info": ci}, timeout=30)
-        # Vor dem Parsen: ist das Apples Edge-Ablehnung statt einer Antwort?
+        # Vor dem Parsen: ist das ueberhaupt eine Antwort, oder eine
+        # Abweisung? Beide sehen wie Serverfehler aus, sind aber keine.
         http.check_edge_rejection(resp, ci)
+        http.check_rate_limit(resp, what="Apples Anmeldedienst")
         resp.raise_for_status()
         try:
             return plistlib.loads(resp.content)["Response"]
@@ -235,6 +237,7 @@ class GSAClient:
             "https://gsa.apple.com/grandslam/GsService2/validate",
             headers={**headers, "security-code": code}, timeout=30)
         http.check_edge_rejection(resp, headers["X-MMe-Client-Info"])
+        http.check_rate_limit(resp, what="Apples 2FA-Pruefung")
         try:
             self._check(plistlib.loads(resp.content))
         except plistlib.InvalidFileException:

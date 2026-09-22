@@ -40,7 +40,19 @@ G_1024 = 2
 
 
 def _pad(n: int, width: int) -> bytes:
+    """Linksseitig auf ``width`` genullt - fuer k und u (RFC 5054)."""
     return n.to_bytes(width, "big")
+
+
+def _minimal(n: int) -> bytes:
+    """Kuerzestmoegliche Big-Endian-Darstellung, ohne fuehrende Nullbytes.
+
+    Fuer A, B und S: die etablierten Implementierungen hashen diese Werte
+    *ungepadded*. Der Unterschied schlaegt nur durch, wenn der Wert zufaellig
+    mit einem Nullbyte beginnt - also in etwa einem von 256 Faellen. Genau
+    solche Logins wuerden sonst unerklaerlich scheitern.
+    """
+    return n.to_bytes(max(1, (n.bit_length() + 7) // 8), "big")
 
 
 def _hash_int(hash_alg, *values: bytes) -> int:
@@ -93,7 +105,7 @@ class SRPClient:
 
     @property
     def A_bytes(self) -> bytes:
-        return _pad(self.A, self._width)
+        return _minimal(self.A)
 
     def _x(self, salt: bytes, password: bytes) -> int:
         inner = self.H((self.I if self.username_in_x else b"") + b":" + password
@@ -108,8 +120,9 @@ class SRPClient:
             raise ValueError("Server hat ein ungueltiges B geschickt (B mod N == 0)")
 
         w = self._width
+        # k und u werden nach RFC 5054 gepadded, ...
         k = _hash_int(self.H, _pad(self.N, w), _pad(self.g, w))
-        u = _hash_int(self.H, self.A_bytes, _pad(B, w))
+        u = _hash_int(self.H, _pad(self.A, w), _pad(B, w))
         if u == 0:
             raise ValueError("Ungueltiges u (== 0)")
 
@@ -117,10 +130,11 @@ class SRPClient:
         # S = (B - k*g^x) ^ (a + u*x)  mod N
         S = pow((B - k * pow(self.g, x, self.N)) % self.N,
                 self.a + u * x, self.N)
-        self.K = self.H(_pad(S, w)).digest()
+        # ... K und M1 dagegen aus der ungepaddeten Darstellung.
+        self.K = self.H(_minimal(S)).digest()
 
         # M1 = H( H(N) XOR H(g) | H(I) | s | A | B | K )
-        hn = int.from_bytes(self.H(_pad(self.N, w)).digest(), "big")
+        hn = int.from_bytes(self.H(_minimal(self.N)).digest(), "big")
         hg = int.from_bytes(self.H(_pad(self.g, w)).digest(), "big")
         xor = (hn ^ hg).to_bytes(self.H().digest_size, "big")
 
@@ -129,7 +143,7 @@ class SRPClient:
         h.update(self.H(self.I).digest())
         h.update(salt)
         h.update(self.A_bytes)
-        h.update(_pad(B, w))
+        h.update(_minimal(B))
         h.update(self.K)
         self.M1 = h.digest()
         return self.M1
