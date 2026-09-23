@@ -1,6 +1,6 @@
 # ModStaller
 
-Ein iOS-Sideloader fuer Linux. Nimmt eine IPA, signiert sie mit einem ueber
+Ein iOS-Sideloader fuer Linux und Windows. Nimmt eine IPA, signiert sie mit einem ueber
 den eigenen Apple-Account bezogenen Development-Zertifikat und installiert sie
 aufs iPhone - ohne Mac, ohne Jailbreak.
 
@@ -24,20 +24,30 @@ iOS 27 fuer die Installation also nicht gebraucht.
 
 ## Setup
 
-Am einfachsten als AppImage - bringt Python, pymobiledevice3 und zsign mit:
+Fertige Builds gibt es unter
+[Releases](https://github.com/Crafttino21/ModStaller/releases/latest):
+
+| Datei | Fuer |
+|---|---|
+| `ModStaller-X.Y.Z-x86_64.AppImage` | Linux, Oberflaeche - aktualisiert sich selbst |
+| `ModStaller-Setup-X.Y.Z.exe` | Windows, Oberflaeche - Installer ohne Adminrechte, aktualisiert sich selbst |
+| `ModStaller-CLI-X.Y.Z-windows-x64.zip` | Windows, Kommandozeile: `modstaller.exe` + `zsign.exe` |
+
+Python, pymobiledevice3 und zsign sind jeweils dabei. Auf dem Rechner noetig
+ist nur der Dienst, ueber den das iPhone per USB erreichbar ist:
 
 ```bash
-./build-appimage.sh                        # braucht nur Docker (--run startet sie danach)
-./dist/ModStaller-0.1.0-x86_64.AppImage
-```
-
-Auf dem Rechner noetig bleiben nur `usbmuxd` (USB zum iPhone, ein
-Systemdienst) und fuer AppImages generell `fuse2`:
-
-```bash
-sudo pacman -S usbmuxd fuse2              # Arch
+sudo pacman -S usbmuxd fuse2              # Arch (fuse2 fuer AppImages)
 sudo apt install usbmuxd libfuse2         # Debian/Ubuntu
 ```
+
+Unter **Windows** ist das der Apple-Geraetedienst: die App **„Apple-Geraete“**
+aus dem Microsoft Store (oder iTunes) installieren. Beim ersten Start warnt
+SmartScreen, weil die .exe nicht kostenpflichtig signiert ist - "Weitere
+Informationen" > "Trotzdem ausfuehren".
+
+Die AppImage selbst bauen: `./build-appimage.sh` (braucht nur Docker, `--run`
+startet sie danach). Die Windows-Builds entstehen in der GitHub-Pipeline.
 
 Fuer die Entwicklung:
 
@@ -97,9 +107,10 @@ Eine neue Version veroeffentlichen:
 ./release.sh 0.3.0-beta.1     # Vorabversion
 ```
 
-Den Rest erledigt GitHub (`.github/workflows/release.yml`): Tests, AppImage
-bauen, Release mit `latest-linux.yml` anlegen. Die installierte AppImage
-schaut beim Start und alle vier Stunden dort nach und zeigt unten links an,
+Den Rest erledigt GitHub (`.github/workflows/release.yml`): Tests auf Linux
+und Windows, AppImage, Windows-Installer und CLI-Zip bauen, eine Release mit
+den Update-Dateien (`latest-linux.yml`, `latest.yml`) anlegen. AppImage und
+installierte Windows-Version schauen beim Start und alle vier Stunden dort nach und zeigt unten links an,
 wenn es etwas Neues gibt. Heruntergeladen und neu gestartet wird nur auf
 Knopfdruck - nie waehrend einer Installation oder JIT-Sitzung. Vorabversionen
 bekommt nur, wer selbst eine Vorabversion laufen hat.

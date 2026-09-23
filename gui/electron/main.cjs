@@ -20,18 +20,23 @@ let backend = null;
 let updater = null;
 let updateState = { state: "unsupported" };
 
+const WINDOWS = process.platform === "win32";
+
 function backendCommand() {
   if (app.isPackaged) {
     const res = process.resourcesPath;
     return {
-      cmd: path.join(res, "backend", "modstaller-backend"),
+      cmd: path.join(res, "backend", WINDOWS ? "modstaller-backend.exe" : "modstaller-backend"),
       args: ["serve"],
       // Das mitgelieferte zsign zuerst finden, ein systemweites notfalls auch.
-      env: { ...process.env, PATH: `${path.join(res, "bin")}:${process.env.PATH ?? ""}` },
+      env: { ...process.env, PATH: [path.join(res, "bin"), process.env.PATH ?? ""].join(path.delimiter) },
+      windowsHide: true,
     };
   }
   const root = path.resolve(__dirname, "..", "..");
-  const venv = path.join(root, ".venv", "bin", "python");
+  const venv = WINDOWS
+    ? path.join(root, ".venv", "Scripts", "python.exe")
+    : path.join(root, ".venv", "bin", "python");
   return {
     cmd: process.env.MODSTALLER_PYTHON || (fs.existsSync(venv) ? venv : "python3"),
     args: ["-m", "modstaller", "serve"],
@@ -41,8 +46,9 @@ function backendCommand() {
 }
 
 function startBackend() {
-  const { cmd, args, cwd, env } = backendCommand();
-  const child = spawn(cmd, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+  const { cmd, args, cwd, env, windowsHide } = backendCommand();
+  // windowsHide: sonst blitzt unter Windows ein Konsolenfenster auf.
+  const child = spawn(cmd, args, { cwd, env, windowsHide, stdio: ["pipe", "pipe", "pipe"] });
   backend = child;
   const stderrTail = [];
   let buf = "";
@@ -142,10 +148,15 @@ function plainNotes(notes) {
     .replace(/\n{3,}/g, "\n\n").trim();
 }
 
+/** Kann diese Installation sich selbst ersetzen? */
+function canSelfUpdate() {
+  if (!app.isPackaged) return false;           // Entwicklung
+  if (WINDOWS) return true;                    // NSIS-Installation
+  return Boolean(process.env.APPIMAGE);        // nur die AppImage, nicht entpackt
+}
+
 function setupUpdates() {
-  // Nur eine AppImage kann sich selbst ersetzen - in der Entwicklung (oder
-  // entpackt gestartet) gibt es nichts zu aktualisieren.
-  if (!app.isPackaged || !process.env.APPIMAGE) {
+  if (!canSelfUpdate()) {
     setUpdateState({ state: "unsupported" });
     return;
   }

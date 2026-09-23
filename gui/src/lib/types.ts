@@ -154,6 +154,7 @@ declare global {
       install(): Promise<void>;
     };
     backend: {
+      platform: string;
       send(msg: unknown): void;
       onMessage(cb: (msg: any) => void): () => void;
       onExit(cb: (info: BackendExit) => void): () => void;

@@ -201,3 +201,15 @@ def test_stray_prints_do_not_reach_the_protocol():
 ])
 def test_unusual_values_serialise(value, expected):
     assert srv._jsonable(value) == expected
+
+
+async def test_serve_reads_lines_until_eof():
+    """stdin wird in einem Thread gelesen - das geht auch unter Windows."""
+    r, w = os.pipe()
+    wire = Wire()
+    with os.fdopen(r, "rb") as stream:
+        serving = asyncio.create_task(wire.server.serve(stream))
+        os.write(w, b'{"jsonrpc":"2.0","id":1,"method":"version"}\n')
+        assert "result" in await wire.reply_to(1)
+        os.close(w)                       # Oberflaeche weg
+        await asyncio.wait_for(serving, 5)

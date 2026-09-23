@@ -10,7 +10,7 @@ from typing import Callable
 from .apple import anisette as anisette_mod
 from .apple.devservices import DeveloperServices
 from .apple.session import Session
-from .config import OUT_DIR, Settings
+from .config import OUT_DIR, Settings, find_zsign
 from .device.connection import ServiceProvider, device_info
 from .device.install import install_ipa
 from .errors import AppleError, SigningError
@@ -135,7 +135,7 @@ async def install(
             ipa=info.path, output=out, p12=p12, p12_password=password,
             profile=profile_path, bundle_id=new_id,
             strip_extensions=strip,
-        ), zsign=settings.zsign_path)
+        ), zsign=find_zsign(settings.zsign_path) or settings.zsign_path)
         on_step(f"  fertig in {time.time() - started:.1f}s "
              f"({out.stat().st_size / 1e6:.0f} MB)")
 

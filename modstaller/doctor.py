@@ -6,6 +6,7 @@ Liefert nur Daten. Wie sie aussehen, entscheiden CLI und Oberflaeche.
 from __future__ import annotations
 
 import shutil
+import socket
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,8 +27,23 @@ class Check:
     kind: str = PROBLEM
 
 
-async def run_checks() -> list[Check]:
-    checks: list[Check] = []
+#: Wo der Apple-Geraetedienst unter Windows lauscht (usbmuxd-Protokoll).
+APPLE_MOBILE_DEVICE = ("127.0.0.1", 27015)
+
+
+def _usb_service_check(posix: bool = config.POSIX) -> Check:
+    """Der Dienst, ueber den das iPhone per USB erreichbar ist."""
+    if not posix:
+        # Unter Windows spricht pymobiledevice3 den Apple-Geraetedienst
+        # ueber TCP an. Er laeuft dauerhaft, sobald er installiert ist.
+        try:
+            socket.create_connection(APPLE_MOBILE_DEVICE, timeout=1).close()
+            return Check("Apple-Gerätedienst", True, "läuft")
+        except OSError:
+            return Check(
+                "Apple-Gerätedienst", False, "nicht erreichbar",
+                hint="Die App „Apple-Geräte“ aus dem Microsoft Store (oder "
+                     "iTunes) installieren - sie bringt den Dienst mit.")
 
     # usbmuxd startet erst, wenn ein Geraet angesteckt wird (udev bzw.
     # Socket-Aktivierung). Ohne iPhone fehlt der Socket also zu Recht - dann
@@ -37,14 +53,19 @@ async def run_checks() -> list[Check]:
               or next((p for p in ("/usr/bin/usbmuxd", "/usr/sbin/usbmuxd")
                        if Path(p).exists()), None))
     if sock.exists():
-        checks.append(Check("usbmuxd", True, f"laeuft ({sock})"))
-    else:
-        checks.append(Check(
-            "usbmuxd", bool(daemon),
-            f"installiert ({daemon}), startet beim Anstecken" if daemon
-            else "nicht installiert",
-            hint="Arch: sudo pacman -S usbmuxd - Debian/Ubuntu: sudo apt "
-                 "install usbmuxd - Fedora: sudo dnf install usbmuxd"))
+        return Check("usbmuxd", True, f"laeuft ({sock})")
+    return Check(
+        "usbmuxd", bool(daemon),
+        f"installiert ({daemon}), startet beim Anstecken" if daemon
+        else "nicht installiert",
+        hint="Arch: sudo pacman -S usbmuxd - Debian/Ubuntu: sudo apt "
+             "install usbmuxd - Fedora: sudo dnf install usbmuxd")
+
+
+async def run_checks() -> list[Check]:
+    checks: list[Check] = []
+
+    checks.append(_usb_service_check())
 
     from importlib.metadata import PackageNotFoundError, version
     for mod, label in (("pymobiledevice3", "pymobiledevice3"),
@@ -61,10 +82,11 @@ async def run_checks() -> list[Check]:
             ver = getattr(m, "__version__", "")
         checks.append(Check(label, True, ver))
 
-    zsign = shutil.which(config.Settings.load().zsign_path)
+    zsign = config.find_zsign(config.Settings.load().zsign_path)
     checks.append(Check(
         "zsign", bool(zsign), zsign or "fehlt",
-        hint="installieren mit: paru -S zsign-bin"))
+        hint=("installieren mit: paru -S zsign-bin" if config.POSIX
+              else "zsign.exe fehlt - ModStaller neu installieren.")))
 
     ca = config.GSA_CA_BUNDLE
     checks.append(Check("Apple-CA-Bundle", ca.exists(), str(ca)))

@@ -9,6 +9,7 @@
   let running = $state(false);
   let error = $state("");
   let version = $state("");
+  let dataDir = $state("");
 
   async function run() {
     running = true;
@@ -22,7 +23,8 @@
     }
   }
   run();
-  call<string>("version").then((v) => (version = v), () => {});
+  call<{ version: string; dataDir: string }>("info").then(
+    (i) => ((version = i.version), (dataDir = i.dataDir)), () => {});
 
   const problems = $derived(checks?.filter((c) => !c.ok && c.kind === "problem").length ?? 0);
   const todos = $derived(checks?.filter((c) => !c.ok && c.kind === "todo").length ?? 0);
@@ -66,7 +68,7 @@
   <div class="grow">
     <div class="label">ModStaller {ui.update.current ?? version}</div>
     <div class="faint tiny">
-      {#if ui.update.state === "unsupported"}Automatische Updates gibt es nur in der AppImage.
+      {#if ui.update.state === "unsupported"}Automatische Updates gibt es nur in der AppImage bzw. der mit dem Setup installierten Windows-Version.
       {:else if ui.update.state === "checking"}Suche nach Updates …
       {:else if ui.update.state === "none"}Aktuell – keine neuere Version auf GitHub.
       {:else if ui.update.state === "error"}Update-Prüfung fehlgeschlagen: {ui.update.message}
@@ -81,7 +83,7 @@
   {/if}
 </div>
 
-<p class="faint foot">Daten unter <code>~/.local/share/modstaller</code> (Secrets mit 0600).</p>
+{#if dataDir}<p class="faint foot">Daten unter <code class="selectable">{dataDir}</code></p>{/if}
 
 <style>
   .summary { margin-bottom: 14px; font-weight: 550; }

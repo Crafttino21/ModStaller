@@ -38,7 +38,7 @@
     </div>
     <div>
       <div class="name">ModStaller</div>
-      <div class="sub">Sideloading für Linux</div>
+      <div class="sub">Sideloading für {window.backend.platform === "win32" ? "Windows" : "Linux"}</div>
     </div>
   </div>
 

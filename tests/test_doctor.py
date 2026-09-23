@@ -25,3 +25,27 @@ def test_open_steps_are_not_problems():
               Check("CA", True)]
     assert [c.label for c in doctor.problems(checks)] == ["zsign"]
     assert [c.label for c in doctor.todos(checks)] == ["Apple-Anmeldung"]
+
+
+def test_windows_checks_the_apple_device_service(monkeypatch):
+    """Unter Windows gibt es kein usbmuxd - der Apple-Geraetedienst ersetzt ihn."""
+    import socket
+
+    class Conn:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(socket, "create_connection", lambda addr, timeout: Conn())
+    c = doctor._usb_service_check(posix=False)
+    assert c.ok and c.label == "Apple-Gerätedienst"
+
+
+def test_windows_without_apple_devices_app_gets_a_hint(monkeypatch):
+    import socket
+
+    def refused(addr, timeout):
+        raise ConnectionRefusedError()
+
+    monkeypatch.setattr(socket, "create_connection", refused)
+    c = doctor._usb_service_check(posix=False)
+    assert not c.ok and "Apple-Geräte" in c.hint

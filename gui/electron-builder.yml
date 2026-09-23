@@ -27,6 +27,20 @@ linux:
   # Kein pauschales --no-sandbox: das AppRun von electron-builder prueft
   # selbst, ob Chromiums Sandbox geht (auf Ubuntu 24.04 z. B. nicht), und
   # schaltet sie nur dann ab.
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+nsis:
+  # Assistent statt Ein-Klick: Ordner waehlbar, aber ohne Adminrechte ins
+  # Benutzerprofil - dann kann sich die App auch selbst aktualisieren.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: ModStaller
+  artifactName: ModStaller-Setup-${version}.${ext}
 # Woher die App ihre Updates holt (electron-updater) - und wohin die Pipeline
 # veroeffentlicht. Lokal wird nie hochgeladen: "npm run dist" baut mit
 # --publish never, die Release legt .github/workflows/release.yml an.

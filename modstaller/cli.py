@@ -4,11 +4,38 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 from pathlib import Path
 
 from . import config
 from .errors import ModStallerError, describe
+
+
+def _windows_console() -> None:
+    """UTF-8 und ANSI-Farben auch in der klassischen Windows-Konsole.
+
+    Ohne das bricht schon das Haekchen im Systemcheck mit einem
+    UnicodeEncodeError ab (cp1252), und die Farbcodes stehen roh da.
+    """
+    if os.name != "nt":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        for std in (-11, -12):          # STD_OUTPUT_HANDLE, STD_ERROR_HANDLE
+            handle = kernel32.GetStdHandle(std)
+            mode = ctypes.c_uint32()
+            if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+    except Exception:
+        pass  # keine Konsole (umgeleitet) - dann braucht es auch keine Farben
 
 
 def _ok(label: str, detail: str = "") -> None:
@@ -408,6 +435,7 @@ def _serve(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _windows_console()
     parser = build_parser()
     args = parser.parse_args(argv)
     args_debug = getattr(args, "debug", False)

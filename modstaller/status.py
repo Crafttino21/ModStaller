@@ -16,7 +16,8 @@ URGENT_DAYS = 2.0
 
 #: Wo wir nach IPAs suchen, wenn keine angegeben wird.
 IPA_DIRS = (Path.home() / "Downloads", Path.home() / "Dokumente",
-            Path.home() / "Desktop", Path.home() / "Schreibtisch")
+            Path.home() / "Documents", Path.home() / "Desktop",
+            Path.home() / "Schreibtisch")
 
 
 @dataclass

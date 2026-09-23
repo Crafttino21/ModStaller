@@ -232,12 +232,23 @@ class Server:
         job.cancel()
         return True
 
-    async def serve(self, reader: asyncio.StreamReader) -> None:
+    async def serve(self, stream) -> None:
+        """Verarbeitet Zeilen aus ``stream`` (binaer, blockierend) bis EOF.
+
+        Gelesen wird in einem eigenen Thread statt mit
+        ``loop.connect_read_pipe``: das kann unter Windows mit den anonymen
+        Pipes, die Electron anlegt, nicht umgehen. Ein Thread geht ueberall.
+        """
         self.loop = asyncio.get_running_loop()
-        while True:
-            line = await reader.readline()
-            if not line:
-                break
+        lines: asyncio.Queue = asyncio.Queue()
+
+        def read() -> None:
+            for line in iter(stream.readline, b""):
+                self.loop.call_soon_threadsafe(lines.put_nowait, line)
+            self.loop.call_soon_threadsafe(lines.put_nowait, None)
+
+        threading.Thread(target=read, name="stdin", daemon=True).start()
+        while (line := await lines.get()) is not None:
             self.handle_line(line)
         # Oberflaeche weg: laufende Arbeit abbrechen, nicht verwaisen lassen.
         for job in list(self._jobs.values()):
@@ -574,6 +585,12 @@ async def _cancel(server: Server, job: Job, params: dict):
     return server.cancel(params.get("id"))
 
 
+@method("info")
+async def _info(server: Server, job: Job, params: dict):
+    return {"version": await _version(server, job, params),
+            "dataDir": str(config.DATA_DIR), "posix": config.POSIX}
+
+
 @method("version")
 async def _version(server: Server, job: Job, params: dict):
     from importlib.metadata import PackageNotFoundError, version
@@ -602,12 +619,8 @@ def take_stdout() -> int:
 async def _run() -> int:
     out = take_stdout()
     server = Server(out)
-    loop = asyncio.get_running_loop()
-    reader = asyncio.StreamReader(limit=16 * 1024 * 1024)
-    await loop.connect_read_pipe(
-        lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
     server.notify("ready", {})
-    await server.serve(reader)
+    await server.serve(sys.stdin.buffer)
     return 0
 
 

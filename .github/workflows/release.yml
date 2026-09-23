@@ -1,15 +1,19 @@
-# Baut bei jedem Versions-Tag (v1.2.3) die AppImage und veroeffentlicht sie
-# als GitHub-Release. Die App holt sich Updates genau von dort
-# (electron-updater liest latest-linux.yml aus der neuesten Release).
+# Baut bei jedem Versions-Tag (v1.2.3) ModStaller fuer Linux und Windows und
+# veroeffentlicht alles als eine GitHub-Release. Die Apps holen sich Updates
+# genau von dort (electron-updater liest latest-linux.yml bzw. latest.yml).
 #
 # Ausloesen:  ./release.sh 1.2.3   (oder von Hand: git tag v1.2.3 && git push origin v1.2.3)
 # Tags mit Bindestrich (v1.3.0-beta.1) werden als Vorabversion markiert -
 # die bekommen nur Nutzer, die selbst eine Vorabversion laufen haben.
+#
+# Probelauf ohne Veroeffentlichung: Actions -> Release -> "Run workflow".
+# Die Builds liegen dann als Artefakte am Lauf.
 name: Release
 
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,10 +22,17 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  ZSIGN_REF: v1.1.1
+
 jobs:
   test:
-    name: Tests
-    runs-on: ubuntu-24.04
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
 
@@ -36,12 +47,14 @@ jobs:
           pytest -q
 
       - uses: actions/setup-node@v5
+        if: runner.os == 'Linux'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: gui/package-lock.json
 
       - name: Typpruefung der Oberflaeche
+        if: runner.os == 'Linux'
         working-directory: gui
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
@@ -49,8 +62,8 @@ jobs:
           npm ci --no-audit --no-fund
           npx svelte-check --tsconfig ./tsconfig.json
 
-  release:
-    name: AppImage bauen und veroeffentlichen
+  build-linux:
+    name: Linux (AppImage)
     needs: test
     runs-on: ubuntu-24.04
     steps:
@@ -63,9 +76,10 @@ jobs:
           cache-dependency-path: gui/package-lock.json
 
       # Der Tag ist die Wahrheit - auch wenn jemand vergessen hat, die
-      # Nummer im Repo hochzuzaehlen. Sonst meldete die neue AppImage die
-      # alte Version und boete sich selbst ewig als Update an.
+      # Nummer im Repo hochzuzaehlen. Sonst meldete die neue Version die
+      # alte Nummer und boete sich selbst ewig als Update an.
       - name: Version aus dem Tag uebernehmen
+        if: startsWith(github.ref, 'refs/tags/v')
         run: python3 packaging/set-version.py "${GITHUB_REF_NAME#v}"
 
       # Dasselbe Skript wie lokal: Backend und zsign im Ubuntu-22.04-
@@ -73,11 +87,107 @@ jobs:
       - name: AppImage bauen
         run: ./build-appimage.sh
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          if-no-files-found: error
+          path: |
+            dist/*.AppImage
+            dist/latest-linux.yml
+
+  build-windows:
+    name: Windows (Setup + CLI)
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Version aus dem Tag uebernehmen
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python packaging/set-version.py "${GITHUB_REF_NAME#v}"
+
+      # zsign bringt eine VS2022-Solution mit statischem OpenSSL und
+      # statischer C-Laufzeit mit - die .exe braucht nichts weiter.
+      - name: zsign bauen
+        run: |
+          git clone -q --depth 1 --branch "$ZSIGN_REF" https://github.com/zhlynn/zsign.git "$RUNNER_TEMP/zsign"
+          msbuild "$RUNNER_TEMP/zsign/build/windows/vs2022/zsign.sln" -p:Configuration=Release -p:Platform=x64 -m -nologo -v:minimal
+          exe=$(find "$RUNNER_TEMP/zsign/build/windows" -name zsign.exe -path "*Release*" | head -n 1)
+          test -n "$exe"
+          mkdir -p packaging/out/bin
+          cp "$exe" packaging/out/bin/zsign.exe
+          packaging/out/bin/zsign.exe -v
+
+      - name: Backend und CLI bauen (PyInstaller)
+        run: |
+          pip install . "pyinstaller>=6.10"
+          python packaging/build_backend.py --out packaging/out --cli
+
+      - name: Backend pruefen
+        run: |
+          packaging/out/cli/modstaller.exe --help > /dev/null
+          reply=$(echo '{"jsonrpc":"2.0","id":1,"method":"info"}' | packaging/out/backend/modstaller-backend.exe serve)
+          echo "$reply"
+          echo "$reply" | grep -q '"posix": false'
+
+      - name: Installer bauen
+        working-directory: gui
+        run: |
+          npm ci --no-audit --no-fund
+          npm run dist:win
+
+      - name: CLI-Zip packen
+        run: |
+          version=$(python -c "import json;print(json.load(open('gui/package.json'))['version'])")
+          cd packaging/out
+          cp bin/zsign.exe cli/
+          7z a -tzip "../../dist/ModStaller-CLI-${version}-windows-x64.zip" ./cli/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+            dist/*.zip
+
+  publish:
+    name: Release veroeffentlichen
+    needs: [build-linux, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # Beide Update-Dateien muessen die Tag-Version nennen - sonst boete
+      # eine Plattform ihren Nutzern die falsche Version an.
       - name: Update-Metadaten pruefen
         run: |
           ls -la dist/
-          test -f dist/latest-linux.yml
-          grep -q "version: ${GITHUB_REF_NAME#v}$" dist/latest-linux.yml
+          for f in latest-linux.yml latest.yml; do
+            grep -q "^version: ${GITHUB_REF_NAME#v}$" "dist/$f" || { echo "$f passt nicht zum Tag"; exit 1; }
+          done
 
       - name: Release anlegen
         uses: softprops/action-gh-release@v2
@@ -86,8 +196,11 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           fail_on_unmatched_files: true
-          # Die Blockmap fuer Delta-Updates steckt bei AppImages in der Datei
-          # selbst (blockMapSize in latest-linux.yml) - keine eigene Datei.
+          # Linux: Blockmap steckt in der AppImage. Windows: eigene .blockmap.
           files: |
             dist/*.AppImage
             dist/latest-linux.yml
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+            dist/*.zip

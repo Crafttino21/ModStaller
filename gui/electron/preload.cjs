@@ -4,6 +4,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("backend", {
+  platform: process.platform,
   send: (msg) => ipcRenderer.send("rpc:send", msg),
   onMessage: (cb) => {
     const listener = (_e, msg) => cb(msg);

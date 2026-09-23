@@ -2,12 +2,20 @@
 
 Secrets liegen unter 0600 in 0700-Verzeichnissen. Gelesen wird nur, was auch
 korrekt restriktiv ist - lieber lautstark abbrechen als still leaken.
+
+Unter Windows gibt es keine Unix-Rechte: dort liegt alles unter
+``%LOCALAPPDATA%\\modstaller``, das die NTFS-Rechte des Benutzerprofils
+schuetzen. Bewusst nicht unter ``%APPDATA%``: dort legt die Oberflaeche
+(Electron) ihren Ordner "ModStaller" an - und Windows unterscheidet keine
+Gross-/Kleinschreibung.
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 import stat
+import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,14 +25,28 @@ from .errors import ConfigError
 APP_NAME = "modstaller"
 
 
-def _xdg(var: str, default: str) -> Path:
-    return Path(os.environ.get(var) or Path.home() / default)
+#: Unix-Dateirechte gibt es nur hier - unter Windows ist ``st_mode`` fuer
+#: Gruppe/Andere immer "offen" und sagt nichts ueber den Zugriff aus.
+POSIX = os.name != "nt"
 
 
-CONFIG_DIR = _xdg("XDG_CONFIG_HOME", ".config") / APP_NAME
-DATA_DIR = _xdg("XDG_DATA_HOME", ".local/share") / APP_NAME
-CACHE_DIR = _xdg("XDG_CACHE_HOME", ".cache") / APP_NAME
-STATE_DIR = _xdg("XDG_STATE_HOME", ".local/state") / APP_NAME
+def base_dirs(env: dict | None = None, *, posix: bool = POSIX,
+              home: Path | None = None) -> tuple[Path, Path, Path, Path]:
+    """Konfig-, Daten-, Cache- und State-Verzeichnis fuer dieses System."""
+    env = os.environ if env is None else env
+    home = home or Path.home()
+    if not posix:
+        base = Path(env.get("LOCALAPPDATA") or home / "AppData" / "Local") / APP_NAME
+        return base, base / "data", base / "cache", base / "state"
+
+    def xdg(var: str, default: str) -> Path:
+        return Path(env.get(var) or home / default) / APP_NAME
+
+    return (xdg("XDG_CONFIG_HOME", ".config"), xdg("XDG_DATA_HOME", ".local/share"),
+            xdg("XDG_CACHE_HOME", ".cache"), xdg("XDG_STATE_HOME", ".local/state"))
+
+
+CONFIG_DIR, DATA_DIR, CACHE_DIR, STATE_DIR = base_dirs()
 
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 SECRETS_DIR = DATA_DIR / "secrets"
@@ -46,6 +68,22 @@ GSA_CA_BUNDLE = Path(__file__).parent / "apple" / "certs" / "apple-gsa-ca.pem"
 _PRIVATE_DIRS = (DATA_DIR, SECRETS_DIR, ANISETTE_DIR, CERTS_DIR, PROFILES_DIR,
                  IPA_CACHE_DIR, STATE_DIR)
 _PUBLIC_DIRS = (CONFIG_DIR, CACHE_DIR, WORK_DIR, OUT_DIR)
+
+
+def find_zsign(configured: str = "zsign") -> str | None:
+    """Wo zsign liegt - im PATH oder direkt neben der eigenen .exe.
+
+    Die Windows-CLI kommt als Zip mit ``modstaller.exe`` und ``zsign.exe``
+    nebeneinander, ohne PATH-Eintrag. Beim Aufruf faende Windows zsign dort
+    zwar von selbst, ``shutil.which`` (und damit der Systemcheck) aber nicht.
+    """
+    if found := shutil.which(configured):
+        return found
+    if getattr(sys, "frozen", False):
+        beside = Path(sys.executable).parent / ("zsign" if POSIX else "zsign.exe")
+        if beside.is_file():
+            return str(beside)
+    return None
 
 
 def ensure_dirs() -> None:
@@ -71,7 +109,7 @@ def write_secret(path: Path, data: bytes) -> None:
 def read_secret(path: Path) -> bytes:
     """Liest eine Secret-Datei und verweigert sie, wenn sie zu offen liegt."""
     mode = path.stat().st_mode
-    if mode & (stat.S_IRWXG | stat.S_IRWXO):
+    if POSIX and mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise ConfigError(
             f"{path} ist fuer Gruppe/Andere lesbar (Modus {oct(mode & 0o777)}). "
             f"Korrigieren mit: chmod 600 {path}"
