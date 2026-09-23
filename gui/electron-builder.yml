@@ -1,0 +1,29 @@
+appId: de.modstaller.app
+productName: ModStaller
+copyright: ModStaller
+directories:
+  output: ../dist
+  buildResources: build
+files:
+  - electron/**
+  - dist/**
+  - package.json
+# Backend und zsign liegen ausserhalb des asar-Archivs: sie werden als
+# eigene Prozesse gestartet.
+extraResources:
+  - from: ../packaging/out/backend
+    to: backend
+  - from: ../packaging/out/bin
+    to: bin
+linux:
+  target: AppImage
+  category: Utility
+  icon: build/icon.png
+  synopsis: iOS-Apps ohne Mac aufs iPhone bringen
+  description: Signiert IPAs mit dem eigenen Apple-Account und installiert sie per USB aufs iPhone.
+  artifactName: ModStaller-${version}-${arch}.${ext}
+  # Fenster und .desktop-Eintrag zusammenfuehren (Taskleiste, Icon).
+  syncDesktopName: true
+  # Kein pauschales --no-sandbox: das AppRun von electron-builder prueft
+  # selbst, ob Chromiums Sandbox geht (auf Ubuntu 24.04 z. B. nicht), und
+  # schaltet sie nur dann ab.

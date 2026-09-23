@@ -39,7 +39,8 @@ def _redact(cmd: list[str], password: str) -> str:
     return " ".join("***" if a == password else a for a in cmd)
 
 
-def sign(req: SignRequest, *, timeout: float = 900.0) -> Path:
+def sign(req: SignRequest, *, timeout: float = 900.0,
+         zsign: str = "zsign") -> Path:
     if not req.ipa.is_file():
         raise SigningError(f"IPA nicht gefunden: {req.ipa}")
     if not req.profile.is_file():
@@ -48,7 +49,7 @@ def sign(req: SignRequest, *, timeout: float = 900.0) -> Path:
     req.output.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        "zsign",
+        zsign,
         "-k", str(req.p12),
         "-p", req.p12_password,
         "-m", str(req.profile),
@@ -84,10 +85,10 @@ def sign(req: SignRequest, *, timeout: float = 900.0) -> Path:
     return req.output
 
 
-def check_identity(p12: Path, password: str) -> str:
+def check_identity(p12: Path, password: str, zsign: str = "zsign") -> str:
     """Prueft die Identitaet und gibt zsigns Beschreibung zurueck."""
     proc = subprocess.run(
-        ["zsign", "-C", "-k", str(p12), "-p", password],
+        [zsign, "-C", "-k", str(p12), "-p", password],
         capture_output=True, text=True, timeout=120,
     )
     out = (proc.stdout + proc.stderr).strip()

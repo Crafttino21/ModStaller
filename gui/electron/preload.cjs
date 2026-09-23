@@ -1,0 +1,22 @@
+// Die einzige Bruecke zwischen Oberflaeche und System. Bewusst schmal: die
+// Seite kann Nachrichten ans Backend schicken und welche empfangen, eine IPA
+// auswaehlen - sonst nichts.
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
+
+contextBridge.exposeInMainWorld("backend", {
+  send: (msg) => ipcRenderer.send("rpc:send", msg),
+  onMessage: (cb) => {
+    const listener = (_e, msg) => cb(msg);
+    ipcRenderer.on("rpc:message", listener);
+    return () => ipcRenderer.off("rpc:message", listener);
+  },
+  onExit: (cb) => {
+    const listener = (_e, info) => cb(info);
+    ipcRenderer.on("backend:exit", listener);
+    return () => ipcRenderer.off("backend:exit", listener);
+  },
+  restart: () => ipcRenderer.send("backend:restart"),
+  pickIpa: () => ipcRenderer.invoke("dialog:pickIpa"),
+  // Seit Electron 32 hat File kein .path mehr - fuer Drag & Drop noetig.
+  pathForFile: (file) => webUtils.getPathForFile(file),
+});

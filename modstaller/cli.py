@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 from . import config
-from .errors import ModStallerError
+from .errors import ModStallerError, describe
 
 
 def _ok(label: str, detail: str = "") -> None:
@@ -35,80 +33,28 @@ def _progress_printer():
 # -- doctor ----------------------------------------------------------------
 
 
-def cmd_doctor(args) -> int:
+async def _doctor(args) -> int:
+    from .doctor import problems, run_checks, todos
+
     print("ModStaller - Systemcheck\n")
-    problems = 0
-
-    # usbmuxd ist socket-aktiviert; ohne Geraet laeuft kein Prozess. Das ist
-    # kein Fehler, deshalb pruefen wir den Socket, nicht den Prozess.
-    sock = Path("/var/run/usbmuxd")
-    (_ok if sock.exists() else _fail)("usbmuxd-Socket", str(sock))
-    problems += not sock.exists()
-
-    for mod, label in (("pymobiledevice3", "pymobiledevice3"),
-                       ("anisette", "anisette (lokal)"),
-                       ("cryptography", "cryptography")):
-        try:
-            m = __import__(mod)
-            _ok(label, getattr(m, "__version__", ""))
-        except Exception as exc:
-            _fail(label, str(exc))
-            problems += 1
-
-    zsign = shutil.which(config.Settings.load().zsign_path)
-    if zsign:
-        _ok("zsign", zsign)
-    else:
-        _fail("zsign", "fehlt - installieren mit: paru -S zsign-bin")
-        problems += 1
-
-    ca = config.GSA_CA_BUNDLE
-    (_ok if ca.exists() else _fail)("Apple-CA-Bundle", str(ca))
-    problems += not ca.exists()
-
-    # Anisette ist das Nadeloehr fuer den Login - lieber hier merken.
-    try:
-        from .apple import clientinfo
-        from .apple.anisette import LocalProvider
-        ci = LocalProvider().client_info()
-        if clientinfo.is_safe(ci):
-            _ok("Anisette-Client-Info", "com.apple.akd (GSA-tauglich)")
-        else:
-            _fail("Anisette-Client-Info", f"wuerde HTTP 503 ausloesen: {ci}")
-            problems += 1
-    except Exception as exc:
-        _fail("Anisette-Provider", str(exc))
-        problems += 1
-
-    # Die folgenden zwei sind keine Systemfehler, sondern offene Schritte -
-    # sie zaehlen nicht als Problem, muessen aber sichtbar bleiben.
-    todo = []
-
-    from .apple.session import Session
-    if Session.load():
-        _ok("Apple-Anmeldung", "aktiv")
-    else:
-        _fail("Apple-Anmeldung", "fehlt")
-        todo.append("modstaller login")
-
-    devs = subprocess.run(["idevice_id", "-l"], capture_output=True, text=True)
-    serials = [x for x in devs.stdout.split() if x]
-    if serials:
-        _ok("iPhone erkannt", ", ".join(serials))
-    else:
-        _fail("iPhone erkannt", "keins angesteckt")
-        todo.append("iPhone per USB anstecken und entsperren")
+    checks = await run_checks()
+    for c in checks:
+        detail = c.detail
+        if not c.ok and c.kind == "problem" and c.hint:
+            detail = f"{detail} - {c.hint}" if detail else c.hint
+        (_ok if c.ok else _fail)(c.label, detail)
 
     print()
-    if problems:
-        print(f"{problems} Punkt(e) zu klaeren, siehe oben.")
+    bad, todo = problems(checks), todos(checks)
+    if bad:
+        print(f"{len(bad)} Punkt(e) zu klaeren, siehe oben.")
     elif todo:
         print("System ist bereit. Noch offen:")
-        for t in todo:
-            print(f"  - {t}")
+        for c in todo:
+            print(f"  - {c.hint}")
     else:
         print("Alles bereit.")
-    return 1 if problems else 0
+    return 1 if bad else 0
 
 
 # -- Anmeldung -------------------------------------------------------------
@@ -382,12 +328,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-u", "--udid", help="Zielgeraet (Default: das einzige)")
     p.add_argument("--debug", action="store_true",
                    help="vollen Stacktrace bei unerwarteten Fehlern zeigen")
-    # Ohne Unterkommando startet die interaktive Oberflaeche. Die
-    # Unterkommandos bleiben fuer Skripte und den Refresh-Dienst.
+    # Die grafische Oberflaeche ist ein eigener Client (gui/), der ueber
+    # "serve" mit uns spricht. Die Unterkommandos bleiben fuer Skripte und
+    # den Refresh-Dienst.
     sub = p.add_subparsers(dest="cmd")
 
     sub.add_parser("doctor", help="Pruefen, ob alles Noetige da ist"
-                   ).set_defaults(func=cmd_doctor)
+                   ).set_defaults(afunc=_doctor)
 
     log = sub.add_parser("login", help="Bei Apple anmelden")
     log.add_argument("apple_id", nargs="?", help="Apple ID (sonst Nachfrage)")
@@ -449,17 +396,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("list", help="Installierte Apps und Ablaufdaten"
                    ).set_defaults(afunc=_list)
+
+    # Fuer die Oberflaeche, nicht fuer Menschen - deshalb ohne help.
+    sub.add_parser("serve", help=argparse.SUPPRESS).set_defaults(func=_serve)
     return p
 
 
+def _serve(args) -> int:
+    from .server import main as serve_main
+    return serve_main()
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     args_debug = getattr(args, "debug", False)
     config.ensure_dirs()
 
     if args.cmd is None:
-        from .tui import main as tui_main
-        return tui_main()
+        parser.print_help()
+        return 0
 
     try:
         if hasattr(args, "afunc"):
@@ -472,26 +428,16 @@ def main(argv: list[str] | None = None) -> int:
         print("\nAbgebrochen.", file=sys.stderr)
         return 130
     except Exception as exc:
-        # Netz- und Bibliotheksfehler sollen nicht als Traceback erscheinen.
         # Der volle Stack bleibt ueber --debug erreichbar.
-        import requests
-        if isinstance(exc, requests.exceptions.RetryError):
-            print("\nFehler: Apple hat wiederholt abgewiesen und der Versuch "
-                  "wurde aufgegeben.\nMeist Drosselung - 15-60 Minuten warten.",
-                  file=sys.stderr)
-        elif isinstance(exc, requests.exceptions.SSLError):
-            print(f"\nFehler: TLS-Verbindung zu Apple fehlgeschlagen.\n{exc}",
-                  file=sys.stderr)
-        elif isinstance(exc, requests.exceptions.RequestException):
-            print(f"\nFehler: Netzwerkproblem im Kontakt mit Apple.\n{exc}",
-                  file=sys.stderr)
+        text = describe(exc)
+        if text is not None:
+            print(f"\nFehler: {text}", file=sys.stderr)
+        elif args_debug:
+            raise
         else:
-            if args_debug:
-                raise
             print(f"\nUnerwarteter Fehler: {type(exc).__name__}: {exc}\n"
                   "Vollen Stack mit --debug anzeigen.", file=sys.stderr)
         return 1
-
 
 if __name__ == "__main__":
     sys.exit(main())

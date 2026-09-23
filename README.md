@@ -24,22 +24,40 @@ iOS 27 fuer die Installation also nicht gebraucht.
 
 ## Setup
 
+Am einfachsten als AppImage - bringt Python, pymobiledevice3 und zsign mit:
+
+```bash
+packaging/build.sh                        # braucht nur Docker
+./dist/ModStaller-0.1.0-x86_64.AppImage
+```
+
+Auf dem Rechner noetig bleiben nur `usbmuxd` (USB zum iPhone, ein
+Systemdienst) und fuer AppImages generell `fuse2`:
+
+```bash
+sudo pacman -S usbmuxd fuse2              # Arch
+sudo apt install usbmuxd libfuse2         # Debian/Ubuntu
+```
+
+Fuer die Entwicklung:
+
 ```bash
 python -m venv .venv
 .venv/bin/pip install -e .
 paru -S zsign-bin
 .venv/bin/modstaller doctor
+
+cd gui && npm install && npm run dev      # Oberflaeche mit Hot Reload
 ```
 
 ## Benutzung
 
-Ohne Argument startet die interaktive Oberflaeche - sie zeigt oben, ob das
-iPhone haengt, ob du angemeldet bist und was demnaechst ablaeuft, und bietet
-vorrangig an, was gerade dran ist:
+Die Oberflaeche (AppImage oder `npm run dev`) zeigt vorne, ob das iPhone
+haengt, ob du angemeldet bist und was demnaechst ablaeuft. IPAs lassen sich
+einfach ins Fenster ziehen.
 
-```bash
-modstaller
-```
+Sie ist ein Client wie die Kommandozeile: `gui/` startet `modstaller serve`
+und spricht mit ihm JSON-RPC ueber stdin/stdout (`modstaller/server.py`).
 
 Fuer Skripte und den Refresh-Dienst bleiben die Unterkommandos:
 

@@ -59,8 +59,8 @@ async def connect(udid: str | None = None, *, timeout: float = 0.0):
         except NotPairedError as exc:
             raise NotPaired(
                 "Das Geraet ist nicht mit diesem Rechner gepairt. "
-                "iPhone entsperren, USB anstecken und 'Vertrauen' bestaetigen, "
-                "dann: idevicepair pair"
+                "iPhone entsperren, USB anstecken, 'Vertrauen' bestaetigen "
+                "und erneut versuchen - das Pairing passiert dann von selbst."
             ) from exc
         except PasswordRequiredError as exc:
             raise NotPaired(

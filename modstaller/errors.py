@@ -111,3 +111,26 @@ class AppleRateLimited(AppleError):
     """Apple hat gedrosselt (HTTP 429). Weitere Versuche verschlimmern es."""
 
     exit_code = 7
+
+
+def describe(exc: BaseException) -> str | None:
+    """Klartext fuer Fehler, die der Nutzer verstehen soll.
+
+    ``None`` heisst: unerwartet - der Aufrufer entscheidet, ob er einen
+    Stacktrace zeigt. Netz- und Bibliotheksfehler sollen nicht als Traceback
+    erscheinen.
+    """
+    if isinstance(exc, ModStallerError):
+        return str(exc)
+    try:
+        import requests
+    except ImportError:
+        return None
+    if isinstance(exc, requests.exceptions.RetryError):
+        return ("Apple hat wiederholt abgewiesen und der Versuch wurde "
+                "aufgegeben.\nMeist Drosselung - 15-60 Minuten warten.")
+    if isinstance(exc, requests.exceptions.SSLError):
+        return f"TLS-Verbindung zu Apple fehlgeschlagen.\n{exc}"
+    if isinstance(exc, requests.exceptions.RequestException):
+        return f"Netzwerkproblem im Kontakt mit Apple.\n{exc}"
+    return None

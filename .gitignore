@@ -5,3 +5,7 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+gui/node_modules/
+packaging/out/
+# Build-Ressourcen der Oberflaeche (Icon) gehoeren ins Repository.
+!gui/build/

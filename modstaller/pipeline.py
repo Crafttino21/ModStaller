@@ -45,13 +45,14 @@ async def install(
     strip_extensions: bool | None = None,
     revoke_conflicting_cert: bool = False,
     progress: Callable[[int], None] | None = None,
+    on_step: Callable[[str], None] = _say,
 ) -> InstallOutcome:
     settings = settings or Settings.load()
 
     # 1. IPA zuerst pruefen - das ist billig und faengt die meisten Fehler,
     #    bevor wir Apples Kontingente anfassen.
     info = ipa_mod.inspect(ipa_path)
-    _say(f"IPA gelesen:\n{info.summary()}")
+    on_step(f"IPA gelesen:\n{info.summary()}")
     if info.encrypted:
         raise SigningError(
             "Diese IPA ist App-Store-verschluesselt (FairPlay DRM) und kann "
@@ -61,7 +62,7 @@ async def install(
     # 2. Geraet - ebenfalls vor jedem Apple-Kontakt.
     async with ServiceProvider(udid) as sp:
         dev = await device_info(sp.lockdown)
-        _say(f"\nGeraet: {dev.name}, iOS {dev.ios_version}")
+        on_step(f"\nGeraet: {dev.name}, iOS {dev.ios_version}")
         if not dev.developer_mode:
             raise SigningError(
                 "Developer Mode ist aus. Auf dem iPhone unter Einstellungen > "
@@ -79,13 +80,13 @@ async def install(
         teams = api.list_teams()
         team = pick_team(teams, team_id or settings.default_team_id)
         caps = Capabilities.for_team(team)
-        _say(f"Team:   {team}")
+        on_step(f"Team:   {team}")
 
         # 4. Geraet beim Team anmelden (idempotent).
         api.register_device(team.team_id, dev.udid, dev.name)
 
         # 5. Zertifikat.
-        _say("\nZertifikat besorgen …")
+        on_step("\nZertifikat besorgen …")
         p12, password = ensure_certificate(
             api, team, dev.name, revoke_conflicting=revoke_conflicting_cert)
 
@@ -95,7 +96,7 @@ async def install(
         strip = (caps.is_free and bool(info.extensions)
                  if strip_extensions is None else strip_extensions)
         if strip and info.extensions:
-            _say(f"  {len(info.extensions)} Extension(s) werden entfernt "
+            on_step(f"  {len(info.extensions)} Extension(s) werden entfernt "
                  f"(spart {len(info.extensions)} App-ID(s) vom Wochenkontingent)")
 
         # 7. App-ID und Profil.
@@ -111,35 +112,35 @@ async def install(
             pass
 
         wanted = derive_bundle_id(info.bundle_id, team.team_id)
-        _say(f"\nApp-ID {wanted} …")
+        on_step(f"\nApp-ID {wanted} …")
         app_id = ensure_app_id(api, team, wanted, info.name,
                                reuse_when_exhausted=True, protected=protected)
         new_id = app_id.identifier
         if new_id != wanted:
-            _say(f"  Wochenkontingent ausgeschoepft - ModStaller benutzt die "
+            on_step(f"  Wochenkontingent ausgeschoepft - ModStaller benutzt die "
                  f"freie App-ID\n  {new_id} weiter. Die App laeuft darunter "
                  f"voellig normal; nur\n  die interne Kennung passt nicht zum "
                  f"Namen.")
         profile_path = fetch_profile(api, team, app_id)
         prof = profile_info(profile_path)
         caps = caps.reconcile(prof)
-        _say(f"  Profil gueltig: {prof.days_left:.1f} Tage "
+        on_step(f"  Profil gueltig: {prof.days_left:.1f} Tage "
              f"({caps.describe()})")
 
         # 8. Signieren.
         out = OUT_DIR / f"{new_id}.ipa"
-        _say("\nSignieren …")
+        on_step("\nSignieren …")
         started = time.time()
         sign(SignRequest(
             ipa=info.path, output=out, p12=p12, p12_password=password,
             profile=profile_path, bundle_id=new_id,
             strip_extensions=strip,
-        ))
-        _say(f"  fertig in {time.time() - started:.1f}s "
+        ), zsign=settings.zsign_path)
+        on_step(f"  fertig in {time.time() - started:.1f}s "
              f"({out.stat().st_size / 1e6:.0f} MB)")
 
         # 9. Installieren.
-        _say("\nInstallieren …")
+        on_step("\nInstallieren …")
         result = await install_ipa(sp, out, progress=progress)
 
         # 10. Merken, damit der Refresh spaeter weiss, was zu tun ist.
@@ -170,6 +171,7 @@ async def refresh(
     threshold_days: float | None = None,
     only: str | None = None,
     progress: Callable[[int], None] | None = None,
+    on_step: Callable[[str], None] = _say,
 ) -> list[InstallOutcome]:
     """Erneuert Apps, deren Profil bald ablaeuft.
 
@@ -190,19 +192,19 @@ async def refresh(
         due = store.due_for_refresh(threshold)
 
     if not due:
-        _say(f"Nichts faellig (Schwelle: {threshold:.0f} Tage).")
+        on_step(f"Nichts faellig (Schwelle: {threshold:.0f} Tage).")
         return []
 
     results: list[InstallOutcome] = []
     for rec in due:
         source = Path(rec.source_ipa)
         if not source.is_file():
-            _say(f"\n{rec.name}: Original-IPA fehlt ({source}) - uebersprungen.")
+            on_step(f"\n{rec.name}: Original-IPA fehlt ({source}) - uebersprungen.")
             continue
-        _say(f"\n=== {rec.name} erneuern ({rec.expiry_text}) ===")
+        on_step(f"\n=== {rec.name} erneuern ({rec.expiry_text}) ===")
         results.append(await install(
             source, udid=udid or rec.udid, team_id=rec.team_id,
             settings=settings, strip_extensions=rec.strip_extensions,
-            progress=progress,
+            progress=progress, on_step=on_step,
         ))
     return results
