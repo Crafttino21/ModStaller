@@ -4,6 +4,9 @@
   } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import ExpiryRing from "../components/ExpiryRing.svelte";
+  import DeviceChecks from "../components/DeviceChecks.svelte";
+  import PhoneMockup from "../components/PhoneMockup.svelte";
+  import BatteryLevel from "../components/BatteryLevel.svelte";
   import { busy, go, ui } from "../lib/state.svelte";
   import { date, days } from "../lib/format";
   import { enableJit, refreshApps } from "../lib/actions";
@@ -30,13 +33,21 @@
 
 <div class="tiles">
   <div class="card tile">
-    <div class="tile-icon" class:on={!!st?.device}><Smartphone size={22} /></div>
+    {#if st?.device}
+      <div class="mock"><PhoneMockup form={st.device.formFactor} height={62} /></div>
+    {:else}
+      <div class="tile-icon"><Smartphone size={22} /></div>
+    {/if}
     <div class="grow">
-      <div class="label">iPhone</div>
+      <div class="label">{st?.device?.formFactor === "ipad" ? "iPad" : "iPhone"}</div>
       {#if st?.device}
         <div class="value">{st.device.name}</div>
+        <div class="model">{st.device.model}</div>
         <div class="chips">
           <span class="chip">iOS {st.device.iosVersion}</span>
+          {#if st.device.battery}
+            <span class="chip"><BatteryLevel level={st.device.battery.level} charging={st.device.battery.charging} /></span>
+          {/if}
           {#if st.device.developerMode}
             <span class="chip ok"><span class="dot"></span>Entwicklermodus an</span>
           {:else}
@@ -68,6 +79,10 @@
     <ChevronRight size={18} class="chev" />
   </button>
 </div>
+
+{#if st?.deviceAttached}
+  <div class="checks"><DeviceChecks compact /></div>
+{/if}
 
 <div class="section-head">
   <h2>Deine Apps</h2>
@@ -124,11 +139,14 @@
   .tile-icon.on { background: var(--accent-grad); color: #fff; box-shadow: 0 6px 18px rgb(110 100 255 / 0.3); }
   .label { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
   .value { font-size: 17px; font-weight: 650; margin-top: 2px; }
+  .model { font-size: 13px; color: var(--text-2); }
+  .mock { width: 48px; display: grid; place-items: center; flex: none; }
   .value.dim { color: var(--text-2); }
   .chips { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   .hint { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); margin-top: 4px; }
   .grow { flex: 1; min-width: 0; }
 
+  .checks { margin-top: 14px; }
   .section-head { display: flex; align-items: center; justify-content: space-between; margin: 30px 0 12px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
   .app { display: flex; gap: 14px; align-items: center; padding: 16px; }

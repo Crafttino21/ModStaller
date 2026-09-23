@@ -5,6 +5,11 @@ export interface Device {
   udid: string;
   iosVersion: string;
   developerMode: boolean;
+  productType: string;
+  /** "iPhone 16 Pro Max" statt "iPhone17,2". */
+  model: string;
+  formFactor: "home" | "notch" | "island" | "ipad";
+  battery: { level: number; charging: boolean } | null;
 }
 
 export interface App {
@@ -107,6 +112,21 @@ export interface DeviceApp {
   bundleId: string;
   name: string;
   version: string;
+}
+
+export interface DeviceCheck {
+  id: string;
+  label: string;
+  state: "ok" | "warn" | "bad" | "info" | "na";
+  detail: string;
+  fix: string | null;
+  fix_label: string;
+  manual: string;
+}
+
+export interface FixResult {
+  message: string;
+  manual: string;
 }
 
 export interface BackendExit {

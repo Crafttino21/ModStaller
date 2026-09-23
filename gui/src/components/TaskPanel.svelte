@@ -56,7 +56,7 @@
   {/if}
 
   {#if task.state !== "running" && task.message}
-    <div class="result {task.state} selectable">{task.message}</div>
+    <div class="result {task.state} {task.tone} selectable">{task.message}</div>
   {/if}
   {#each task.notes as note}
     <p class="note muted selectable">{note}</p>
@@ -104,6 +104,7 @@
 
   .result { margin-top: 18px; padding: 12px 14px; border-radius: 10px; white-space: pre-wrap; font-size: 13.5px; }
   .result.done { background: var(--ok-soft); }
+  .result.done.warn { background: var(--warn-soft); }
   .result.error { background: var(--bad-soft); }
   .result.cancelled { background: var(--warn-soft); }
   .note { margin-top: 8px; font-size: 13px; }

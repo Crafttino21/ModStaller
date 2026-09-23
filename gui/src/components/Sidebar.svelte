@@ -2,6 +2,8 @@
   import {
     LayoutGrid, Download, Package, UserRound, Smartphone, Stethoscope, LoaderCircle,
   } from "@lucide/svelte";
+  import PhoneMockup from "./PhoneMockup.svelte";
+  import BatteryLevel from "./BatteryLevel.svelte";
   import { go, ui, type View } from "../lib/state.svelte";
 
   const items: { view: View; label: string; icon: typeof LayoutGrid }[] = [
@@ -15,6 +17,7 @@
 
   const urgentCount = $derived(ui.status?.urgent.length ?? 0);
   const device = $derived(ui.status?.device);
+  const checkProblems = $derived(ui.checks.list?.filter((c) => c.state === "bad").length ?? 0);
 </script>
 
 <aside>
@@ -46,6 +49,9 @@
         {#if item.view === "apps" && urgentCount}
           <span class="badge">{urgentCount}</span>
         {/if}
+        {#if item.view === "device" && checkProblems}
+          <span class="badge bad">{checkProblems}</span>
+        {/if}
         {#if item.view === "account" && ui.status && !ui.status.loggedIn}
           <span class="badge warn">!</span>
         {/if}
@@ -60,18 +66,29 @@
         <span>{ui.task.title}</span>
       </button>
     {/if}
-    <div class="conn">
-      {#if device}
-        <span class="dot" style:color="var(--ok)"></span>
-        <span class="truncate">{device.name}</span>
-      {:else if ui.status?.deviceAttached}
-        <span class="dot" style:color="var(--warn)"></span>
-        <span>iPhone gesperrt?</span>
-      {:else}
-        <span class="dot" style:color="var(--text-3)"></span>
-        <span class="faint">Kein iPhone</span>
-      {/if}
-    </div>
+    {#if device}
+      <button class="device" onclick={() => go("device")} title="Zum Gerät">
+        <PhoneMockup form={device.formFactor} height={58} />
+        <div class="dev-info">
+          <div class="dev-name">{device.name}</div>
+          <div class="dev-model">{device.model}</div>
+          <div class="dev-meta">
+            <span>iOS {device.iosVersion}</span>
+            {#if device.battery}<BatteryLevel level={device.battery.level} charging={device.battery.charging} />{/if}
+          </div>
+        </div>
+      </button>
+    {:else}
+      <div class="conn">
+        {#if ui.status?.deviceAttached}
+          <span class="dot" style:color="var(--warn)"></span>
+          <span>iPhone gesperrt?</span>
+        {:else}
+          <span class="dot" style:color="var(--text-3)"></span>
+          <span class="faint">Kein iPhone</span>
+        {/if}
+      </div>
+    {/if}
   </div>
 </aside>
 
@@ -125,6 +142,7 @@
     place-items: center;
   }
 
+  .badge.bad { background: var(--bad); color: #fff; }
   .foot { margin-top: auto; display: grid; gap: 8px; }
   .running {
     display: flex; align-items: center; gap: 8px;
@@ -134,5 +152,17 @@
   }
   .running span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .conn { display: flex; align-items: center; gap: 9px; padding: 8px 12px; font-size: 12.5px; color: var(--text-2); }
-  .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .device {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 10px 12px; border-radius: 12px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .device:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .dev-info { min-width: 0; flex: 1; display: grid; gap: 1px; }
+  .dev-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dev-model { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dev-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 3px;
+              font-size: 12px; color: var(--text-3); }
 </style>

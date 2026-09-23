@@ -25,7 +25,9 @@ docker run --rm -v "$ROOT:/src:ro" -v "$OUT:/out" "$IMAGE" \
   bash -c "bash /src/packaging/build-zsign.sh && chown -R $(id -u):$(id -g) /out/bin"
 
 echo "==> Oberflaeche + AppImage"
-BUILD_GUI='npm ci --no-audit --no-fund && npm run dist'
+# install.js holt die Electron-Binary nach, die npm ci hier nicht mitbringt -
+# sonst ginge danach "npm run dev" nicht mehr.
+BUILD_GUI='npm ci --no-audit --no-fund && node node_modules/electron/install.js && npm run dist'
 if command -v npm >/dev/null; then
   (cd "$ROOT/gui" && ELECTRON_BUILDER_CACHE="$OUT/cache" bash -c "$BUILD_GUI")
 else

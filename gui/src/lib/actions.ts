@@ -2,7 +2,7 @@
 
 import { ask, runTask, toast } from "./state.svelte";
 import { call } from "./rpc";
-import type { App, InstallOutcome, JitResult } from "./types";
+import type { App, DeviceCheck, FixResult, InstallOutcome, JitResult } from "./types";
 
 export function installIpa(path: string, name: string, keepExtensions: boolean) {
   runTask<InstallOutcome>("install", `${name} installieren`, "install",
@@ -69,4 +69,14 @@ export async function logout() {
   await call("logout", { forgetDevice: option });
   toast("Abgemeldet.");
   return true;
+}
+
+export function fixCheck(check: DeviceCheck) {
+  if (!check.fix) return;
+  runTask<FixResult>("fix", `${check.label}: ${check.fix_label}`, "device.fix", { fix: check.fix },
+    (r) => ({
+      message: r.message,
+      notes: r.manual ? [`Noch zu tun: ${r.manual}`] : [],
+      tone: r.manual ? "warn" : "ok",
+    }));
 }

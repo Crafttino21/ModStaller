@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Smartphone, TriangleAlert, Search, LoaderCircle, RefreshCw } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
+  import DeviceChecks from "../components/DeviceChecks.svelte";
   import { errorText, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import type { DeviceApp, DeviceInfo } from "../lib/types";
@@ -46,6 +47,10 @@
 </script>
 
 <PageHeader title="Gerät" subtitle="Das angeschlossene iPhone." />
+
+{#if ui.status?.deviceAttached}
+  <div class="checks"><DeviceChecks /></div>
+{/if}
 
 {#if !connected}
   <div class="card empty">
@@ -104,6 +109,7 @@
 {/if}
 
 <style>
+  .checks { margin-bottom: 14px; }
   .pad { padding: 22px; margin-bottom: 14px; }
   .small { font-size: 13px; }
   .tiny { font-size: 11.5px; }

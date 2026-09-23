@@ -26,6 +26,7 @@ import json
 import os
 import sys
 import threading
+import time
 import traceback
 from dataclasses import asdict
 from pathlib import Path
@@ -41,6 +42,11 @@ INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 USER_ERROR = -32000        # ModStallerError & Co. - Meldung ist fuer Menschen
 CANCELLED = -32800
+
+
+#: Wie lange ein Geraete-Eintrag im Status gilt, bevor der Akku neu gelesen
+#: wird. Kuerzer lohnt nicht: lockdown jedes Mal neu aufzubauen kostet.
+BATTERY_TTL = 30.0
 
 
 class RpcError(Exception):
@@ -287,6 +293,7 @@ def _outcome_dict(o) -> dict:
 async def _status(server: Server, job: Job, params: dict):
     from .apple.session import Session
     from .device.connection import list_devices
+    from .device.models import form_factor, marketing_name
     from .state import store
     from .status import URGENT_DAYS, Status, device_status
 
@@ -298,16 +305,28 @@ async def _status(server: Server, job: Job, params: dict):
 
     device = None
     if serials:
-        if serials[0] not in cache or params.get("refresh"):
+        entry = cache.get(serials[0])
+        # Der Akku aendert sich - nach BATTERY_TTL gilt der Eintrag als alt.
+        stale = entry is None or time.monotonic() - entry["_at"] > BATTERY_TTL
+        if stale or params.get("refresh"):
             cache.pop(serials[0], None)
             await device_status(st)
             if st.has_device and not st.error:
                 cache[serials[0]] = {
+                    "_at": time.monotonic(),
                     "name": st.device_name, "udid": st.udid,
                     "iosVersion": st.ios_version,
                     "developerMode": st.developer_mode,
+                    "productType": st.product_type,
+                    "model": marketing_name(st.product_type),
+                    "formFactor": form_factor(st.product_type),
+                    "battery": ({"level": st.battery.level,
+                                 "charging": st.battery.charging}
+                                if st.battery else None),
                 }
-        device = cache.get(serials[0])
+        if serials[0] in cache:
+            device = {k: v for k, v in cache[serials[0]].items()
+                      if not k.startswith("_")}
 
     return {
         "device": device,
@@ -532,6 +551,22 @@ async def _device_apps(server: Server, job: Job, params: dict):
           "version": meta.get("CFBundleShortVersionString", "")}
          for bid, meta in apps.items()),
         key=lambda a: a["name"].lower())
+
+
+@method("device.checks")
+async def _device_checks(server: Server, job: Job, params: dict):
+    from .device.readiness import run_checks
+    return [asdict(c) for c in await job.isolated(run_checks)]
+
+
+@method("device.fix")
+async def _device_fix(server: Server, job: Job, params: dict):
+    from .device.readiness import run_fix
+    fix = _need(params, "fix")
+    result = await job.isolated(lambda: run_fix(fix, on_step=job.log))
+    # Entwicklermodus & Co. stehen im Status-Cache - der ist jetzt veraltet.
+    server.device_cache.clear()
+    return asdict(result)
 
 
 @method("cancel")

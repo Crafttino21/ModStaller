@@ -8,10 +8,10 @@
 // selben iPhone ohnehin in die Quere kaemen.
 
 import { call, failAll, handle, onReady, RpcError, start, type Call } from "./rpc";
-import type { BackendExit, Status } from "./types";
+import type { BackendExit, DeviceCheck, Status } from "./types";
 
 export type View = "overview" | "install" | "apps" | "account" | "device" | "system";
-export type TaskKind = "install" | "refresh" | "jit" | "uninstall";
+export type TaskKind = "install" | "refresh" | "jit" | "uninstall" | "fix";
 export type TaskState = "running" | "done" | "error" | "cancelled";
 
 export interface Task {
@@ -22,6 +22,8 @@ export interface Task {
   state: TaskState;
   message: string;
   notes: string[];
+  /** "warn": erledigt, aber am iPhone fehlt noch ein Handgriff. */
+  tone: "ok" | "warn";
   open: boolean;
   call: Call<unknown>;
 }
@@ -56,6 +58,13 @@ export const ui = $state({
   confirm: null as Confirm | null,
   /** Per Drag & Drop irgendwo ins Fenster gezogene IPA. */
   droppedIpa: null as string | null,
+  /** iPhone-Check: fuer welches Geraet (key) und mit welchem Ergebnis. */
+  checks: {
+    key: null as string | null,
+    list: null as DeviceCheck[] | null,
+    loading: false,
+    error: "",
+  },
 });
 
 export function go(view: View) {
@@ -103,6 +112,7 @@ export async function refreshStatus(force = false) {
   polling = true;
   try {
     ui.status = await call<Status>("status", { refresh: force });
+    autoCheck();
   } catch {
     // Beim naechsten Durchlauf erneut - ein einzelner Aussetzer ist kein Zustand.
   } finally {
@@ -113,6 +123,40 @@ export async function refreshStatus(force = false) {
 setInterval(() => {
   if (document.visibilityState === "visible") refreshStatus();
 }, POLL_MS);
+
+// -- iPhone-Check -----------------------------------------------------------
+
+/** Welches Geraet gerade dran ist - "attached", solange es sich nicht ausweist. */
+function deviceKey(st: Status | null): string | null {
+  if (!st?.deviceAttached) return null;
+  return st.device?.udid ?? "attached";
+}
+
+/** Sobald ein (anderes) iPhone auftaucht oder sich entsperrt: einmal alles pruefen. */
+function autoCheck() {
+  const key = deviceKey(ui.status);
+  if (key === null) {
+    ui.checks.key = null;
+    ui.checks.list = null;
+    return;
+  }
+  // Waehrend eines Vorgangs nicht dazwischenfunken - der Entwicklermodus
+  // z. B. startet das iPhone neu. Danach wird ohnehin neu geprueft.
+  if (key !== ui.checks.key && !ui.checks.loading && !busy()) refreshChecks();
+}
+
+export async function refreshChecks() {
+  ui.checks.loading = true;
+  ui.checks.error = "";
+  ui.checks.key = deviceKey(ui.status);
+  try {
+    ui.checks.list = await call<DeviceCheck[]>("device.checks");
+  } catch (err) {
+    ui.checks.error = errorText(err);
+  } finally {
+    ui.checks.loading = false;
+  }
+}
 
 // -- Aufgaben ----------------------------------------------------------------
 
@@ -137,7 +181,7 @@ export function runTask<T>(
   }
   const task: Task = $state({
     kind, title, log: [], pct: null, state: "running",
-    message: "", notes: [], open: true,
+    message: "", notes: [], tone: "ok", open: true,
     call: null as unknown as Call<unknown>,
   });
   task.call = start<T>(method, params, {
@@ -152,6 +196,7 @@ export function runTask<T>(
       task.state = "done";
       task.message = d.message;
       task.notes = d.notes ?? [];
+      task.tone = d.tone ?? "ok";
       if (!task.open) toast(d.message, d.tone ?? "ok");
     },
     (err) => {
@@ -160,7 +205,10 @@ export function runTask<T>(
       task.message = cancelled ? "Abgebrochen." : errorText(err);
       if (!task.open) toast(`${title}: ${task.message}`, cancelled ? "warn" : "bad", 8000);
     },
-  ).finally(() => refreshStatus(true));
+  ).finally(async () => {
+    await refreshStatus(true);
+    if (ui.status?.deviceAttached) refreshChecks();
+  });
 }
 
 export function closeTask() {

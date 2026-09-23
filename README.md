@@ -27,7 +27,7 @@ iOS 27 fuer die Installation also nicht gebraucht.
 Am einfachsten als AppImage - bringt Python, pymobiledevice3 und zsign mit:
 
 ```bash
-packaging/build.sh                        # braucht nur Docker
+./build-appimage.sh                        # braucht nur Docker (--run startet sie danach)
 ./dist/ModStaller-0.1.0-x86_64.AppImage
 ```
 
@@ -55,6 +55,20 @@ cd gui && npm install && npm run dev      # Oberflaeche mit Hot Reload
 Die Oberflaeche (AppImage oder `npm run dev`) zeigt vorne, ob das iPhone
 haengt, ob du angemeldet bist und was demnaechst ablaeuft. IPAs lassen sich
 einfach ins Fenster ziehen.
+
+Sobald ein iPhone angesteckt wird, laeuft der **iPhone-Check**: Kopplung,
+iOS-Version, Entwicklermodus, Developer Disk Image, belegte App-Plaetze und
+freier Speicher. Was sich automatisch beheben laesst, bekommt einen Knopf:
+
+* **Kopplung anfragen** - am iPhone dann nur noch "Vertrauen" tippen.
+* **Entwicklermodus einschalten** - ohne Code-Sperre vollautomatisch samt
+  Neustart und Bestaetigung. Mit Code-Sperre verweigert iOS das; ModStaller
+  blendet dann den sonst versteckten Schalter in den Einstellungen ein.
+* **Developer Disk Image laden** (nur fuer JIT) und **abgelaufene Profile
+  entfernen**.
+
+"Entwickler vertrauen" (Einstellungen > Allgemein > VPN & Geraeteverwaltung)
+bleibt Handarbeit - dafuer gibt es keine Schnittstelle.
 
 Sie ist ein Client wie die Kommandozeile: `gui/` startet `modstaller serve`
 und spricht mit ihm JSON-RPC ueber stdin/stdout (`modstaller/server.py`).

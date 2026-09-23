@@ -59,9 +59,11 @@
     const out: { text: string; action?: () => void; label?: string }[] = [];
     if (!st) return out;
     if (!st.loggedIn) out.push({ text: "Nicht bei Apple angemeldet.", action: () => go("account"), label: "Anmelden" });
-    if (!st.device) out.push({ text: st.deviceAttached ? "iPhone ist angesteckt, aber gesperrt oder nicht gepairt." : "Kein iPhone verbunden – per USB anstecken und entsperren." });
+    if (!st.device && st.deviceAttached)
+      out.push({ text: "iPhone ist angesteckt, aber gesperrt oder nicht gekoppelt.", action: () => go("device"), label: "Beheben" });
+    else if (!st.device) out.push({ text: "Kein iPhone verbunden – per USB anstecken und entsperren." });
     else if (!st.device.developerMode)
-      out.push({ text: "Entwicklermodus ist aus: Einstellungen › Datenschutz & Sicherheit › Entwicklermodus." });
+      out.push({ text: "Entwicklermodus ist aus.", action: () => go("device"), label: "Einschalten" });
     if (info?.encrypted) out.push({ text: "Diese IPA ist App-Store-verschlüsselt (FairPlay) und lässt sich nicht neu signieren." });
     return out;
   });

@@ -24,7 +24,9 @@ class Status:
     device_name: str | None = None
     udid: str = ""
     ios_version: str = ""
+    product_type: str = ""
     developer_mode: bool = True
+    battery: object = None      # device.connection.Battery
     logged_in: bool = False
     apps: list = field(default_factory=list)
     error: str = ""
@@ -41,13 +43,15 @@ class Status:
 async def device_status(st: Status) -> None:
     """Traegt ein, was das iPhone ueber sich sagt - oder dass keins da ist."""
     try:
-        from .device.connection import ServiceProvider, device_info
+        from .device.connection import ServiceProvider, battery, device_info
         async with ServiceProvider() as sp:
             info = await device_info(sp.lockdown)
             st.device_name = info.name
             st.udid = info.udid
             st.ios_version = info.ios_version
+            st.product_type = info.product_type
             st.developer_mode = info.developer_mode
+            st.battery = await battery(sp.lockdown)
     except ModStallerError as exc:
         # Kein Geraet ist ein Zustand, kein Fehler. Ein gesperrtes oder
         # ungepairtes schon - das muss man sehen, um es zu beheben.

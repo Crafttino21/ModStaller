@@ -94,6 +94,22 @@ async def device_info(lockdown) -> DeviceInfo:
     )
 
 
+@dataclass(frozen=True)
+class Battery:
+    level: int          # Prozent
+    charging: bool
+
+
+async def battery(lockdown) -> Battery | None:
+    """Akkustand - ``None``, wenn das Geraet ihn nicht verraet."""
+    try:
+        v = await lockdown.get_value(domain="com.apple.mobile.battery")
+        return Battery(level=int(v["BatteryCurrentCapacity"]),
+                       charging=bool(v.get("BatteryIsCharging")))
+    except Exception:
+        return None
+
+
 class ServiceProvider:
     """Haelt lockdown und - bei Bedarf - den RSD-Tunnel.
 

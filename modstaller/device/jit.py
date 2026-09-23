@@ -284,30 +284,14 @@ async def enable_jit(sp, bundle_id: str, *,
                      on_step=lambda msg: None,
                      verbose: bool = False) -> JitResult:
     """Startet die App und begleitet sie, bis JIT steht."""
-    from pymobiledevice3.exceptions import (
-        AlreadyMountedError, DeveloperDiskImageNotFoundError,
-    )
     from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
     from pymobiledevice3.services.dvt.instruments.process_control import (
         ProcessControl,
     )
-    from pymobiledevice3.services.mobile_image_mounter import auto_mount
 
-    on_step("Developer Disk Image bereitstellen …")
-    try:
-        await auto_mount(sp.lockdown)
-    except AlreadyMountedError:
-        pass
-    except DeveloperDiskImageNotFoundError as exc:
-        raise DeviceError(
-            "Kein passendes Developer Disk Image gefunden - fuer sehr neue "
-            f"iOS-Versionen gibt es noch keins. ({exc})"
-        ) from exc
-    except Exception as exc:
-        raise DeviceError(
-            f"Developer Disk Image liess sich nicht laden: "
-            f"{exc or type(exc).__name__}"
-        ) from exc
+    from .readiness import mount_developer_image
+
+    await mount_developer_image(sp.lockdown, on_step)
 
     rsd = await sp.rsd()
 
