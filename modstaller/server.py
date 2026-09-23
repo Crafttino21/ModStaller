@@ -612,6 +612,14 @@ def take_stdout() -> int:
     sys.stdout.flush()
     out = os.dup(1)
     os.dup2(2, 1)
+    if os.name == "nt":
+        # Unter Windows erben Kindprozesse nicht FD 1, sondern das
+        # Standard-Handle des Prozesses - das biegt dup2 nicht mit um.
+        import ctypes
+        import msvcrt
+        STD_OUTPUT_HANDLE = -11
+        ctypes.windll.kernel32.SetStdHandle(STD_OUTPUT_HANDLE,
+                                            msvcrt.get_osfhandle(2))
     sys.stdout = sys.stderr
     return out
 

@@ -197,7 +197,8 @@ def test_stray_prints_do_not_reach_the_protocol():
 
 @pytest.mark.parametrize("value, expected", [
     (b"\x00", None),
-    (__import__("pathlib").Path("/x.ipa"), "/x.ipa"),
+    # str(), nicht "/x.ipa": unter Windows wird daraus "\\x.ipa".
+    (__import__("pathlib").Path("/x.ipa"), str(__import__("pathlib").Path("/x.ipa"))),
 ])
 def test_unusual_values_serialise(value, expected):
     assert srv._jsonable(value) == expected

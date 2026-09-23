@@ -41,9 +41,11 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # Das Annotations-Plugin haengt jeden Fehlschlag als Annotation an den
+      # Lauf - die sind im Gegensatz zu den Logs auch ohne Anmeldung lesbar.
       - name: Python-Tests
         run: |
-          pip install -e . pytest pytest-asyncio
+          pip install -e . pytest pytest-asyncio pytest-github-actions-annotate-failures
           pytest -q
 
       - uses: actions/setup-node@v5
