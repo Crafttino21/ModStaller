@@ -100,7 +100,8 @@ jobs:
   build-windows:
     name: Windows (Setup + CLI)
     needs: test
-    runs-on: windows-latest
+    # Fest 2022: zsigns Projekt verlangt das VS2022-Toolset (v143).
+    runs-on: windows-2022
     defaults:
       run:
         shell: bash
@@ -118,31 +119,47 @@ jobs:
           cache: npm
           cache-dependency-path: gui/package-lock.json
 
-      - uses: microsoft/setup-msbuild@v2
-
       - name: Version aus dem Tag uebernehmen
         if: startsWith(github.ref, 'refs/tags/v')
         run: python packaging/set-version.py "${GITHUB_REF_NAME#v}"
 
       # zsign bringt eine VS2022-Solution mit statischem OpenSSL und
       # statischer C-Laufzeit mit - die .exe braucht nichts weiter.
+      # PowerShell statt Bash: MSBuild wird per vswhere gefunden, und Fehler
+      # landen als Annotation am Lauf (die sind ohne Anmeldung lesbar).
       - name: zsign bauen
+        shell: pwsh
         run: |
-          git clone -q --depth 1 --branch "$ZSIGN_REF" https://github.com/zhlynn/zsign.git "$RUNNER_TEMP/zsign"
-          msbuild "$RUNNER_TEMP/zsign/build/windows/vs2022/zsign.sln" -p:Configuration=Release -p:Platform=x64 -m -nologo -v:minimal
-          exe=$(find "$RUNNER_TEMP/zsign/build/windows" -name zsign.exe -path "*Release*" | head -n 1)
-          test -n "$exe"
-          mkdir -p packaging/out/bin
-          cp "$exe" packaging/out/bin/zsign.exe
-          packaging/out/bin/zsign.exe -v
+          $ErrorActionPreference = "Stop"
+          $src = Join-Path $env:RUNNER_TEMP "zsign"
+          git clone -q --depth 1 --branch $env:ZSIGN_REF https://github.com/zhlynn/zsign.git $src
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+          if (-not $msbuild) { Write-Output "::error::MSBuild nicht gefunden"; exit 1 }
+          Write-Output "MSBuild: $msbuild"
+          $log = & $msbuild (Join-Path $src "build\windows\vs2022\zsign.sln") -p:Configuration=Release -p:Platform=x64 -m -nologo -v:minimal 2>&1
+          $log | Write-Output
+          if ($LASTEXITCODE -ne 0) {
+            $log | Select-String -Pattern "error" | Select-Object -First 6 |
+              ForEach-Object { Write-Output "::error::$($_.Line.Trim())" }
+            exit 1
+          }
+          $exe = Get-ChildItem (Join-Path $src "build\windows") -Recurse -Filter zsign.exe |
+            Where-Object FullName -like "*Release*" | Select-Object -First 1
+          if (-not $exe) { Write-Output "::error::zsign.exe nach dem Build nicht gefunden"; exit 1 }
+          New-Item -ItemType Directory -Force packaging\out\bin | Out-Null
+          Copy-Item $exe.FullName packaging\out\bin\zsign.exe
+          & packaging\out\bin\zsign.exe -v
 
       - name: Backend und CLI bauen (PyInstaller)
         run: |
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
           pip install . "pyinstaller>=6.10"
           python packaging/build_backend.py --out packaging/out --cli
 
       - name: Backend pruefen
         run: |
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
           packaging/out/cli/modstaller.exe --help > /dev/null
           reply=$(echo '{"jsonrpc":"2.0","id":1,"method":"info"}' | packaging/out/backend/modstaller-backend.exe serve)
           echo "$reply"
@@ -151,15 +168,27 @@ jobs:
       - name: Installer bauen
         working-directory: gui
         run: |
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
           npm ci --no-audit --no-fund
           npm run dist:win
 
       - name: CLI-Zip packen
         run: |
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
           version=$(python -c "import json;print(json.load(open('gui/package.json'))['version'])")
           cd packaging/out
           cp bin/zsign.exe cli/
           7z a -tzip "../../dist/ModStaller-CLI-${version}-windows-x64.zip" ./cli/*
+
+      # Die Logs sind nur angemeldet lesbar, Annotationen oeffentlich - so
+      # laesst sich ein Fehlschlag auch von aussen nachvollziehen.
+      - name: Fehler als Annotation melden
+        if: failure()
+        run: |
+          test -f "$RUNNER_TEMP/build.log" || exit 0
+          tail -n 10 "$RUNNER_TEMP/build.log" | while IFS= read -r line; do
+            echo "::error::${line:0:300}"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
