@@ -88,6 +88,22 @@ modstaller certs                  # Zertifikate anzeigen/widerrufen
 modstaller jit <bundle-id>        # JIT freischalten (Java-/Emulator-Apps)
 ```
 
+## Releases und Updates
+
+Eine neue Version veroeffentlichen:
+
+```bash
+./release.sh 0.2.0            # Version setzen, Commit + Tag, pushen
+./release.sh 0.3.0-beta.1     # Vorabversion
+```
+
+Den Rest erledigt GitHub (`.github/workflows/release.yml`): Tests, AppImage
+bauen, Release mit `latest-linux.yml` anlegen. Die installierte AppImage
+schaut beim Start und alle vier Stunden dort nach und zeigt unten links an,
+wenn es etwas Neues gibt. Heruntergeladen und neu gestartet wird nur auf
+Knopfdruck - nie waehrend einer Installation oder JIT-Sitzung. Vorabversionen
+bekommt nur, wer selbst eine Vorabversion laufen hat.
+
 ## JIT
 
 Java- und Emulator-Apps erzeugen Maschinencode zur Laufzeit. iOS verbietet

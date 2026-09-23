@@ -8,7 +8,7 @@
 // selben iPhone ohnehin in die Quere kaemen.
 
 import { call, failAll, handle, onReady, RpcError, start, type Call } from "./rpc";
-import type { BackendExit, DeviceCheck, Status } from "./types";
+import type { BackendExit, DeviceCheck, Status, UpdateState } from "./types";
 
 export type View = "overview" | "install" | "apps" | "account" | "device" | "system";
 export type TaskKind = "install" | "refresh" | "jit" | "uninstall" | "fix";
@@ -58,6 +58,8 @@ export const ui = $state({
   confirm: null as Confirm | null,
   /** Per Drag & Drop irgendwo ins Fenster gezogene IPA. */
   droppedIpa: null as string | null,
+  /** Neue Version aus den GitHub-Releases (nur in der AppImage). */
+  update: { state: "unsupported" } as UpdateState,
   /** iPhone-Check: fuer welches Geraet (key) und mit welchem Ergebnis. */
   checks: {
     key: null as string | null,
@@ -250,3 +252,8 @@ export function restartBackend() {
   ui.exit = null;
   window.backend.restart();
 }
+
+// -- Updates -----------------------------------------------------------------
+
+window.updates.get().then((s) => (ui.update = s));
+window.updates.onState((s) => (ui.update = s));

@@ -12,8 +12,13 @@ const path = require("node:path");
 /** Wie viel stderr wir fuer die Fehleranzeige aufheben. */
 const STDERR_KEEP = 60;
 
+/** Wie oft nach einer neuen Version geschaut wird (zusaetzlich zum Start). */
+const UPDATE_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
 let win = null;
 let backend = null;
+let updater = null;
+let updateState = { state: "unsupported" };
 
 function backendCommand() {
   if (app.isPackaged) {
@@ -117,6 +122,67 @@ function createWindow() {
   win.on("closed", () => { win = null; });
 }
 
+// -- Updates -----------------------------------------------------------------
+//
+// Quelle sind die GitHub-Releases (publish in electron-builder.yml). Geladen
+// und eingespielt wird nur auf Knopfdruck: ein Neustart mitten in einer
+// Installation oder waehrend JIT waere fatal. Wer die App einfach schliesst,
+// bekommt ein fertig geladenes Update beim Beenden eingespielt.
+
+function setUpdateState(next) {
+  updateState = { ...next, current: app.getVersion() };
+  win?.webContents.send("update:state", updateState);
+}
+
+/** Release-Notes kommen als HTML von GitHub - angezeigt wird reiner Text. */
+function plainNotes(notes) {
+  const raw = Array.isArray(notes) ? notes.map((n) => n.note ?? "").join("\n\n") : notes ?? "";
+  return String(raw).replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|li|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function setupUpdates() {
+  // Nur eine AppImage kann sich selbst ersetzen - in der Entwicklung (oder
+  // entpackt gestartet) gibt es nichts zu aktualisieren.
+  if (!app.isPackaged || !process.env.APPIMAGE) {
+    setUpdateState({ state: "unsupported" });
+    return;
+  }
+  const { autoUpdater } = require("electron-updater");
+  updater = autoUpdater;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  let version = null;
+  autoUpdater.on("checking-for-update", () => setUpdateState({ state: "checking" }));
+  autoUpdater.on("update-not-available", () => setUpdateState({ state: "none" }));
+  autoUpdater.on("update-available", (info) => {
+    version = info.version;
+    setUpdateState({ state: "available", version, notes: plainNotes(info.releaseNotes) });
+  });
+  autoUpdater.on("download-progress", (p) =>
+    setUpdateState({ state: "downloading", version, percent: Math.round(p.percent) }));
+  autoUpdater.on("update-downloaded", (info) =>
+    setUpdateState({ state: "ready", version: info.version }));
+  autoUpdater.on("error", (err) =>
+    setUpdateState({ state: "error", version, message: String(err?.message ?? err).split("\n")[0] }));
+
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, UPDATE_INTERVAL_MS).unref();
+}
+
+ipcMain.handle("update:get", () => updateState);
+ipcMain.handle("update:check", () => updater?.checkForUpdates().catch(() => {}));
+ipcMain.handle("update:download", () => updater?.downloadUpdate().catch(() => {}));
+ipcMain.handle("update:install", () => {
+  // isSilent=false, isForceRunAfter=true: danach startet die neue Version.
+  updater?.quitAndInstall(false, true);
+});
+
+// -- Backend ---------------------------------------------------------------
+
 ipcMain.on("rpc:send", (_e, msg) => {
   backend?.stdin.write(JSON.stringify(msg) + "\n");
 });
@@ -139,6 +205,7 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   startBackend();
   createWindow();
+  setupUpdates();
 });
 
 app.on("window-all-closed", () => app.quit());

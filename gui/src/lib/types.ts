@@ -135,8 +135,24 @@ export interface BackendExit {
   stderr: string;
 }
 
+export interface UpdateState {
+  state: "unsupported" | "checking" | "none" | "available" | "downloading" | "ready" | "error";
+  current?: string;
+  version?: string;
+  notes?: string;
+  percent?: number;
+  message?: string;
+}
+
 declare global {
   interface Window {
+    updates: {
+      get(): Promise<UpdateState>;
+      onState(cb: (s: UpdateState) => void): () => void;
+      check(): Promise<void>;
+      download(): Promise<void>;
+      install(): Promise<void>;
+    };
     backend: {
       send(msg: unknown): void;
       onMessage(cb: (msg: any) => void): () => void;

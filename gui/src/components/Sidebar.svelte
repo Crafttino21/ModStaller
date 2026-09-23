@@ -4,6 +4,7 @@
   } from "@lucide/svelte";
   import PhoneMockup from "./PhoneMockup.svelte";
   import BatteryLevel from "./BatteryLevel.svelte";
+  import UpdateNotice from "./UpdateNotice.svelte";
   import { go, ui, type View } from "../lib/state.svelte";
 
   const items: { view: View; label: string; icon: typeof LayoutGrid }[] = [
@@ -60,6 +61,7 @@
   </nav>
 
   <div class="foot">
+    <UpdateNotice />
     {#if ui.task?.state === "running" && !ui.task.open}
       <button class="running" onclick={() => ui.task && (ui.task.open = true)}>
         <LoaderCircle size={15} class="spin" />

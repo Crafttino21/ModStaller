@@ -1,7 +1,7 @@
 <script lang="ts">
   import { CircleCheck, CircleX, CircleDashed, RefreshCw, LoaderCircle } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
-  import { errorText } from "../lib/state.svelte";
+  import { errorText, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import type { Check } from "../lib/types";
 
@@ -62,7 +62,26 @@
   {/if}
 </div>
 
-<p class="faint foot">ModStaller {version} · Daten unter <code>~/.local/share/modstaller</code> (Secrets mit 0600).</p>
+<div class="card updates">
+  <div class="grow">
+    <div class="label">ModStaller {ui.update.current ?? version}</div>
+    <div class="faint tiny">
+      {#if ui.update.state === "unsupported"}Automatische Updates gibt es nur in der AppImage.
+      {:else if ui.update.state === "checking"}Suche nach Updates …
+      {:else if ui.update.state === "none"}Aktuell – keine neuere Version auf GitHub.
+      {:else if ui.update.state === "error"}Update-Prüfung fehlgeschlagen: {ui.update.message}
+      {:else}Version {ui.update.version} ist verfügbar – siehe unten links.{/if}
+    </div>
+  </div>
+  {#if ui.update.state !== "unsupported"}
+    <button class="btn sm" disabled={ui.update.state === "checking" || ui.update.state === "downloading"}
+            onclick={() => window.updates.check()}>
+      <RefreshCw size={14} /> Nach Updates suchen
+    </button>
+  {/if}
+</div>
+
+<p class="faint foot">Daten unter <code>~/.local/share/modstaller</code> (Secrets mit 0600).</p>
 
 <style>
   .summary { margin-bottom: 14px; font-weight: 550; }
@@ -77,5 +96,6 @@
   .label { font-weight: 550; }
   .tiny { font-size: 11.5px; overflow-wrap: anywhere; }
   .hint { margin-top: 4px; font-size: 13px; color: var(--text-2); }
+  .updates { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 16px 18px; }
   .foot { margin-top: 16px; font-size: 12px; }
 </style>

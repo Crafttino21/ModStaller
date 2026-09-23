@@ -1,0 +1,93 @@
+# Baut bei jedem Versions-Tag (v1.2.3) die AppImage und veroeffentlicht sie
+# als GitHub-Release. Die App holt sich Updates genau von dort
+# (electron-updater liest latest-linux.yml aus der neuesten Release).
+#
+# Ausloesen:  ./release.sh 1.2.3   (oder von Hand: git tag v1.2.3 && git push origin v1.2.3)
+# Tags mit Bindestrich (v1.3.0-beta.1) werden als Vorabversion markiert -
+# die bekommen nur Nutzer, die selbst eine Vorabversion laufen haben.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Python-Tests
+        run: |
+          pip install -e . pytest pytest-asyncio
+          pytest -q
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      - name: Typpruefung der Oberflaeche
+        working-directory: gui
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: |
+          npm ci --no-audit --no-fund
+          npx svelte-check --tsconfig ./tsconfig.json
+
+  release:
+    name: AppImage bauen und veroeffentlichen
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      # Der Tag ist die Wahrheit - auch wenn jemand vergessen hat, die
+      # Nummer im Repo hochzuzaehlen. Sonst meldete die neue AppImage die
+      # alte Version und boete sich selbst ewig als Update an.
+      - name: Version aus dem Tag uebernehmen
+        run: python3 packaging/set-version.py "${GITHUB_REF_NAME#v}"
+
+      # Dasselbe Skript wie lokal: Backend und zsign im Ubuntu-22.04-
+      # Container (alte glibc = laeuft auf moeglichst vielen Distros).
+      - name: AppImage bauen
+        run: ./build-appimage.sh
+
+      - name: Update-Metadaten pruefen
+        run: |
+          ls -la dist/
+          test -f dist/latest-linux.yml
+          grep -q "version: ${GITHUB_REF_NAME#v}$" dist/latest-linux.yml
+
+      - name: Release anlegen
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ModStaller ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          # Die Blockmap fuer Delta-Updates steckt bei AppImages in der Datei
+          # selbst (blockMapSize in latest-linux.yml) - keine eigene Datei.
+          files: |
+            dist/*.AppImage
+            dist/latest-linux.yml

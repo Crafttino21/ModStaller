@@ -27,3 +27,11 @@ linux:
   # Kein pauschales --no-sandbox: das AppRun von electron-builder prueft
   # selbst, ob Chromiums Sandbox geht (auf Ubuntu 24.04 z. B. nicht), und
   # schaltet sie nur dann ab.
+# Woher die App ihre Updates holt (electron-updater) - und wohin die Pipeline
+# veroeffentlicht. Lokal wird nie hochgeladen: "npm run dist" baut mit
+# --publish never, die Release legt .github/workflows/release.yml an.
+publish:
+  provider: github
+  owner: Crafttino21
+  repo: ModStaller
+  releaseType: release
