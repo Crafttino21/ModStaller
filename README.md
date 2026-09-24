@@ -1,55 +1,148 @@
 # ModStaller
 
-Ein iOS-Sideloader fuer Linux und Windows. Nimmt eine IPA, signiert sie mit einem ueber
-den eigenen Apple-Account bezogenen Development-Zertifikat und installiert sie
-aufs iPhone - ohne Mac, ohne Jailbreak.
+An iOS sideloader for Linux (Windows and Android on the way). It takes an IPA,
+signs it with a development certificate obtained through your own Apple account
+and installs it on your iPhone - no Mac, no jailbreak.
 
-Getestet gegen: iPhone 16 Pro Max (iPhone17,2), iOS 27.0, CachyOS/Arch.
+Tested against: iPhone 16 Pro Max (iPhone17,2), iOS 27.0, CachyOS/Arch.
+See [Supported devices](#supported-devices) for the full compatibility list.
 
-## Stand
+## Status
 
-| Meilenstein | Inhalt | Status |
+| Milestone | Scope | Status |
 |---|---|---|
-| M0 | Geruest, `doctor`, Device-Verbindung | laeuft |
-| M1 | Anisette + GSA-Login inkl. 2FA | laeuft |
-| M2 | Zertifikat, App-ID, Provisioning-Profil | laeuft |
-| M3 | Signieren und installieren | laeuft |
-| M4 | `refresh`, `uninstall`, `certs` | gebaut, Refresh noch ungetestet |
-| M5 | systemd-Timer fuer automatischen Refresh | offen |
+| M0 | Scaffolding, `doctor`, device connection | working |
+| M1 | Anisette + GSA login incl. 2FA | working |
+| M2 | Certificate, App ID, provisioning profile | working |
+| M3 | Signing and installing | working |
+| M4 | `refresh`, `uninstall`, `certs` | built, refresh not yet tested |
+| M5 | systemd timer for automatic refresh | open |
 
-Erster vollstaendiger Durchlauf am 23.09.2026: PojavLauncher 2.2 (17
-injizierte dylibs, 4 Frameworks) signiert und auf iPhone 16 Pro Max unter
-iOS 27.0 installiert. Transportweg: lockdown - der RSD-Tunnel wird auf
-iOS 27 fuer die Installation also nicht gebraucht.
+First complete run on 2026-09-23: PojavLauncher 2.2 (17 injected dylibs,
+4 frameworks) signed and installed on an iPhone 16 Pro Max running iOS 27.0.
+Transport: lockdown - so the RSD tunnel is not needed for installation on
+iOS 27.
+
+## Roadmap
+
+ModStaller currently runs fully on **Linux**. Planned next:
+
+**Short term**
+
+- [ ] Test `refresh` end to end against a real 7-day expiry (finish M4)
+- [ ] systemd timer for automatic refresh (M5)
+- [ ] Test on more devices, especially an A13/A14 iPhone without TXM and an
+      older iOS version (see [Supported devices](#supported-devices))
+
+**Windows**
+
+- [x] CI builds: installer, CLI zip, auto-update
+- [ ] Full test pass on real Windows machines (pairing, install, JIT via RSD tunnel)
+- [ ] Automatic refresh via Windows Task Scheduler (counterpart to M5)
+- [ ] Declare Windows as officially supported
+
+**Android**
+
+- [ ] Use an Android phone as the host: connect the iPhone via USB-C/OTG and
+      sign and install directly from Android - no PC needed
+- [ ] Evaluate the USB stack on Android (usbmuxd replacement without root)
+- [ ] Android app with the same feature set as the desktop UI
+
+**Later / ideas**
+
+- [ ] Wireless refresh over Wi-Fi once the device is paired
+- [ ] Support for multiple Apple accounts and multiple devices
+
+## Supported devices
+
+ModStaller uses the same mechanism as Xcode's free provisioning, so in
+principle it works on every iPhone that can run a supported iOS version.
+So far only one combination has actually been tested - everything else is
+expected to work but unconfirmed. Test reports (issue with model, iOS version
+and the output of `modstaller device info`) are very welcome.
+
+**Legend:** ✅ tested · 🟡 expected to work, untested · ❌ not supported
+
+### iPhone
+
+| Model | Chip | TXM/SPTM | Install | JIT | Status |
+|---|---|---|---|---|---|
+| iPhone 16 Pro Max | A18 Pro | yes | ✅ | 🟡 | ✅ tested on iOS 27.0 |
+| iPhone 16 Pro, 16, 16 Plus, 16e | A18 Pro / A18 | yes | 🟡 | 🟡 | 🟡 |
+| iPhone 17, 17 Pro, 17 Pro Max, iPhone Air and newer | A19 / A19 Pro and newer | yes | 🟡 | 🟡 | 🟡 |
+| iPhone 15 Pro, 15 Pro Max | A17 Pro | yes | 🟡 | 🟡 | 🟡 |
+| iPhone 15, 15 Plus, 14 Pro, 14 Pro Max | A16 | yes | 🟡 | 🟡 | 🟡 |
+| iPhone 14, 14 Plus, 13 series, SE (3rd gen) | A15 | yes | 🟡 | 🟡 | 🟡 |
+| iPhone 12 series | A14 | no | 🟡 | 🟡 ¹ | 🟡 |
+| iPhone 11 series, SE (2nd gen) | A13 | no | 🟡 | 🟡 ¹ | 🟡 |
+| iPhone XS / XR and older | A12 and older | no | ❌ | ❌ | ❌ no iOS 26/27 |
+
+¹ Without TXM/SPTM, attaching a debugger is enough to unlock JIT (see
+[JIT](#jit)), so these devices should actually be the easier case.
+
+iPads running iPadOS use the same mechanism and should work in principle,
+but have not been tested at all.
+
+### iOS versions
+
+| iOS | Install | JIT | Status |
+|---|---|---|---|
+| 27.x | ✅ | 🟡 | ✅ tested on 27.0 |
+| 26.x | 🟡 | 🟡 | 🟡 expected |
+| 17.4 - 18.x | 🟡 | 🟡 | 🟡 expected, untested |
+| 16.0 - 17.3 | 🟡 | ❓ | 🟡 install should work; JIT uses an older tunnel variant and is unverified |
+| 15.x and older | ❌ | ❌ | ❌ not supported |
+
+### Apple's requirements for sideloading
+
+These come from Apple's rules for development-signed apps and apply to every
+device above, regardless of ModStaller:
+
+* **Developer Mode** must be enabled (iOS 16 and later). ModStaller's iPhone
+  check can switch it on for you - see [Usage](#usage).
+* **The device must be paired and trusted** with the computer ("Trust This
+  Computer", passcode on first connect).
+* **The developer certificate must be trusted** once on the iPhone under
+  Settings > General > VPN & Device Management.
+* **The device is registered to your Apple team** automatically on first
+  install. This counts against Apple's device limit for your account.
+* **Free accounts:** 7-day profiles, at most 3 sideloaded apps per device,
+  10 new App IDs per week - see
+  [Limits of free Apple accounts](#limits-of-free-apple-accounts).
+  Paid accounts get one-year profiles and don't have the 3-app limit.
+* **JIT** additionally requires the app to be development-signed
+  (`get-task-allow`) and, on TXM/SPTM devices, to implement the breakpoint
+  protocol described under [JIT](#jit).
 
 ## Setup
 
-Fertige Builds gibt es unter
+Prebuilt binaries are available under
 [Releases](https://github.com/Crafttino21/ModStaller/releases/latest):
 
-| Datei | Fuer |
+| File | For |
 |---|---|
-| `ModStaller-X.Y.Z-x86_64.AppImage` | Linux, Oberflaeche - aktualisiert sich selbst |
-| `ModStaller-Setup-X.Y.Z.exe` | Windows, Oberflaeche - Installer ohne Adminrechte, aktualisiert sich selbst |
-| `ModStaller-CLI-X.Y.Z-windows-x64.zip` | Windows, Kommandozeile: `modstaller.exe` + `zsign.exe` |
+| `ModStaller-X.Y.Z-x86_64.AppImage` | Linux, GUI - updates itself |
+| `ModStaller-Setup-X.Y.Z.exe` | Windows, GUI - installer without admin rights, updates itself (experimental) |
+| `ModStaller-CLI-X.Y.Z-windows-x64.zip` | Windows, command line: `modstaller.exe` + `zsign.exe` (experimental) |
 
-Python, pymobiledevice3 und zsign sind jeweils dabei. Auf dem Rechner noetig
-ist nur der Dienst, ueber den das iPhone per USB erreichbar ist:
+Python, pymobiledevice3 and zsign are bundled in each. The only thing your
+machine needs is the service that makes the iPhone reachable over USB:
 
 ```bash
-sudo pacman -S usbmuxd fuse2              # Arch (fuse2 fuer AppImages)
+sudo pacman -S usbmuxd fuse2              # Arch (fuse2 for AppImages)
 sudo apt install usbmuxd libfuse2         # Debian/Ubuntu
 ```
 
-Unter **Windows** ist das der Apple-Geraetedienst: die App **„Apple-Geraete“**
-aus dem Microsoft Store (oder iTunes) installieren. Beim ersten Start warnt
-SmartScreen, weil die .exe nicht kostenpflichtig signiert ist - "Weitere
-Informationen" > "Trotzdem ausfuehren".
+On **Windows** that is the Apple device service: install the **"Apple
+Devices"** app from the Microsoft Store (or iTunes). On first launch
+SmartScreen will warn you because the .exe is not signed with a paid
+certificate - "More info" > "Run anyway".
 
-Die AppImage selbst bauen: `./build-appimage.sh` (braucht nur Docker, `--run`
-startet sie danach). Die Windows-Builds entstehen in der GitHub-Pipeline.
+To build the AppImage yourself: `./build-appimage.sh` (only needs Docker;
+`--run` launches it afterwards). The Windows builds are produced by the GitHub
+pipeline.
 
-Fuer die Entwicklung:
+For development:
 
 ```bash
 python -m venv .venv
@@ -57,167 +150,169 @@ python -m venv .venv
 paru -S zsign-bin
 .venv/bin/modstaller doctor
 
-cd gui && npm install && npm run dev      # Oberflaeche mit Hot Reload
+cd gui && npm install && npm run dev      # GUI with hot reload
 ```
 
-## Benutzung
+## Usage
 
-Die Oberflaeche (AppImage oder `npm run dev`) zeigt vorne, ob das iPhone
-haengt, ob du angemeldet bist und was demnaechst ablaeuft. IPAs lassen sich
-einfach ins Fenster ziehen.
+The GUI (AppImage or `npm run dev`) shows up front whether the iPhone is
+connected, whether you are signed in and what is about to expire. IPAs can
+simply be dragged into the window.
 
-Sobald ein iPhone angesteckt wird, laeuft der **iPhone-Check**: Kopplung,
-iOS-Version, Entwicklermodus, Developer Disk Image, belegte App-Plaetze und
-freier Speicher. Was sich automatisch beheben laesst, bekommt einen Knopf:
+As soon as an iPhone is plugged in, the **iPhone check** runs: pairing, iOS
+version, Developer Mode, Developer Disk Image, used app slots and free
+storage. Anything that can be fixed automatically gets a button:
 
-* **Kopplung anfragen** - am iPhone dann nur noch "Vertrauen" tippen.
-* **Entwicklermodus einschalten** - ohne Code-Sperre vollautomatisch samt
-  Neustart und Bestaetigung. Mit Code-Sperre verweigert iOS das; ModStaller
-  blendet dann den sonst versteckten Schalter in den Einstellungen ein.
-* **Developer Disk Image laden** (nur fuer JIT) und **abgelaufene Profile
-  entfernen**.
+* **Request pairing** - then just tap "Trust" on the iPhone.
+* **Enable Developer Mode** - fully automatic without a passcode, including
+  reboot and confirmation. With a passcode iOS refuses this; ModStaller then
+  reveals the otherwise hidden toggle in Settings instead.
+* **Load Developer Disk Image** (only needed for JIT) and **remove expired
+  profiles**.
 
-"Entwickler vertrauen" (Einstellungen > Allgemein > VPN & Geraeteverwaltung)
-bleibt Handarbeit - dafuer gibt es keine Schnittstelle.
+"Trust developer" (Settings > General > VPN & Device Management) remains a
+manual step - there is no interface for it.
 
-Sie ist ein Client wie die Kommandozeile: `gui/` startet `modstaller serve`
-und spricht mit ihm JSON-RPC ueber stdin/stdout (`modstaller/server.py`).
+The GUI is a client just like the command line: `gui/` starts
+`modstaller serve` and talks to it via JSON-RPC over stdin/stdout
+(`modstaller/server.py`).
 
-Fuer Skripte und den Refresh-Dienst bleiben die Unterkommandos:
+For scripts and the refresh service, the subcommands remain:
 
 ```bash
-modstaller login                  # einmalig, fragt Apple ID + 2FA-Code
-modstaller account                # Team, Kontingente, angelegte App-IDs
-modstaller device info            # iPhone, iOS-Version, Developer Mode
+modstaller login                  # once, asks for Apple ID + 2FA code
+modstaller account                # team, quotas, registered App IDs
+modstaller device info            # iPhone, iOS version, Developer Mode
 
-modstaller install app.ipa        # signieren und installieren
-modstaller list                   # was laeuft, und wie lange noch
-modstaller refresh                # vor dem 7-Tage-Ablauf erneuern
-modstaller uninstall <bundle-id>  # App entfernen, macht einen Platz frei
-modstaller certs                  # Zertifikate anzeigen/widerrufen
-modstaller jit <bundle-id>        # JIT freischalten (Java-/Emulator-Apps)
+modstaller install app.ipa        # sign and install
+modstaller list                   # what is installed and how long it has left
+modstaller refresh                # renew before the 7-day expiry
+modstaller uninstall <bundle-id>  # remove an app, frees a slot
+modstaller certs                  # show/revoke certificates
+modstaller jit <bundle-id>        # enable JIT (Java/emulator apps)
 ```
 
-## Releases und Updates
+## Releases and updates
 
-Eine neue Version veroeffentlichen:
+Publishing a new version:
 
 ```bash
-./release.sh 0.2.0            # Version setzen, Commit + Tag, pushen
-./release.sh 0.3.0-beta.1     # Vorabversion
+./release.sh 0.2.0            # set version, commit + tag, push
+./release.sh 0.3.0-beta.1     # pre-release
 ```
 
-Den Rest erledigt GitHub (`.github/workflows/release.yml`): Tests auf Linux
-und Windows, AppImage, Windows-Installer und CLI-Zip bauen, eine Release mit
-den Update-Dateien (`latest-linux.yml`, `latest.yml`) anlegen. AppImage und
-installierte Windows-Version schauen beim Start und alle vier Stunden dort nach und zeigt unten links an,
-wenn es etwas Neues gibt. Heruntergeladen und neu gestartet wird nur auf
-Knopfdruck - nie waehrend einer Installation oder JIT-Sitzung. Vorabversionen
-bekommt nur, wer selbst eine Vorabversion laufen hat.
+GitHub takes care of the rest (`.github/workflows/release.yml`): tests on
+Linux and Windows, building the AppImage, Windows installer and CLI zip, and
+creating a release with the update manifests (`latest-linux.yml`,
+`latest.yml`). The AppImage and the installed Windows version check for
+updates at startup and every four hours, and show a notice in the bottom-left
+corner when something new is available. Downloading and restarting only
+happen when you click the button - never during an installation or a JIT
+session. Pre-releases are only offered to users who are already running a
+pre-release.
 
 ## JIT
 
-Java- und Emulator-Apps erzeugen Maschinencode zur Laufzeit. iOS verbietet
-das - solche Apps bleiben beim Start haengen ("Warte auf JIT").
+Java and emulator apps generate machine code at runtime. iOS forbids this -
+such apps hang on launch ("Waiting for JIT").
 
-Bis iOS 18 genuegte es, einen Debugger anzuhaengen: der Kernel setzt dann
-`CS_DEBUGGED`, und das ueberlebte sogar das Loesen des Debuggers.
+Up to iOS 18 it was enough to attach a debugger: the kernel then set
+`CS_DEBUGGED`, and that even survived detaching the debugger.
 
-**Auf Geraeten mit TXM/SPTM - allen neueren iPhones - reicht das nicht mehr.**
-Dort wird eine Speicherseite nur ausfuehrbar, wenn ein *angehaengter* Debugger
-hineinschreibt: ein Byte je 16-KB-Seite, und dieser Zugriff selbst erteilt das
-Recht. JIT ist damit kein Schalter mehr, sondern ein Gespraech:
+**On devices with TXM/SPTM - every iPhone with an A15 chip or newer - that is no longer enough.**
+There, a memory page only becomes executable when an *attached* debugger
+writes to it: one byte per 16 KB page, and that very access grants the
+permission. JIT is therefore no longer a switch but a conversation:
 
-    App:      brk #0xf00d, x16=1, x0=Adresse, x1=Laenge   "bereite das vor"
-    Debugger: schreibt in jede Seite, traegt die Adresse in x0 ein
-    App:      baut ihren Compiler-Speicher auf
-    App:      brk #0xf00d, x16=0                          "fertig, du kannst gehen"
+    App:      brk #0xf00d, x16=1, x0=address, x1=length   "prepare this"
+    Debugger: writes to every page, puts the address into x0
+    App:      sets up its compiler memory
+    App:      brk #0xf00d, x16=0                          "done, you can go"
 
-`modstaller jit` startet die App angehalten, haengt sich ueber den RSD-Tunnel
-an und bedient diese Anfragen, bis die App sich abmeldet.
+`modstaller jit` launches the app suspended, attaches via the RSD tunnel and
+serves these requests until the app signs off.
 
-Drei Einschraenkungen:
+Three limitations:
 
-* **Die App muss mitspielen.** Wer diesen Haltepunkt nicht ausloest, bekommt
-  kein JIT, egal welcher Debugger anhaengt.
-* Die App braucht `get-task-allow` - development-signierte haben es,
-  App-Store-Apps nie.
-* Die Freischaltung gilt nur fuer *diesen* Start der App.
+* **The app has to cooperate.** If it does not trigger this breakpoint, it
+  gets no JIT, no matter which debugger is attached.
+* The app needs `get-task-allow` - development-signed apps have it, App Store
+  apps never do.
+* The unlock only applies to *this* launch of the app.
 
-Der Bedarf entsteht erst, wenn die App tatsaechlich kompilieren will. Bei
-einem Minecraft-Launcher heisst das: waehrend `modstaller jit` wartet, muss
-im Programm eine Instanz gestartet werden.
+The need only arises once the app actually wants to compile. For a Minecraft
+launcher that means: while `modstaller jit` is waiting, you have to start an
+instance in the launcher.
 
-Bei einem Gratis-Account werden App-Extensions per Default entfernt: jede
-kostet eine App-ID aus einem Kontingent von zehn pro Woche, und die App
-selbst laeuft ohne sie. Mit `--keep-extensions` behaeltst du sie.
+With a free account, app extensions are stripped by default: each one costs
+an App ID from a quota of ten per week, and the app itself runs fine without
+them. Use `--keep-extensions` to keep them.
 
-`refresh` nutzt die beim Installieren gemerkte Original-IPA und haelt die
-Bundle-ID stabil - sonst waere die App fuer iOS eine andere und die
-gespeicherten Daten weg.
+`refresh` uses the original IPA remembered at install time and keeps the
+bundle ID stable - otherwise iOS would treat it as a different app and the
+stored data would be gone.
 
-## Zwei Fallstricke, die hier geloest sind
+## Three pitfalls solved here
 
-**Apples 503-Nebelkerze.** Seit Ende August 2026 weist Apple jeden
-GSA-Request an der Edge mit HTTP 503 ab, dessen `X-MMe-Client-Info` den
-Identifier `com.apple.dt.Xcode` traegt - was die `anisette`-Bibliothek per
-Default tut. Das sieht aus wie ein Apple-Ausfall und ist keiner. ModStaller
-ersetzt den Identifier durch `com.apple.akd` und verweigert in
-`apple/clientinfo.py` jeden Request, der das nicht tut. Empirisch geprueft:
+**Apple's 503 smoke screen.** Since the end of August 2026, Apple rejects
+every GSA request at the edge with HTTP 503 if its `X-MMe-Client-Info` carries
+the identifier `com.apple.dt.Xcode` - which the `anisette` library does by
+default. It looks like an Apple outage but isn't one. ModStaller replaces the
+identifier with `com.apple.akd` and refuses, in `apple/clientinfo.py`, any
+request that doesn't. Verified empirically:
 
-    com.apple.dt.Xcode  ->  HTTP 503, 190 B  (an der Edge abgewiesen)
-    com.apple.akd/1.0   ->  HTTP 404          (durchgekommen)
+    com.apple.dt.Xcode  ->  HTTP 503, 190 B  (rejected at the edge)
+    com.apple.akd/1.0   ->  HTTP 404          (got through)
 
-**Apples private CA.** `gsa.apple.com` wird nicht von einer oeffentlichen CA
-signiert, sondern von "Apple Server Authentication CA". Mit dem System-Trust-
-Store scheitert jede Verbindung. Die Kette liegt in
-`modstaller/apple/certs/apple-gsa-ca.pem` - wir verifizieren dagegen, statt
-die Pruefung abzuschalten.
+**Apple's private CA.** `gsa.apple.com` is not signed by a public CA but by
+"Apple Server Authentication CA". With the system trust store every
+connection fails. The chain lives in
+`modstaller/apple/certs/apple-gsa-ca.pem` - we verify against it instead of
+disabling verification.
 
-**Ein Request pro Verbindung.** Apples Edge laesst an `GsService2` nur den
-ersten Request einer TCP-Verbindung durch; jeder weitere bekommt HTTP 429.
-Gemessen:
+**One request per connection.** Apple's edge only lets the first request on a
+TCP connection to `GsService2` through; every further one gets HTTP 429.
+Measured:
 
-    Verbindung wiederverwendet:  404, 429, 429, 429, 429, 429
-    Connection: close:           404, 404, 404, 404, 404, 429
+    Connection reused:   404, 429, 429, 429, 429, 429
+    Connection: close:   404, 404, 404, 404, 404, 429
 
-Ein Login besteht aus zwei Requests (`init`, `complete`) - mit Keep-Alive
-scheitert also *jeder* Login am zweiten, und es sieht aus wie eine Sperre des
-Accounts. ModStaller erzwingt pro Request eine frische Verbindung. Der
-verbleibende sporadische 429 ist ein Budget pro IP-Adresse und wird begrenzt
-wiederholt; das ist unbedenklich, weil die Edge vor dem Auth-Dienst abweist
-und das SRP-Cookie dabei nicht verbraucht wird.
+A login consists of two requests (`init`, `complete`) - so with keep-alive
+*every* login fails on the second one, and it looks like the account has been
+locked. ModStaller forces a fresh connection per request. The remaining
+sporadic 429 is a per-IP budget and is retried a limited number of times;
+that is harmless because the edge rejects the request before it reaches the
+auth service, so the SRP cookie is not consumed.
 
-Diagnose und Messmethode stammen aus den Untersuchungen von SideStore
-(Issue #1557) und OpenTagViewer (Issue #226); die Umsetzung hier ist eigener
-Code.
+Diagnosis and measurement method come from the investigations by SideStore
+(issue #1557) and OpenTagViewer (issue #226); the implementation here is
+original code.
 
-## Grenzen kostenloser Apple-Accounts
+## Limits of free Apple accounts
 
-Keine davon ist ein Fehler von ModStaller; sie kommen von Apple:
+None of these are bugs in ModStaller; they come from Apple:
 
-* **Profile laufen nach 7 Tagen ab.** Danach startet die App nicht mehr, bis
-  `modstaller refresh` sie neu signiert.
-* **Hoechstens 3 sideloadete Apps gleichzeitig** pro Geraet. Die vierte lehnt
-  das iPhone ab; `modstaller uninstall <bundle-id>` macht Platz.
-* **10 App-IDs pro Woche.** Gezaehlt werden *neu angelegte*, nicht die
-  vorhandenen - eine zu loeschen gibt also kein Kontingent zurueck. Ist das
-  Fenster voll, weicht ModStaller auf eine vorhandene, ungenutzte App-ID aus;
-  die App laeuft dann unter deren Bundle-ID. App-IDs installierter Apps und
-  ihrer Extensions bleiben dabei unangetastet. Jede Extension braucht eine
-  eigene App-ID, deshalb werden sie bei kostenlosen Accounts per Default
-  entfernt.
-* **Nur ein Development-Zertifikat.** Zwei Sideload-Werkzeuge parallel
-  verdraengen sich zwangslaeufig gegenseitig, weil der private Schluessel
-  jeweils beim anfordernden Werkzeug liegt.
+* **Profiles expire after 7 days.** After that the app won't launch until
+  `modstaller refresh` re-signs it.
+* **At most 3 sideloaded apps at a time** per device. The iPhone rejects the
+  fourth; `modstaller uninstall <bundle-id>` frees a slot.
+* **10 App IDs per week.** What counts is *newly created* ones, not existing
+  ones - so deleting one does not give quota back. When the window is full,
+  ModStaller falls back to an existing, unused App ID; the app then runs
+  under that bundle ID. App IDs of installed apps and their extensions are
+  left untouched. Every extension needs its own App ID, which is why they are
+  stripped by default on free accounts.
+* **Only one development certificate.** Two sideloading tools used in
+  parallel will inevitably push each other out, because the private key
+  always lives with the tool that requested it.
 
-Ob ein Account kostenlos ist, laesst sich Apple nicht direkt entlocken: es
-meldet auch bezahlte Einzelaccounts als `Individual`. ModStaller nimmt im
-Zweifel "kostenlos" an und korrigiert sich an der tatsaechlichen Laufzeit des
-ersten Profils - 7 Tage heisst kostenlos, ein Jahr heisst bezahlt.
+Apple does not reveal directly whether an account is free: it reports paid
+individual accounts as `Individual` too. ModStaller assumes "free" when in
+doubt and corrects itself based on the actual lifetime of the first profile -
+7 days means free, one year means paid.
 
-## Sicherheit
+## Security
 
-Das Apple-Passwort wird nie gespeichert und nie uebertragen: SRP-6a beweist
-seine Kenntnis, ohne es zu senden. Alle Secrets liegen unter
-`~/.local/share/modstaller/` mit 0600 in 0700-Verzeichnissen.
+Your Apple password is never stored and never transmitted: SRP-6a proves
+knowledge of it without sending it. All secrets are stored under
+`~/.local/share/modstaller/` with mode 0600 inside 0700 directories.
