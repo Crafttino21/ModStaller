@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld("backend", {
     ipcRenderer.on("backend:exit", listener);
     return () => ipcRenderer.off("backend:exit", listener);
   },
+  // Das Backend startet vor dem Fenster: ein "backend:exit" von vorhin hat
+  // diese Seite nie erreicht. Also nachfragen, statt ewig zu warten.
+  getState: () => ipcRenderer.invoke("backend:state"),
+  logPath: () => ipcRenderer.invoke("app:logPath"),
   restart: () => ipcRenderer.send("backend:restart"),
   pickIpa: () => ipcRenderer.invoke("dialog:pickIpa"),
   // Seit Electron 32 hat File kein .path mehr - fuer Drag & Drop noetig.

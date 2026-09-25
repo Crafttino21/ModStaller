@@ -20,6 +20,12 @@ echo "==> Python-Backend (PyInstaller)"
 docker run --rm -v "$ROOT:/src:ro" -v "$OUT:/out" "$IMAGE" \
   bash -c "bash /src/packaging/build-backend.sh && chown -R $(id -u):$(id -g) /out/backend"
 
+# Derselbe Rauchtest wie in der Windows-Pipeline: dasselbe Protokoll, das die
+# Oberflaeche spricht, inklusive "doctor" - dem einzigen Kommando, das
+# pymobiledevice3, anisette, unicorn und cryptography wirklich anfasst.
+echo "==> Backend pruefen"
+python3 "$ROOT/packaging/smoke_backend.py" "$OUT/backend/modstaller-backend"
+
 echo "==> zsign"
 docker run --rm -v "$ROOT:/src:ro" -v "$OUT:/out" "$IMAGE" \
   bash -c "bash /src/packaging/build-zsign.sh && chown -R $(id -u):$(id -g) /out/bin"

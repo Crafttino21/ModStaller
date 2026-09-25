@@ -19,6 +19,7 @@ import asyncio
 from dataclasses import dataclass
 
 from ..errors import DeviceNotFound, DeviceError, NotPaired
+from ..i18n import _
 
 
 @dataclass(frozen=True)
@@ -57,21 +58,20 @@ async def connect(udid: str | None = None, *, timeout: float = 0.0):
         try:
             return await create_using_usbmux(serial=udid, label="ModStaller")
         except NotPairedError as exc:
-            raise NotPaired(
-                "Das Geraet ist nicht mit diesem Rechner gepairt. "
-                "iPhone entsperren, USB anstecken, 'Vertrauen' bestaetigen "
-                "und erneut versuchen - das Pairing passiert dann von selbst."
-            ) from exc
+            raise NotPaired(_(
+                "The device is not paired with this computer. Unlock the "
+                "iPhone, plug in USB, confirm ‘Trust’ and try again - "
+                "pairing then happens on its own.")) from exc
         except PasswordRequiredError as exc:
-            raise NotPaired(
-                "Das iPhone ist gesperrt. Bitte entsperren und erneut versuchen."
-            ) from exc
+            raise NotPaired(_(
+                "The iPhone is locked. Please unlock it and try again."
+            )) from exc
         except (ConnectionFailedError, OSError) as exc:
             if asyncio.get_running_loop().time() >= deadline:
-                raise DeviceNotFound(
-                    "Kein iPhone gefunden. Per USB anstecken und entsperren. "
-                    "(usbmuxd startet erst, wenn ein Geraet da ist.)"
-                ) from exc
+                raise DeviceNotFound(_(
+                    "No iPhone found. Connect it via USB and unlock it. "
+                    "(usbmuxd only starts once a device is present.)"
+                )) from exc
             await asyncio.sleep(0.5)
 
 
@@ -152,9 +152,8 @@ class ServiceProvider:
             self._tunnel = UserspaceRsdTunnel(self.udid)
             self._rsd = await self._tunnel.__aenter__()
         except Exception as exc:
-            raise DeviceError(
-                f"RSD-Tunnel liess sich nicht aufbauen: {exc}\n"
-                "Ab iOS 17 braucht die App-Installation diesen Tunnel. "
-                "Hilft oft: iPhone entsperren, Kabel neu anstecken."
-            ) from exc
+            raise DeviceError(_(
+                "RSD tunnel could not be established: {error}\nFrom iOS 17 "
+                "on, installing apps needs this tunnel. Often helps: unlock "
+                "the iPhone, re-plug the cable.", error=exc)) from exc
         return self._rsd

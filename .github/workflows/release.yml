@@ -55,7 +55,7 @@ jobs:
           cache: npm
           cache-dependency-path: gui/package-lock.json
 
-      - name: Typpruefung der Oberflaeche
+      - name: Oberflaeche pruefen und testen
         if: runner.os == 'Linux'
         working-directory: gui
         env:
@@ -63,6 +63,7 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npx svelte-check --tsconfig ./tsconfig.json
+          npm test
 
   build-linux:
     name: Linux (AppImage)
@@ -87,7 +88,7 @@ jobs:
       # Dasselbe Skript wie lokal: Backend und zsign im Ubuntu-22.04-
       # Container (alte glibc = laeuft auf moeglichst vielen Distros).
       - name: AppImage bauen
-        run: ./build-appimage.sh
+        run: ./buildscripts/build-appimage.sh
 
       - uses: actions/upload-artifact@v4
         with:
@@ -157,13 +158,49 @@ jobs:
           pip install . "pyinstaller>=6.10"
           python packaging/build_backend.py --out packaging/out --cli
 
+      # Control Flow Guard muss aus den Programmen heraus sein - sonst bricht
+      # die Anisette-Emulation nativ ab (0xC0000409) und reisst das Backend
+      # mit. Der Schritt dazu steht in packaging/build_backend.py; hier wird
+      # nachgesehen, ob er wirklich gelaufen ist.
+      - name: Control Flow Guard pruefen
+        run: |
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
+          python - <<'PY'
+          import struct, sys
+          from pathlib import Path
+
+          bad = []
+          for p in (Path("packaging/out/backend/modstaller-backend.exe"),
+                    Path("packaging/out/cli/modstaller.exe")):
+              d = p.read_bytes()
+              pe = struct.unpack_from("<I", d, 0x3C)[0]
+              flags, = struct.unpack_from("<H", d, pe + 24 + 70)
+              print(f"{p}: DllCharacteristics=0x{flags:04x}")
+              if flags & 0x4000:
+                  bad.append(str(p))
+          if bad:
+              print("::error::Control Flow Guard noch gesetzt: " + ", ".join(bad))
+              sys.exit(1)
+          PY
+
+      # Bis 1.1.0-beta.3 wurde hier nur "info" abgefragt - und das fasst weder
+      # pymobiledevice3 noch anisette noch unicorn an. Der Rauchtest spricht
+      # deshalb dasselbe Protokoll wie die Oberflaeche und ruft auch "doctor".
       - name: Backend pruefen
         run: |
           exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
           packaging/out/cli/modstaller.exe --help > /dev/null
-          reply=$(echo '{"jsonrpc":"2.0","id":1,"method":"info"}' | packaging/out/backend/modstaller-backend.exe serve)
-          echo "$reply"
-          echo "$reply" | grep -q '"posix": false'
+
+          out=$(python packaging/smoke_backend.py packaging/out/backend/modstaller-backend.exe) || {
+            echo "$out"; echo "::error::Rauchtest des Backends fehlgeschlagen"; exit 1; }
+          echo "$out"
+          # Ein Windows-Build, der sich fuer POSIX haelt, legt seine Daten am
+          # falschen Ort ab und prueft Unix-Rechte, die es hier nicht gibt.
+          echo "$out" | grep -q '"posix": false' || {
+            echo "::error::Backend meldet POSIX-Verhalten unter Windows"; exit 1; }
+
+          python packaging/smoke_backend.py packaging/out/cli/modstaller.exe || {
+            echo "::error::Rauchtest der CLI fehlgeschlagen"; exit 1; }
 
       - name: Installer bauen
         working-directory: gui
@@ -171,6 +208,16 @@ jobs:
           exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
           npm ci --no-audit --no-fund
           npm run dist:win
+
+      # extraResources schlaegt nicht fehl, wenn die Quelle leer ist - dann
+      # laege ein Installer ohne Backend vor, und das faellt erst beim Nutzer auf.
+      - name: Backend im Installer pruefen
+        run: |
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
+          res=dist/win-unpacked/resources
+          test -f "$res/backend/modstaller-backend.exe" || { echo "::error::modstaller-backend.exe fehlt im Build"; exit 1; }
+          test -d "$res/backend/_internal" || { echo "::error::_internal fehlt neben modstaller-backend.exe"; exit 1; }
+          test -f "$res/bin/zsign.exe" || { echo "::error::zsign.exe fehlt im Build"; exit 1; }
 
       - name: CLI-Zip packen
         run: |

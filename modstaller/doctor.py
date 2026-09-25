@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import config
+from .i18n import _
 
 #: Ein Problem verhindert den Betrieb. Ein offener Schritt ist kein Fehler
 #: des Systems, muss aber sichtbar bleiben (Anmeldung, iPhone anstecken).
@@ -38,12 +39,12 @@ def _usb_service_check(posix: bool = config.POSIX) -> Check:
         # ueber TCP an. Er laeuft dauerhaft, sobald er installiert ist.
         try:
             socket.create_connection(APPLE_MOBILE_DEVICE, timeout=1).close()
-            return Check("Apple-Gerätedienst", True, "läuft")
+            return Check(_("Apple device service"), True, _("running"))
         except OSError:
             return Check(
-                "Apple-Gerätedienst", False, "nicht erreichbar",
-                hint="Die App „Apple-Geräte“ aus dem Microsoft Store (oder "
-                     "iTunes) installieren - sie bringt den Dienst mit.")
+                _("Apple device service"), False, _("not reachable"),
+                hint=_("Install the “Apple Devices” app from the Microsoft "
+                       "Store (or iTunes) - it brings the service along."))
 
     # usbmuxd startet erst, wenn ein Geraet angesteckt wird (udev bzw.
     # Socket-Aktivierung). Ohne iPhone fehlt der Socket also zu Recht - dann
@@ -53,11 +54,11 @@ def _usb_service_check(posix: bool = config.POSIX) -> Check:
               or next((p for p in ("/usr/bin/usbmuxd", "/usr/sbin/usbmuxd")
                        if Path(p).exists()), None))
     if sock.exists():
-        return Check("usbmuxd", True, f"laeuft ({sock})")
+        return Check("usbmuxd", True, _("running ({socket})", socket=sock))
     return Check(
         "usbmuxd", bool(daemon),
-        f"installiert ({daemon}), startet beim Anstecken" if daemon
-        else "nicht installiert",
+        _("installed ({path}), starts when a device is plugged in",
+          path=daemon) if daemon else _("not installed"),
         hint="Arch: sudo pacman -S usbmuxd - Debian/Ubuntu: sudo apt "
              "install usbmuxd - Fedora: sudo dnf install usbmuxd")
 
@@ -69,7 +70,7 @@ async def run_checks() -> list[Check]:
 
     from importlib.metadata import PackageNotFoundError, version
     for mod, label in (("pymobiledevice3", "pymobiledevice3"),
-                       ("anisette", "anisette (lokal)"),
+                       ("anisette", "anisette (local)"),
                        ("cryptography", "cryptography")):
         try:
             m = __import__(mod)
@@ -82,41 +83,51 @@ async def run_checks() -> list[Check]:
             ver = getattr(m, "__version__", "")
         checks.append(Check(label, True, ver))
 
-    zsign = config.find_zsign(config.Settings.load().zsign_path)
+    settings = config.Settings.load()
+
+    zsign = config.find_zsign(settings.zsign_path)
     checks.append(Check(
-        "zsign", bool(zsign), zsign or "fehlt",
-        hint=("installieren mit: paru -S zsign-bin" if config.POSIX
-              else "zsign.exe fehlt - ModStaller neu installieren.")))
+        "zsign", bool(zsign), zsign or _("missing"),
+        hint=(_("install it with: paru -S zsign-bin") if config.POSIX
+              else _("zsign.exe is missing - reinstall ModStaller."))))
 
     ca = config.GSA_CA_BUNDLE
-    checks.append(Check("Apple-CA-Bundle", ca.exists(), str(ca)))
+    checks.append(Check(_("Apple CA bundle"), ca.exists(), str(ca)))
 
-    # Anisette ist das Nadeloehr fuer den Login - lieber hier merken.
+    # Anisette ist das Nadeloehr fuer den Login - lieber hier merken. Welche
+    # Quelle zaehlt, steht in den Einstellungen und nicht hier; das Label nennt
+    # sie, damit der Check nicht verschweigt, wohin die Identifier gehen.
+    label = (_("Anisette (local)") if settings.anisette_provider == "local"
+             else _("Anisette (server: {url})",
+                    url=settings.anisette_server))
     try:
+        from .apple import anisette as anisette_mod
         from .apple import clientinfo
-        from .apple.anisette import LocalProvider
-        ci = LocalProvider().client_info()
+        ani = anisette_mod.build(settings.anisette_provider,
+                                 settings.anisette_server)
+        ci = ani.client_info()
         if clientinfo.is_safe(ci):
-            checks.append(Check("Anisette-Client-Info", True,
-                                "com.apple.akd (GSA-tauglich)"))
+            checks.append(Check(label, True,
+                                _("com.apple.akd (accepted by GSA)")))
         else:
-            checks.append(Check("Anisette-Client-Info", False,
-                                f"wuerde HTTP 503 ausloesen: {ci}"))
+            checks.append(Check(label, False,
+                                _("would trigger HTTP 503: {info}", info=ci)))
     except Exception as exc:
-        checks.append(Check("Anisette-Provider", False, str(exc)))
+        checks.append(Check(label, False, str(exc)))
 
     from .apple.session import Session
     logged_in = Session.load() is not None
     checks.append(Check(
-        "Apple-Anmeldung", logged_in, "aktiv" if logged_in else "fehlt",
+        _("Apple sign-in"), logged_in,
+        _("active") if logged_in else _("missing"),
         hint="modstaller login", kind=TODO))
 
     from .device.connection import list_devices
     serials = await list_devices()
     checks.append(Check(
-        "iPhone erkannt", bool(serials),
-        ", ".join(serials) if serials else "keins angesteckt",
-        hint="iPhone per USB anstecken und entsperren", kind=TODO))
+        _("iPhone detected"), bool(serials),
+        ", ".join(serials) if serials else _("none connected"),
+        hint=_("Connect the iPhone via USB and unlock it"), kind=TODO))
 
     return checks
 

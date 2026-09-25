@@ -25,6 +25,7 @@ from __future__ import annotations
 import re
 
 from ..errors import ClientInfoPolicyViolation
+from ..i18n import _
 
 #: Der von Apple abgelehnte Identifier.
 REJECTED_IDENTIFIER = "com.apple.dt.Xcode"
@@ -75,16 +76,16 @@ def is_safe(client_info: str | None) -> bool:
 def assert_safe(client_info: str | None, *, where: str = "GSA-Request") -> None:
     """Transport-Guard. Wirft lokal, bevor Apple mit 503 antworten kann."""
     if not client_info:
-        raise ClientInfoPolicyViolation(
-            f"{where}: X-MMe-Client-Info fehlt. Apple lehnt den Request sonst ab."
-        )
+        raise ClientInfoPolicyViolation(_(
+            "{where}: X-MMe-Client-Info is missing. Apple would reject the "
+            "request.", where=where))
     if REJECTED_IDENTIFIER in client_info:
-        raise ClientInfoPolicyViolation(
-            f"{where}: X-MMe-Client-Info nennt {REJECTED_IDENTIFIER!r}. "
-            f"Apple antwortet darauf seit August 2026 mit HTTP 503 an der Edge. "
-            f"Erwartet wird {AKD_IDENTIFIER!r}. "
-            f"Gesehen: {client_info!r}"
-        )
+        raise ClientInfoPolicyViolation(_(
+            "{where}: X-MMe-Client-Info states {rejected!r}. Since August "
+            "2026 Apple answers that with HTTP 503 at the edge. Expected is "
+            "{wanted!r}. Seen: {seen!r}",
+            where=where, rejected=REJECTED_IDENTIFIER,
+            wanted=AKD_IDENTIFIER, seen=client_info))
 
 
 def looks_well_formed(client_info: str) -> bool:

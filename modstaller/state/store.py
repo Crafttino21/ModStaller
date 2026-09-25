@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
 from ..config import DATA_DIR, read_secret, write_secret
+from ..i18n import _
 
 INSTALLS_FILE = DATA_DIR / "apps.json"
 
@@ -40,9 +41,10 @@ class InstallRecord:
     def expiry_text(self) -> str:
         d = self.days_left
         if d < 0:
-            return "abgelaufen"
+            return _("expired")
         when = datetime.fromtimestamp(self.expires_at, timezone.utc).astimezone()
-        return f"noch {d:.1f} Tage (bis {when:%d.%m. %H:%M})"
+        return _("{days:.1f} days left (until {date})",
+                 days=d, date=f"{when:%d.%m. %H:%M}")
 
 
 def _load_raw() -> dict:

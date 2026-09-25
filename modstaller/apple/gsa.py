@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ..errors import AppleError, InteractionRequired
+from ..i18n import _
 from . import clientinfo, http
 from .srp import SRPClient, derive_password
 
@@ -51,22 +52,23 @@ ERR_INVALID_CODE = -21669
 ERR_NOT_FULLY_AUTHENTICATED = -22406
 ERR_TEMPORARILY_BLOCKED = -22411
 
+#: Uebersetzt wird erst beim Nachschlagen, nicht beim Import.
 _MESSAGES = {
-    ERR_INVALID_CREDENTIALS: "Apple-ID oder Passwort ist falsch.",
-    ERR_INVALID_CODE: "Der 2FA-Code wurde nicht akzeptiert.",
+    ERR_INVALID_CREDENTIALS: "Apple ID or password is wrong.",
+    ERR_INVALID_CODE: "The two-factor code was not accepted.",
 }
 
 _HINTS = {
     ERR_NOT_FULLY_AUTHENTICATED: (
-        "Apple nennt das ein falsches Passwort, meint aber meist eine nicht "
-        "vollstaendig bestaetigte Sitzung - typischerweise eine ausstehende "
-        "Zwei-Faktor-Bestaetigung. Falls das Passwort sicher stimmt, hilft "
-        "oft: modstaller logout --forget-device, dann neu anmelden."
+        "Apple calls this a wrong password but usually means a session that "
+        "was never fully confirmed - typically a pending two-factor "
+        "confirmation. If the password is definitely correct, this often "
+        "helps: modstaller logout --forget-device, then sign in again."
     ),
     ERR_TEMPORARILY_BLOCKED: (
-        "Apple blockt diesen Account gerade voruebergehend, meist nach "
-        "mehreren fehlgeschlagenen Versuchen kurz hintereinander. Etwa eine "
-        "Stunde warten; weitere Versuche verlaengern die Sperre."
+        "Apple is temporarily blocking this account, usually after several "
+        "failed attempts in quick succession. Wait about an hour; further "
+        "attempts extend the block."
     ),
 }
 
@@ -121,18 +123,16 @@ def _decrypt_app_token(session_key: bytes, blob: bytes) -> dict:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     if not blob.startswith(_TOKEN_VERSION):
-        raise AppleError(
-            "Apples Token hat eine unerwartete Version "
-            f"({blob[:3]!r} statt {_TOKEN_VERSION!r})."
-        )
+        raise AppleError(_(
+            "Apple’s token has an unexpected version ({got!r} instead of "
+            "{expected!r}).", got=blob[:3], expected=_TOKEN_VERSION))
     try:
         plain = AESGCM(session_key).decrypt(blob[3:19], blob[19:],
                                             _TOKEN_VERSION)
     except Exception as exc:
-        raise AppleError(
-            "Apples App-Token liess sich nicht entschluesseln - der "
-            "Session-Key passt nicht zur Antwort."
-        ) from exc
+        raise AppleError(_(
+            "Apple’s app token could not be decrypted - the session key "
+            "does not match the response.")) from exc
     return plistlib.loads(_PLIST_HEADER + plain)
 
 
@@ -229,8 +229,11 @@ class GSAClient:
         status = resp.get("Status", resp)
         code = status.get("ec", 0)
         if code:
-            msg = _MESSAGES.get(code) or status.get("em") or f"GSA-Fehler {code}"
+            table = _MESSAGES.get(code)
+            msg = (_(table) if table else
+                   status.get("em") or _("GSA error {code}", code=code))
             hint = _HINTS.get(code)
+            hint = _(hint) if hint else None
             raise AppleError(f"{msg} (Code {code})"
                              + (f"\n\n{hint}" if hint else ""))
         return resp
@@ -243,22 +246,21 @@ class GSAClient:
 
         if self._needs_2fa(complete, spd):
             if self._debug:
-                print("  -> Apple verlangt eine Zweit-Bestaetigung.", flush=True)
+                print("  -> Apple requires a second confirmation.", flush=True)
             self._do_two_factor(spd)
             # Nach bestandener 2FA gilt der Handshake neu - Apple haengt die
             # Vertrauensstellung an die ADI-Identitaet, nicht an die Session.
             spd, srp_key, complete = self._handshake(apple_id, password)
             if self._needs_2fa(complete, spd):
-                raise AppleError(
-                    "Apple verlangt nach der 2FA-Bestaetigung erneut einen Code. "
-                    "Meist hilft es, den Provisioning-State zurueckzusetzen: "
-                    "modstaller logout --forget-device"
-                )
+                raise AppleError(_(
+                    "Apple asks for another code after the two-factor "
+                    "confirmation. Resetting the provisioning state usually "
+                    "helps: modstaller logout --forget-device"))
 
         adsid, token = spd.get("adsid"), spd.get("GsIdmsToken")
         if not adsid or not token:
-            raise AppleError("GSA lieferte keine adsid/GsIdmsToken - "
-                             "Login unvollstaendig.")
+            raise AppleError(_("GSA returned no adsid/GsIdmsToken - "
+                               "the sign-in is incomplete."))
 
         app_token = self._fetch_app_token(spd, adsid, token)
         return GSAResult(
@@ -273,10 +275,9 @@ class GSAClient:
         session_key = spd.get("sk")
         cookie = spd.get("c")
         if not session_key or cookie is None:
-            raise AppleError(
-                "GSA lieferte keinen Session-Key - ohne den laesst sich kein "
-                "Token fuer die Entwickler-API anfordern."
-            )
+            raise AppleError(_(
+                "GSA returned no session key - without it no token for the "
+                "developer API can be requested."))
 
         # Beglaubigt die Anfrage: nur wer den Session-Key kennt, kann sie
         # stellen. Reihenfolge ist Teil des Protokolls.
@@ -296,18 +297,16 @@ class GSAClient:
 
         encrypted = resp.get("et")
         if not encrypted:
-            raise AppleError("Apple lieferte kein App-Token zurueck.")
+            raise AppleError(_("Apple returned no app token."))
 
         tokens = _decrypt_app_token(bytes(session_key), bytes(encrypted))
         entry = (tokens.get("t") or {}).get(XCODE_APP) or {}
         app_token = entry.get("token")
         if not app_token:
-            raise AppleError(
-                f"Apple hat kein Token fuer {XCODE_APP} ausgestellt. "
-                "Meist fehlt dem Account die Entwickler-Registrierung - "
-                "einmal auf developer.apple.com anmelden und die Bedingungen "
-                "akzeptieren."
-            )
+            raise AppleError(_(
+                "Apple issued no token for {app}. Usually the account is not "
+                "registered as a developer - sign in once on "
+                "developer.apple.com and accept the terms.", app=XCODE_APP))
         return app_token
 
     def _handshake(self, apple_id: str,
@@ -338,10 +337,9 @@ class GSAClient:
         }))
 
         if not srp.verify_session(complete["M2"]):
-            raise AppleError(
-                "Apples Sitzungsbeweis stimmt nicht. Die Gegenstelle konnte "
-                "den Schluessel nicht belegen - Verbindung nicht vertrauen."
-            )
+            raise AppleError(_(
+                "Apple’s session proof does not match. The other side could "
+                "not prove the key - do not trust this connection."))
         assert srp.K is not None
         return _decrypt_spd(srp.K, complete["spd"]), srp.K, complete
 
@@ -385,10 +383,9 @@ class GSAClient:
 
     def _do_two_factor(self, spd: dict) -> None:
         if self._prompt is None:
-            raise InteractionRequired(
-                "Apple verlangt einen 2FA-Code, aber ModStaller laeuft "
-                "nicht-interaktiv. Einmal 'modstaller login' ausfuehren."
-            )
+            raise InteractionRequired(_(
+                "Apple requires a two-factor code, but ModStaller is running "
+                "non-interactively. Run ‘modstaller login’ once."))
         headers = self._two_factor_headers(spd)
 
         # Code an die vertrauten Geraete schicken.
@@ -399,7 +396,7 @@ class GSAClient:
 
         code = self._prompt().strip()
         if not code:
-            raise AppleError("Kein 2FA-Code eingegeben.")
+            raise AppleError(_("No two-factor code was entered."))
 
         resp = http.gsa_request(
             self._session, "GET",

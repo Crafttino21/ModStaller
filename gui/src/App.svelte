@@ -12,9 +12,12 @@
   import Account from "./views/Account.svelte";
   import Device from "./views/Device.svelte";
   import System from "./views/System.svelte";
+  import Settings from "./views/Settings.svelte";
   import { go, toast, ui } from "./lib/state.svelte";
+  import { t } from "./lib/i18n.svelte";
 
-  const views = { overview: Overview, install: Install, apps: Apps, account: Account, device: Device, system: System };
+  const views = { overview: Overview, install: Install, apps: Apps, account: Account,
+                  device: Device, system: System, settings: Settings };
   const View = $derived(views[ui.view]);
 
   // Eine IPA darf ueberall ins Fenster fallen, nicht nur auf die Drop-Zone.
@@ -26,7 +29,7 @@
     const file = e.dataTransfer?.files[0];
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".ipa")) {
-      toast("Das ist keine IPA-Datei.", "warn");
+      toast(t("That is not an IPA file."), "warn");
       return;
     }
     ui.droppedIpa = window.backend.pathForFile(file);
@@ -42,7 +45,7 @@
     {#if ui.backend === "down"}
       <BackendDown />
     {:else if ui.backend === "starting"}
-      <div class="boot"><LoaderCircle size={28} class="spin" /><p class="muted">ModStaller startet …</p></div>
+      <div class="boot"><LoaderCircle size={28} class="spin" /><p class="muted">{t("ModStaller is starting …")}</p></div>
     {:else}
       <div class="page">
         {#key ui.view}<View />{/key}

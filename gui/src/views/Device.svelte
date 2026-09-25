@@ -5,6 +5,7 @@
   import { errorText, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import type { DeviceApp, DeviceInfo } from "../lib/types";
+  import { t } from "../lib/i18n.svelte";
 
   let info = $state<DeviceInfo | null>(null);
   let error = $state("");
@@ -46,7 +47,7 @@
   );
 </script>
 
-<PageHeader title="Gerät" subtitle="Das angeschlossene iPhone." />
+<PageHeader title={t("Device")} subtitle={t("The connected iPhone.")} />
 
 {#if ui.status?.deviceAttached}
   <div class="checks"><DeviceChecks /></div>
@@ -55,7 +56,7 @@
 {#if !connected}
   <div class="card empty">
     <Smartphone size={30} />
-    <p>{ui.status?.deviceAttached ? "Angesteckt, aber nicht bereit – iPhone entsperren und „Vertrauen“ bestätigen." : "Kein iPhone verbunden. Per USB anstecken und entsperren."}</p>
+    <p>{ui.status?.deviceAttached ? t("Connected but not ready – unlock the iPhone and confirm “Trust”.") : t("No iPhone connected. Plug it in via USB and unlock it.")}</p>
     {#if ui.status?.error}<p class="faint small selectable">{ui.status.error}</p>{/if}
   </div>
 {:else}
@@ -77,9 +78,9 @@
         <dt>UDID</dt><dd class="mono selectable">{info.udid}</dd>
         <dt>Entwicklermodus</dt>
         <dd>
-          {#if info.developerMode}<span class="chip ok"><span class="dot"></span>an</span>
-          {:else}<span class="chip bad"><span class="dot"></span>aus</span>
-            <span class="muted small">Einstellungen › Datenschutz &amp; Sicherheit › Entwicklermodus – sonst startet keine sideloadete App.</span>{/if}
+          {#if info.developerMode}<span class="chip ok"><span class="dot"></span>{t("on")}</span>
+          {:else}<span class="chip bad"><span class="dot"></span>{t("off")}</span>
+            <span class="muted small">{t("Settings › Privacy & Security › Developer Mode – otherwise no sideloaded app will start.")}</span>{/if}
         </dd>
       </dl>
     {/if}
@@ -89,7 +90,7 @@
     <div class="apps-head">
       <h2>Installierte Nutzer-Apps</h2>
       {#if apps}
-        <div class="search"><Search size={15} /><input type="search" placeholder="Filtern" bind:value={filter} /></div>
+        <div class="search"><Search size={15} /><input type="search" placeholder={t("Filter")} bind:value={filter} /></div>
         <button class="btn sm icon ghost" title="Neu laden" onclick={loadApps}><RefreshCw size={15} /></button>
       {/if}
     </div>

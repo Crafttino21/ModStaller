@@ -18,6 +18,7 @@ from ..errors import (
     APP_ID_QUOTA_EXCEEDED, APP_ID_UNAVAILABLE, BENIGN_CODES,
     AppleAPIError, AppleError, remedy_for,
 )
+from ..i18n import _
 from . import http
 
 #: Xcodes Client-Id. Die API erwartet sie.
@@ -76,7 +77,8 @@ class Certificate:
     machine_id: str = ""
 
     def __str__(self) -> str:
-        when = f", laeuft ab {self.expires_at:%d.%m.%Y}" if self.expires_at else ""
+        when = (_(", expires {date}", date=f"{self.expires_at:%d.%m.%Y}")
+                if self.expires_at else "")
         return f"{self.name} [{self.cert_id}]{when}"
 
 
@@ -140,10 +142,9 @@ class DeveloperServices:
         resp = self._http.post(url, data=plistlib.dumps(body),
                                headers=headers, timeout=45)
         if resp.status_code in (401, 403):
-            raise AppleError(
-                "Apple hat die Anmeldung abgelehnt (HTTP "
-                f"{resp.status_code}). Bitte neu anmelden: modstaller login"
-            )
+            raise AppleError(_(
+                "Apple rejected the sign-in (HTTP {status}). Please sign in "
+                "again: modstaller login", status=resp.status_code))
         resp.raise_for_status()
         try:
             data = plistlib.loads(resp.content)
@@ -159,7 +160,7 @@ class DeveloperServices:
         if not code or code in BENIGN_CODES:
             return data
         message = (data.get("userString") or data.get("resultString")
-                   or f"Fehler {code} bei {action}")
+                   or _("Error {code} at {action}", code=code, action=action))
         hint = remedy_for(code)
         raise AppleAPIError(code, data.get("resultString", ""),
                             f"{message}\n{hint}" if hint else message)
@@ -251,7 +252,7 @@ class DeveloperServices:
         prof = data.get("provisioningProfile") or {}
         content = prof.get("encodedProfile")
         if not content:
-            raise AppleError("Apple lieferte ein leeres Provisioning-Profil.")
+            raise AppleError(_("Apple returned an empty provisioning profile."))
         return Profile(content=bytes(content),
                        expires_at=_profile_expiry(bytes(content)))
 

@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .apple.devservices import AppID, DeveloperServices, Profile, Team
 from .config import PROFILES_DIR, write_secret
+from .i18n import _
 from .errors import (
     APP_ID_QUOTA_EXCEEDED, APP_ID_UNAVAILABLE, AppleAPIError, AppleError,
 )
@@ -92,15 +93,15 @@ def derive_bundle_id(original: str, team_id: str) -> str:
 
 def pick_team(teams: list[Team], preferred: str | None = None) -> Team:
     if not teams:
-        raise AppleError(
-            "Dein Apple-Account hat kein Entwickler-Team. Einmal auf "
-            "developer.apple.com anmelden und die Bedingungen akzeptieren."
-        )
+        raise AppleError(_(
+            "Your Apple account has no developer team. Sign in once on "
+            "developer.apple.com and accept the terms."))
     if preferred:
         for t in teams:
             if t.team_id == preferred:
                 return t
-        raise AppleError(f"Team {preferred} gibt es in diesem Account nicht.")
+        raise AppleError(_("Team {team} does not exist in this account.",
+                           team=preferred))
     return teams[0]
 
 
@@ -155,26 +156,26 @@ def ensure_certificate(api: DeveloperServices, team: Team,
         except Exception:
             pass
         raise AppleError(
-            f"Apple hat kein Zertifikat ausgestellt: {exc}\n\n"
-            + (f"Vorhandene Zertifikate:\n{listing}\n\n" if listing else "")
-            + "Apple laesst pro Account nur wenige Development-Zertifikate zu, "
-              "und ein fremdes ist fuer uns wertlos: sein privater Schluessel "
-              "liegt bei dem Werkzeug, das es angefordert hat.\n"
-              "Anzeigen mit:   modstaller certs\n"
-              "Platz schaffen: modstaller install --revoke-conflicting-cert …\n"
-              "Achtung: Apps, die mit dem widerrufenen Zertifikat signiert "
-              "wurden, starten danach nicht mehr."
-        ) from exc
+            _("Apple issued no certificate: {error}", error=exc) + "\n\n"
+            + (_("Existing certificates:\n{listing}", listing=listing)
+               + "\n\n" if listing else "")
+            + _("Apple allows only a few development certificates per "
+                "account, and a foreign one is worthless to us: its private "
+                "key lives with the tool that requested it.\n"
+                "Show them with:  modstaller certs\n"
+                "Make room with:  modstaller install "
+                "--revoke-conflicting-cert …\n"
+                "Careful: apps signed with the revoked certificate will no "
+                "longer start.")) from exc
 
     # Apple liefert den Inhalt nicht immer gleich mit - ausgestellt ist es
     # trotzdem, dann steht es in der Liste.
     content = cert.content or _fetch_own_certificate(api, team, keypair)
     if not content:
-        raise AppleError(
-            "Apple hat ein Zertifikat ausgestellt, liefert seinen Inhalt aber "
-            "weder in der Antwort noch in der Liste. Mit 'modstaller certs' "
-            "nachsehen und erneut versuchen."
-        )
+        raise AppleError(_(
+            "Apple issued a certificate but returns its content neither in "
+            "the response nor in the list. Check with ‘modstaller certs’ "
+            "and try again."))
     return csrmod.build_p12(team.team_id, keypair, content)
 
 
@@ -226,11 +227,11 @@ def _revoke_foreign_certificates(api: DeveloperServices, team: Team,
     for cert in api.list_certificates(team.team_id):
         if cert.content and _belongs_to(bytes(cert.content), keypair):
             continue
-        print(f"  Widerrufe fremdes Zertifikat: {cert}")
+        print(_("  Revoking foreign certificate: {cert}", cert=cert))
         try:
             api.revoke_certificate(team.team_id, cert.serial)
         except Exception as exc:
-            print(f"    liess sich nicht widerrufen: {exc}")
+            print(_("    could not be revoked: {error}", error=exc))
 
 
 def _machine_id() -> str:
@@ -277,20 +278,26 @@ def ensure_app_id(api: DeveloperServices, team: Team, identifier: str,
         raise
 
 
+def app_id_in_use(identifier: str, protected: set[str]) -> bool:
+    """Gehoert diese App-ID zu einer installierten App?
+
+    Geschuetzt ist auch, was darunter liegt: die App-ID einer Extension
+    traegt die der App als Praefix, und ohne sie laesst sich die App nicht
+    mehr vollstaendig signieren.
+    """
+    ident = identifier.lower()
+    return any(ident == p.lower() or ident.startswith(p.lower() + ".")
+               for p in protected)
+
+
 def spare_app_id(existing: list[AppID], protected: set[str]) -> AppID | None:
     """Eine vorhandene App-ID, die zu keiner installierten App gehoert.
 
-    ``protected`` sind die Bundle-IDs auf dem Geraet. Geschuetzt ist auch,
-    was darunter liegt: die App-ID einer Extension traegt die der App als
-    Praefix, und ohne sie laesst sich die App nicht mehr vollstaendig
-    signieren.
+    ``protected`` sind die Bundle-IDs auf dem Geraet.
     """
     for candidate in existing:
-        ident = candidate.identifier.lower()
-        if any(ident == p.lower() or ident.startswith(p.lower() + ".")
-               for p in protected):
-            continue
-        return candidate
+        if not app_id_in_use(candidate.identifier, protected):
+            return candidate
     return None
 
 

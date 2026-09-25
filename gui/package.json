@@ -13,6 +13,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "node --test electron/notes.test.cjs",
     "dist": "vite build && electron-builder --linux AppImage --publish never",
     "dist:win": "vite build && electron-builder --win nsis --publish never"
   },

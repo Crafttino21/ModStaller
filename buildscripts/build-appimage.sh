@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Baut eine neue ModStaller-AppImage.
 #
-#   ./build-appimage.sh          bauen
-#   ./build-appimage.sh --run    bauen und danach starten
+#   ./buildscripts/build-appimage.sh          bauen
+#   ./buildscripts/build-appimage.sh --run    bauen und danach starten
 #
 # Braucht nur Docker. Das eigentliche Bauen erledigt packaging/build.sh;
 # dieses Skript prueft vorher, ob alles bereitsteht, und haelt die lange
-# Ausgabe in einer Log-Datei fest.
+# Ausgabe in einer Log-Datei fest. Das Gegenstueck fuer Windows ist
+# build-windows.bat daneben.
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "$0")" && pwd)
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
 LOG="$ROOT/packaging/out/build.log"
 RUN_AFTER=0
 

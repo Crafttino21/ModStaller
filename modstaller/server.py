@@ -34,6 +34,7 @@ from typing import Awaitable, Callable
 
 from . import config
 from .errors import describe
+from .i18n import _, available, language, set_language
 
 #: JSON-RPC-Fehlercodes. Eigene liegen im freigegebenen Bereich darunter.
 PARSE_ERROR = -32700
@@ -170,10 +171,11 @@ class Server:
         try:
             msg = json.loads(line)
             if not isinstance(msg, dict):
-                raise ValueError("keine JSON-Objekt-Nachricht")
+                raise ValueError("not a JSON object message")
         except ValueError as exc:
             self.send({"jsonrpc": "2.0", "id": None, "error": {
-                "code": PARSE_ERROR, "message": f"Ungueltiges JSON: {exc}"}})
+                "code": PARSE_ERROR,
+                "message": _("Invalid JSON: {error}", error=exc)}})
             return
 
         if "method" not in msg:
@@ -202,20 +204,23 @@ class Server:
         try:
             fn = METHODS.get(name)
             if fn is None:
-                raise RpcError(METHOD_NOT_FOUND, f"Unbekannte Methode: {name}")
+                raise RpcError(METHOD_NOT_FOUND,
+                               _("Unknown method: {name}", name=name))
             if not isinstance(params, dict):
-                raise RpcError(INVALID_PARAMS, "params muss ein Objekt sein")
+                raise RpcError(INVALID_PARAMS, _("params must be an object"))
             result = await fn(self, job, params)
             reply = {"result": result}
         except RpcError as exc:
             reply = {"error": {"code": exc.code, "message": str(exc)}}
         except (_Cancelled, asyncio.CancelledError):
-            reply = {"error": {"code": CANCELLED, "message": "Abgebrochen."}}
+            reply = {"error": {"code": CANCELLED,
+                               "message": _("Cancelled.")}}
         except Exception as exc:
             text = describe(exc)
             if text is None:
                 traceback.print_exc(file=sys.stderr)
-                text = f"Unerwarteter Fehler: {type(exc).__name__}: {exc}"
+                text = _("Unexpected error: {kind}: {error}",
+                         kind=type(exc).__name__, error=exc)
                 code = INTERNAL_ERROR
             else:
                 code = USER_ERROR
@@ -275,7 +280,8 @@ def _jsonable(obj):
 def _need(params: dict, key: str) -> str:
     value = params.get(key)
     if not isinstance(value, str) or not value:
-        raise RpcError(INVALID_PARAMS, f"Parameter {key!r} fehlt")
+        raise RpcError(INVALID_PARAMS,
+                       _("Parameter {key!r} is missing", key=key))
     return value
 
 
@@ -443,7 +449,7 @@ def _api():
     from .errors import AppleError
     session = Session.load()
     if session is None:
-        raise AppleError("Nicht angemeldet.")
+        raise AppleError(_("Not signed in."))
     return DeveloperServices(session, _anisette())
 
 
@@ -481,7 +487,28 @@ async def _logout(server: Server, job: Job, params: dict):
 
 @method("account")
 async def _account(server: Server, job: Job, params: dict):
-    from .provisioning import Capabilities
+    from .device.connection import ServiceProvider
+    from .device.install import app_origin, list_apps
+    from .provisioning import Capabilities, app_id_in_use
+    from .state import store
+
+    # Belegt ist eine App-ID nicht nur durch das, was ModStaller installiert
+    # hat: an ihr kann genauso eine App eines anderen Werkzeugs haengen. Ohne
+    # das Geraet stuende "frei" neben einer App-ID, deren Loeschen eine
+    # laufende App zerstoert. Das iPhone ist aber nicht immer da - dann sagen
+    # wir es lieber, statt zu raten (``usageKnown``).
+    protected = {r.bundle_id for r in store.all_installs()}
+    usage_known = False
+    try:
+        async def read():
+            async with ServiceProvider() as sp:
+                return await list_apps(sp)
+
+        apps = await job.isolated(read)
+        protected |= {b for b, m in apps.items() if app_origin(m)["sideloaded"]}
+        usage_known = True
+    except Exception:
+        pass    # Kein iPhone angesteckt - die Kontoseite bleibt benutzbar.
 
     def run():
         api = _api()
@@ -493,13 +520,39 @@ async def _account(server: Server, job: Job, params: dict):
                 "teamId": team.team_id, "name": team.name, "type": team.type,
                 "isFree": caps.is_free, "description": caps.describe(),
                 "devices": len(api.list_devices(team.team_id)),
-                "appIds": [a.identifier for a in app_ids],
+                "appIds": [{"appIdId": a.app_id_id, "identifier": a.identifier,
+                            "name": a.name,
+                            "inUse": app_id_in_use(a.identifier, protected)}
+                           for a in app_ids],
+                "usageKnown": usage_known,
                 "maxAppIdsPerWeek": caps.max_app_ids_per_week,
                 "maxAppsPerDevice": caps.max_apps_per_device,
             })
         return out
 
     return await asyncio.to_thread(run)
+
+
+@method("appids.delete")
+async def _appids_delete(server: Server, job: Job, params: dict):
+    """Loescht eine App-ID im Apple-Konto.
+
+    Gibt *kein* Wochenkontingent zurueck: Apple zaehlt neu angelegte App-IDs
+    in einem rollierenden Sieben-Tage-Fenster, nicht die vorhandenen. Wer
+    aufraeumen will, kann das hier tun; wer wieder installieren will, dem
+    hilft es nicht - dafuer weicht ModStaller von selbst auf eine freie
+    App-ID aus (siehe provisioning.ensure_app_id).
+    """
+    from .provisioning import pick_team
+    app_id_id = _need(params, "appIdId")
+
+    def run():
+        api = _api()
+        team = pick_team(api.list_teams(), params.get("teamId"))
+        api.delete_app_id(team.team_id, app_id_id)
+
+    await asyncio.to_thread(run)
+    return True
 
 
 def _cert_dict(c) -> dict:
@@ -549,7 +602,7 @@ async def _device_info(server: Server, job: Job, params: dict):
 @method("device.apps")
 async def _device_apps(server: Server, job: Job, params: dict):
     from .device.connection import ServiceProvider
-    from .device.install import list_apps
+    from .device.install import app_origin, list_apps
 
     async def run():
         async with ServiceProvider() as sp:
@@ -557,11 +610,82 @@ async def _device_apps(server: Server, job: Job, params: dict):
 
     apps = await job.isolated(run)
     return sorted(
-        ({"bundleId": bid, "name": meta.get("CFBundleDisplayName")
-          or meta.get("CFBundleName") or bid,
-          "version": meta.get("CFBundleShortVersionString", "")}
+        ({"bundleId": bid, "name": _app_name(bid, meta),
+          "version": meta.get("CFBundleShortVersionString", ""),
+          **app_origin(meta)}
          for bid, meta in apps.items()),
         key=lambda a: a["name"].lower())
+
+
+def _app_name(bundle_id: str, meta: dict) -> str:
+    return (meta.get("CFBundleDisplayName") or meta.get("CFBundleName")
+            or bundle_id)
+
+
+def _record_fields(rec) -> dict:
+    """Was ModStaller ueber eine selbst installierte App weiss."""
+    from .status import URGENT_DAYS
+    if rec is None:
+        return {"sourceIpa": "", "sourceMissing": False,
+                "originalBundleId": "", "appIdId": "", "expiresAt": None,
+                "daysLeft": None, "expiryText": "", "urgent": False,
+                "installedAt": None}
+    return {
+        "sourceIpa": rec.source_ipa,
+        "sourceMissing": not Path(rec.source_ipa).is_file(),
+        "originalBundleId": rec.original_bundle_id,
+        "appIdId": rec.app_id_id,
+        "expiresAt": rec.expires_at,
+        "daysLeft": rec.days_left,
+        "expiryText": rec.expiry_text,
+        "urgent": rec.days_left <= URGENT_DAYS,
+        "installedAt": rec.installed_at,
+    }
+
+
+@method("apps.overview")
+async def _apps_overview(server: Server, job: Job, params: dict):
+    """Alles Sideloadete auf dem iPhone - eigenes und fremdes, mit Herkunft.
+
+    An einer Stelle: was ModStaller installiert hat (samt Quell-IPA und
+    Ablauf) und was ein anderes Werkzeug dort abgelegt hat. Fremdes laesst
+    sich nur entfernen, nicht erneuern - die Original-IPA und der private
+    Schluessel liegen beim anderen Werkzeug.
+
+    Eintraege, die ModStaller kennt, die aber nicht mehr auf dem Geraet
+    liegen, kommen mit ``onDevice: false`` mit: sonst bliebe unerklaerlich,
+    warum sie noch App-IDs belegen.
+    """
+    from .device.connection import ServiceProvider
+    from .device.install import app_origin, list_apps
+    from .state import store
+
+    async def run():
+        async with ServiceProvider() as sp:
+            return await list_apps(sp)
+
+    apps = await job.isolated(run)
+    records = {r.bundle_id: r for r in store.all_installs()}
+
+    out = []
+    for bid, meta in apps.items():
+        origin = app_origin(meta)
+        rec = records.pop(bid, None)
+        if not origin["sideloaded"] and rec is None:
+            continue
+        out.append({"bundleId": bid, "name": _app_name(bid, meta),
+                    "version": meta.get("CFBundleShortVersionString", ""),
+                    "onDevice": True, "managed": rec is not None,
+                    **origin, **_record_fields(rec)})
+
+    for bid, rec in records.items():
+        out.append({"bundleId": bid, "name": rec.name, "version": "",
+                    "onDevice": False, "managed": True, "signer": "",
+                    "teamId": rec.team_id, "sideloaded": True,
+                    "developerSigned": True, **_record_fields(rec)})
+
+    out.sort(key=lambda a: (not a["managed"], a["name"].lower()))
+    return out
 
 
 @method("device.checks")
@@ -588,7 +712,19 @@ async def _cancel(server: Server, job: Job, params: dict):
 @method("info")
 async def _info(server: Server, job: Job, params: dict):
     return {"version": await _version(server, job, params),
-            "dataDir": str(config.DATA_DIR), "posix": config.POSIX}
+            "dataDir": str(config.DATA_DIR), "posix": config.POSIX,
+            "language": language(), "languages": available()}
+
+
+@method("i18n.set")
+async def _i18n_set(server: Server, job: Job, params: dict):
+    """Sagt dem Backend, in welcher Sprache es antworten soll.
+
+    Die Oberflaeche schickt das gleich nach dem Verbinden und bei jedem
+    Wechsel. Rueckgabe ist die Sprache, die tatsaechlich gilt - eine, die wir
+    nicht haben, faellt auf Englisch zurueck.
+    """
+    return set_language(_need(params, "language"))
 
 
 @method("version")

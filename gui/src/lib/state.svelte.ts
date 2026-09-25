@@ -8,9 +8,10 @@
 // selben iPhone ohnehin in die Quere kaemen.
 
 import { call, failAll, handle, onReady, RpcError, start, type Call } from "./rpc";
+import { locale, t } from "./i18n.svelte";
 import type { BackendExit, DeviceCheck, Status, UpdateState } from "./types";
 
-export type View = "overview" | "install" | "apps" | "account" | "device" | "system";
+export type View = "overview" | "install" | "apps" | "account" | "device" | "system" | "settings";
 export type TaskKind = "install" | "refresh" | "jit" | "uninstall" | "fix";
 export type TaskState = "running" | "done" | "error" | "cancelled";
 
@@ -178,7 +179,7 @@ export function runTask<T>(
   describe: (result: T) => { message: string; notes?: string[]; tone?: "ok" | "warn" },
 ) {
   if (busy()) {
-    toast("Es läuft bereits ein Vorgang.", "warn");
+    toast(t("Another operation is already running."), "warn");
     return;
   }
   const task: Task = $state({
@@ -228,11 +229,57 @@ handle("prompt.2fa", () => new Promise((resolve) => {
   };
 }));
 
+/** Wie lange die Oberflaeche auf das erste Lebenszeichen wartet. Grosszuegig:
+ *  das gepackte Backend muss beim ersten Start seine Bibliotheken auspacken. */
+const BOOT_TIMEOUT_MS = 20_000;
+
+let bootTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Weder ein "ready" noch ein "exit"? Dann lieber sagen, dass nichts kommt,
+ *  als fuer immer den Startbildschirm zu zeigen. */
+function armBootTimeout() {
+  if (bootTimer !== null) clearTimeout(bootTimer);
+  bootTimer = setTimeout(() => {
+    bootTimer = null;
+    if (ui.backend === "starting") {
+      markDown({ code: null, stderr: "",
+                 reason: t("The backend did not report in.") });
+    }
+  }, BOOT_TIMEOUT_MS);
+}
+
+function stopBootTimeout() {
+  if (bootTimer === null) return;
+  clearTimeout(bootTimer);
+  bootTimer = null;
+}
+
 function markReady() {
+  stopBootTimeout();
   if (ui.backend === "ready") return;
   ui.backend = "ready";
   ui.exit = null;
+  applyLanguage();
   refreshStatus(true);
+}
+
+/** Sagt dem Backend, in welcher Sprache es antworten soll, und holt alles
+ *  neu, was von dort schon uebersetzt kam - Systemcheck und Geraetechecks
+ *  haetten sonst weiter die alten Texte. */
+export function applyLanguage() {
+  call("i18n.set", { language: locale() }).then(() => {
+    ui.checks.key = null;
+    refreshStatus(true);
+  }, () => {});
+}
+
+function markDown(info: BackendExit) {
+  stopBootTimeout();
+  if (ui.backend === "down") return;
+  ui.backend = "down";
+  ui.exit = info;
+  ui.twoFactor = null;
+  failAll(t("The backend has stopped."));
 }
 
 onReady(markReady);
@@ -240,17 +287,22 @@ onReady(markReady);
 // sein, bevor diese Seite zuhoert. Also selbst nachfragen.
 call("version").then(markReady, () => {});
 
-window.backend.onExit((info) => {
-  ui.backend = "down";
-  ui.exit = info;
-  ui.twoFactor = null;
-  failAll("Das Backend wurde beendet.");
-});
+// Und genauso kann sein Tod schon gemeldet worden sein, bevor es hier jemanden
+// gab, der zuhoert: `webContents.send` puffert nicht. Der Hauptprozess merkt
+// sich den Zustand deshalb - hier einmal abholen.
+window.backend.getState().then((s) => {
+  if (s?.state === "down") markDown(s);
+}, () => {});
+
+window.backend.onExit(markDown);
+
+armBootTimeout();
 
 export function restartBackend() {
   ui.backend = "starting";
   ui.exit = null;
   window.backend.restart();
+  armBootTimeout();
 }
 
 // -- Updates -----------------------------------------------------------------

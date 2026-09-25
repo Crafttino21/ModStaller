@@ -4,7 +4,9 @@ Ohne diese Header akzeptiert Apple keinen Login. Zwei Quellen:
 
 * :class:`LocalProvider` (Default) - fuehrt Apples ADI-Libraries
   (``libstoreservicescore.so``, ``libCoreADI.so`` aus der Apple-Music-APK)
-  lokal in einer ARM-Emulation aus. Nichts verlaesst den Rechner.
+  lokal in einer ARM-Emulation aus. Nichts verlaesst den Rechner. Setzt unter
+  Windows voraus, dass Control Flow Guard aus ist - siehe
+  :func:`local_supported`.
 * :class:`RemoteV3Provider` - anisette-v3-Protokoll gegen einen fremden
   Server. Nur als Fallback; Geraete-Identifier gehen dann an einen Dritten.
 
@@ -19,13 +21,16 @@ Zwei Dinge korrigiert dieses Modul am Verhalten der ``anisette``-Bibliothek:
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import uuid
 from pathlib import Path
 from typing import Protocol
 
-from ..config import ANISETTE_DIR, read_secret, write_secret
+from ..config import (ANISETTE_DIR, CONFIG_FILE, POSIX, read_secret,
+                      write_secret)
 from ..errors import AppleError
+from ..i18n import _
 from . import clientinfo
 
 #: Provisioning-State (adi.pb). Apple bindet die 2FA-Vertrauensstellung daran.
@@ -61,12 +66,76 @@ def _load_or_create_device() -> dict[str, str]:
     return device
 
 
+#: Notausgang, falls jemand es trotzdem versuchen will.
+ALLOW_LOCAL_ENV = "MODSTALLER_ALLOW_LOCAL_ANISETTE"
+
+#: ProcessControlFlowGuardPolicy aus PROCESS_MITIGATION_POLICY.
+_CFG_POLICY = 7
+
+
+def control_flow_guard_active() -> bool:
+    """Ob fuer *diesen* Prozess Control Flow Guard aktiv ist.
+
+    Entschieden wird das von der Haupt-EXE, fuer den ganzen Prozess. Gemessen
+    statt geraten: gepackte Programme, die :func:`packaging.build_backend
+    .clear_cfg` durchlaufen haben, sind sauber, aeltere nicht - und in der
+    Entwicklung laeuft ohnehin ``python.exe``, die CFG nie setzt.
+    """
+    if POSIX:
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.GetCurrentProcess.restype = wintypes.HANDLE
+        k32.GetProcessMitigationPolicy.argtypes = [
+            wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t]
+        k32.GetProcessMitigationPolicy.restype = wintypes.BOOL
+
+        flags = ctypes.c_uint32()
+        if not k32.GetProcessMitigationPolicy(
+                k32.GetCurrentProcess(), _CFG_POLICY,
+                ctypes.byref(flags), ctypes.sizeof(flags)):
+            return False
+        return bool(flags.value & 1)        # EnableControlFlowGuard
+    except Exception:
+        # Nicht feststellbar - dann nicht im Weg stehen.
+        return False
+
+
+def local_supported() -> bool:
+    """Ob die lokale ADI-Emulation in diesem Prozess laufen kann.
+
+    Mit aktivem Control Flow Guard nicht: ``unicorn.dll`` springt mit
+    ``longjmp`` aus JIT-erzeugtem Code heraus, MSVCs Laufzeit findet dafuer
+    keinen Eintrag in der CFG-Tabelle und ruft ``__fastfail`` (0xC0000409,
+    FAST_FAIL_INVALID_SET_OF_CONTEXT). Kein Fehler, den man abfangen koennte -
+    der Prozess ist sofort weg, und mit ihm das Backend der Oberflaeche. Die
+    Sperre greift deshalb *vor* dem Import von ``anisette``, damit
+    ``unicorn.dll`` gar nicht erst geladen wird.
+    """
+    return (not control_flow_guard_active()
+            or os.environ.get(ALLOW_LOCAL_ENV) == "1")
+
+
 class LocalProvider:
     """ADI-Emulation auf diesem Rechner."""
 
     name = "local"
 
     def __init__(self) -> None:
+        if not local_supported():
+            raise AppleError(_(
+                "The local Anisette emulation cannot run in this build: "
+                "Control Flow Guard is active for the process, and the ARM "
+                "emulation (Unicorn) then aborts in native code "
+                "(0xC0000409). A current ModStaller build for Windows does "
+                "not set that flag - otherwise an Anisette server helps. "
+                "In {config}:\n"
+                '  anisette_provider = "remote"\n'
+                '  anisette_server = "https://ani.sidestore.io"',
+                config=CONFIG_FILE))
         from anisette import Anisette
         from anisette._device import AnisetteDeviceConfig
 
@@ -140,9 +209,9 @@ class RemoteV3Provider:
             r.raise_for_status()
             data = {k: v for k, v in r.json().items() if k.lower() != "result"}
         except Exception as exc:
-            raise AppleError(
-                f"Anisette-Server {self._base} nicht erreichbar: {exc}"
-            ) from exc
+            raise AppleError(_(
+                "Anisette server {url} not reachable: {error}",
+                url=self._base, error=exc)) from exc
         data["X-MMe-Client-Info"] = self.client_info()
         return data
 
@@ -154,7 +223,8 @@ def build(provider: str = "local", server: str = "") -> AnisetteProvider:
         return LocalProvider()
     if provider == "remote":
         if not server:
-            raise AppleError("anisette_provider = 'remote', aber kein "
-                             "anisette_server konfiguriert.")
+            raise AppleError(_("anisette_provider = ‘remote’, but no "
+                               "anisette_server is configured."))
         return RemoteV3Provider(server)
-    raise AppleError(f"Unbekannter anisette_provider: {provider!r}")
+    raise AppleError(_("Unknown anisette_provider: {provider!r}",
+                       provider=provider))

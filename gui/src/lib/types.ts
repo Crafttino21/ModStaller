@@ -24,6 +24,34 @@ export interface App {
   sourceMissing: boolean;
 }
 
+/** Woher eine App auf dem iPhone stammt - aus ihrer Signatur abgeleitet. */
+export type Origin = "store" | "testflight" | "developer" | "other";
+
+/** Ein Eintrag aus "apps.overview": eigenes und fremdes nebeneinander. */
+export interface SideloadedApp {
+  bundleId: string;
+  name: string;
+  version: string;
+  /** Liegt sie gerade auf dem iPhone? Sonst kennt ModStaller sie nur noch. */
+  onDevice: boolean;
+  /** Von ModStaller installiert - nur dann gibt es Quelle und Ablaufdatum. */
+  managed: boolean;
+  signer: string;
+  teamId: string;
+  origin: Origin;
+  sideloaded: boolean;
+  developerSigned: boolean;
+  sourceIpa: string;
+  sourceMissing: boolean;
+  originalBundleId: string;
+  appIdId: string;
+  expiresAt: number | null;
+  daysLeft: number | null;
+  expiryText: string;
+  urgent: boolean;
+  installedAt: number | null;
+}
+
 export interface Status {
   device: Device | null;
   deviceAttached: boolean;
@@ -78,9 +106,19 @@ export interface Team {
   isFree: boolean;
   description: string;
   devices: number;
-  appIds: string[];
+  appIds: AppId[];
+  /** Ob beim Lesen ein iPhone angesteckt war. Nur dann stimmt `inUse`. */
+  usageKnown: boolean;
   maxAppIdsPerWeek: number | null;
   maxAppsPerDevice: number | null;
+}
+
+export interface AppId {
+  appIdId: string;
+  identifier: string;
+  name: string;
+  /** Gehoert zu einer App, die ModStaller installiert hat. */
+  inUse: boolean;
 }
 
 export interface Cert {
@@ -135,6 +173,12 @@ export interface BackendExit {
   stderr: string;
 }
 
+/** Was der Hauptprozess ueber das Backend weiss - auch rueckwirkend. */
+export type BackendState =
+  | { state: "starting" }
+  | { state: "running"; pid?: number }
+  | ({ state: "down" } & BackendExit);
+
 export interface UpdateState {
   state: "unsupported" | "checking" | "none" | "available" | "downloading" | "ready" | "error";
   current?: string;
@@ -158,6 +202,8 @@ declare global {
       send(msg: unknown): void;
       onMessage(cb: (msg: any) => void): () => void;
       onExit(cb: (info: BackendExit) => void): () => void;
+      getState(): Promise<BackendState>;
+      logPath(): Promise<string>;
       restart(): void;
       pickIpa(): Promise<string | null>;
       pathForFile(file: File): string;

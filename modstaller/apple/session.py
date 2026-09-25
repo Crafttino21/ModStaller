@@ -14,6 +14,7 @@ from typing import Callable
 
 from ..config import SECRETS_DIR, read_secret, write_secret
 from ..errors import AppleError, InteractionRequired
+from ..i18n import _
 from .gsa import GSAClient, GSAResult
 
 SESSION_FILE = SECRETS_DIR / "session.json"
@@ -101,7 +102,6 @@ def current(anisette, *, interactive: bool = True) -> Session:
     if session and session.probably_valid:
         return session
     if not interactive:
-        raise InteractionRequired(
-            "Keine gueltige Anmeldung. Einmal 'modstaller login' ausfuehren."
-        )
-    raise AppleError("Nicht angemeldet. Zuerst: modstaller login")
+        raise InteractionRequired(_(
+            "No valid sign-in. Run ‘modstaller login’ once."))
+    raise AppleError(_("Not signed in. First: modstaller login"))

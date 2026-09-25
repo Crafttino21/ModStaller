@@ -96,7 +96,7 @@ async def test_full_slots_warn_and_expired_profiles_can_be_cleaned(phone):
     c = _by_id(await rd.run_checks())["profiles"]
     assert c.state == rd.WARN
     assert c.fix == rd.FIX_EXPIRED_PROFILES
-    assert "3 aktive" in c.detail and "1 abgelaufene" in c.detail
+    assert "3 active" in c.detail and "1 expired" in c.detail
 
 
 async def test_low_space_warns(phone):
@@ -138,7 +138,7 @@ async def test_locked_phone_asks_to_unlock_instead_of_pairing(monkeypatch):
             pass
     monkeypatch.setattr(rd, "ServiceProvider", lambda udid=None: Locked())
     [c] = await rd.run_checks()
-    assert c.fix is None and "entsperren" in c.manual
+    assert c.fix is None and "Unlock" in c.manual
 
 
 async def test_passcode_falls_back_to_revealing_the_switch(phone, monkeypatch):
@@ -177,5 +177,5 @@ async def test_developer_mode_without_passcode_is_fully_automatic(phone, monkeyp
 
 
 async def test_unknown_fix_is_refused(phone):
-    with pytest.raises(Exception, match="Unbekannte"):
+    with pytest.raises(Exception, match="Unknown fix"):
         await rd.run_fix("gibtsnicht")

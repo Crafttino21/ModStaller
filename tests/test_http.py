@@ -86,7 +86,7 @@ def test_gsa_request_gives_up_with_clear_message():
                              client_info=clientinfo.DEFAULT_CLIENT_INFO)
     finally:
         http.GSA_RETRY_DELAY = original
-    assert "IP-Adresse" in str(exc.value)
+    assert "IP address" in str(exc.value)
 
 
 def test_dev_session_does_not_retry_429():
@@ -134,7 +134,7 @@ def test_rate_limit_reports_retry_after():
     with pytest.raises(AppleRateLimited) as exc:
         http.check_rate_limit(_FakeResponse(429, b"", {"Retry-After": "600"}),
                               attempts=4)
-    assert "10 Minuten" in str(exc.value)
+    assert "10 minutes" in str(exc.value)
 
 
 # -- 2FA-Erkennung ---------------------------------------------------------

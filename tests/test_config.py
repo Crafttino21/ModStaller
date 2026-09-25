@@ -34,6 +34,19 @@ def test_windows_without_localappdata_falls_back_to_the_profile():
     assert cfg == Path("C:/Users/u/AppData/Local/modstaller")
 
 
+def test_anisette_stays_local_by_default(monkeypatch):
+    """Auf jeder Plattform: Geraete-Identifier bleiben auf dem Rechner."""
+    for posix in (True, False):
+        monkeypatch.setattr(config, "POSIX", posix)
+        assert config.Settings().anisette_provider == "local"
+
+
+def test_the_config_file_can_switch_to_a_server(tmp_path):
+    f = tmp_path / "config.toml"
+    f.write_text('anisette_provider = "remote"\n')
+    assert config.Settings.load(f).anisette_provider == "remote"
+
+
 @pytest.mark.skipif(not config.POSIX, reason="Unix-Rechte gibt es nur auf POSIX")
 def test_open_secret_is_refused_on_posix(tmp_path):
     f = tmp_path / "secret"

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..errors import SigningError
+from ..i18n import _
 
 
 @dataclass
@@ -56,12 +57,13 @@ class IPAInfo:
 def inspect(path: str | Path) -> IPAInfo:
     path = Path(path)
     if not path.is_file():
-        raise SigningError(f"IPA nicht gefunden: {path}")
+        raise SigningError(_("IPA not found: {path}", path=path))
 
     try:
         zf = zipfile.ZipFile(path)
     except zipfile.BadZipFile as exc:
-        raise SigningError(f"{path.name} ist kein gueltiges IPA-Archiv.") from exc
+        raise SigningError(_("{name} is not a valid IPA archive.",
+                             name=path.name)) from exc
 
     with zf:
         names = zf.namelist()
@@ -71,15 +73,17 @@ def inspect(path: str | Path) -> IPAInfo:
             and n.split("/")[1].endswith(".app")
         })
         if not app_dirs:
-            raise SigningError(
-                f"{path.name} enthaelt kein Payload/*.app - kein gueltiges IPA.")
+            raise SigningError(_(
+                "{name} contains no Payload/*.app - not a valid IPA.",
+                name=path.name))
         app = app_dirs[0]
         prefix = f"Payload/{app}/"
 
         try:
             info = plistlib.loads(zf.read(prefix + "Info.plist"))
         except KeyError as exc:
-            raise SigningError(f"Info.plist fehlt in {app}.") from exc
+            raise SigningError(_("Info.plist missing in {app}.",
+                                 app=app)) from exc
 
         def under(sub: str, suffix: str) -> list[str]:
             base = prefix + sub

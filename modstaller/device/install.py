@@ -22,6 +22,7 @@ from typing import Callable
 import re
 
 from ..errors import DeviceError
+from ..i18n import _
 
 #: Wie lange wir auf ein Install warten, bevor wir es als haengend ansehen.
 #: Ein haengendes installation_proxy ist das typische Symptom dafuer, dass der
@@ -39,15 +40,16 @@ def _slot_limit_message(text: str) -> str:
     installed = re.findall(r'"[A-Z0-9]+\.([^"]+)"', text)
     listing = "\n".join(f"    {b}" for b in installed)
     return (
-        "Das iPhone hat sein Kontingent erreicht: mit einem kostenlosen "
-        "Apple-Account duerfen hoechstens drei sideloadete Apps gleichzeitig "
-        "installiert sein.\n\n"
-        + (f"Belegt sind:\n{listing}\n\n" if installed else "")
-        + "Einen Platz freimachen:\n"
-          "    modstaller uninstall <bundle-id>\n"
-          "oder die App direkt auf dem iPhone loeschen.\n\n"
-        "Das Signieren war erfolgreich - die fertige IPA bleibt liegen und "
-        "wird beim naechsten Versuch wiederverwendet."
+        _("The iPhone has reached its limit: with a free Apple account at "
+          "most three sideloaded apps may be installed at the same time.")
+        + "\n\n"
+        + (_("Taken by:\n{listing}", listing=listing) + "\n\n"
+           if installed else "")
+        + _("To free a slot:\n    modstaller uninstall <bundle-id>\nor "
+            "delete the app on the iPhone itself.")
+        + "\n\n"
+        + _("Signing succeeded - the finished IPA stays around and is reused "
+            "on the next attempt.")
     )
 
 
@@ -73,8 +75,47 @@ async def uninstall_app(sp, bundle_id: str) -> str:
             return transport
         except Exception as exc:
             errors.append(f"{transport}: {type(exc).__name__}: {exc}")
-    raise DeviceError(f"{bundle_id} liess sich nicht entfernen:\n  "
-                      + "\n  ".join(dict.fromkeys(errors)))
+    raise DeviceError(_("{bundle_id} could not be removed:", bundle_id=bundle_id)
+                      + "\n  " + "\n  ".join(dict.fromkeys(errors)))
+
+
+#: Signaturen, die Apple selbst vergibt - beides ist kein Sideload.
+APP_STORE_SIGNER = "Apple iPhone OS Application Signing"
+TESTFLIGHT_SIGNER = "TestFlight Beta Distribution"
+
+
+def app_origin(meta: dict) -> dict:
+    """Woher eine installierte App stammt - aus ihren Signatur-Feldern.
+
+    Am Geraet gemessen (iOS 27, 150 Apps): Store-Apps tragen Apples
+    Store-Signatur, TestFlight-Apps ``TestFlight Beta Distribution``,
+    sideloadete eine Entwickler-Identitaet *und* ``get-task-allow`` in den
+    Entitlements. Die Team-ID steht verlaesslich nur in den Entitlements -
+    der Name der Identitaet nennt den Zertifikatsinhaber, nicht das Team.
+
+    ``origin`` unterscheidet vier Faelle, weil "nicht aus dem Store" zu grob
+    waere: TestFlight sieht sonst wie ein Sideload aus. ``developer`` ist die
+    schaerfste Aussage - nur damit laeuft JIT, und nur das laeuft nach sieben
+    Tagen ab. Firmensignierte IPAs (``other``) sind ebenfalls sideloadet,
+    aber keins von beidem.
+    """
+    ent = meta.get("Entitlements") or {}
+    signer = str(meta.get("SignerIdentity", ""))
+    if signer == APP_STORE_SIGNER:
+        origin = "store"
+    elif signer == TESTFLIGHT_SIGNER:
+        origin = "testflight"
+    elif ent.get("get-task-allow"):
+        origin = "developer"
+    else:
+        origin = "other"
+    return {
+        "signer": signer,
+        "teamId": str(ent.get("com.apple.developer.team-identifier", "")),
+        "origin": origin,
+        "sideloaded": origin in ("developer", "other"),
+        "developerSigned": origin == "developer",
+    }
 
 
 async def list_apps(sp, *, user_only: bool = True) -> dict:
@@ -87,7 +128,8 @@ async def list_apps(sp, *, user_only: bool = True) -> dict:
                     application_type="User" if user_only else "Any")
         except Exception as exc:
             last = exc
-    raise DeviceError(f"installation_proxy antwortet nicht: {last}")
+    raise DeviceError(_("installation_proxy does not answer: {error}",
+                        error=last))
 
 
 async def _providers(sp) -> list[tuple[str, object]]:
@@ -114,7 +156,7 @@ async def install_ipa(
     """
     ipa = Path(ipa)
     if not ipa.is_file():
-        raise DeviceError(f"IPA nicht gefunden: {ipa}")
+        raise DeviceError(_("IPA not found: {path}", path=ipa))
 
     def handler(percent, *_):
         if progress:
@@ -136,11 +178,11 @@ async def install_ipa(
             return InstallResult(bundle_id=None, transport=transport,
                                  upgraded=upgrade)
         except asyncio.TimeoutError:
-            errors.append(
-                f"{transport}: installation_proxy hat {INSTALL_TIMEOUT:.0f}s "
-                f"nicht geantwortet (Dienst nimmt die Verbindung an, "
-                f"beantwortet den Install aber nicht)"
-            )
+            errors.append(_(
+                "{transport}: installation_proxy did not answer within "
+                "{seconds:.0f}s (the service accepts the connection but does "
+                "not answer the install)",
+                transport=transport, seconds=INSTALL_TIMEOUT))
         except Exception as exc:
             errors.append(f"{transport}: {type(exc).__name__}: {exc}")
 

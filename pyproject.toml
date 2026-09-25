@@ -22,3 +22,4 @@ include = ["modstaller*"]
 
 [tool.setuptools.package-data]
 "modstaller.apple" = ["certs/*.pem"]
+"modstaller" = ["locale/*.json"]

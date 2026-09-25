@@ -3,6 +3,7 @@
   import PageHeader from "../components/PageHeader.svelte";
   import { errorText, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
+  import { t } from "../lib/i18n.svelte";
   import type { Check } from "../lib/types";
 
   let checks = $state<Check[] | null>(null);
@@ -10,6 +11,7 @@
   let error = $state("");
   let version = $state("");
   let dataDir = $state("");
+  let logPath = $state("");
 
   async function run() {
     running = true;
@@ -25,22 +27,24 @@
   run();
   call<{ version: string; dataDir: string }>("info").then(
     (i) => ((version = i.version), (dataDir = i.dataDir)), () => {});
+  // Der Weg zum Protokoll - das Einzige, was nach einem Absturz uebrig bleibt.
+  window.backend.logPath().then((p) => (logPath = p), () => {});
 
   const problems = $derived(checks?.filter((c) => !c.ok && c.kind === "problem").length ?? 0);
   const todos = $derived(checks?.filter((c) => !c.ok && c.kind === "todo").length ?? 0);
 </script>
 
-<PageHeader title="Systemcheck" subtitle="Ist alles da, was ModStaller braucht?">
+<PageHeader title={t("System check")} subtitle={t("Is everything here that ModStaller needs?")}>
   {#snippet actions()}
     <button class="btn" onclick={run} disabled={running}>
-      {#if running}<LoaderCircle size={16} class="spin" />{:else}<RefreshCw size={16} />{/if} Erneut prüfen
+      {#if running}<LoaderCircle size={16} class="spin" />{:else}<RefreshCw size={16} />{/if} {t("Check again")}
     </button>
   {/snippet}
 </PageHeader>
 
 {#if checks}
   <div class="summary banner {problems ? 'bad' : todos ? 'warn' : 'info'}">
-    {#if problems}{problems} Punkt(e) zu klären.{:else if todos}System ist bereit – noch {todos} Schritt(e) offen.{:else}Alles bereit.{/if}
+    {#if problems}{t("{count} point(s) to clear up.", { count: problems })}{:else if todos}{t("System is ready – {count} step(s) still open.", { count: todos })}{:else}{t("Everything ready.")}{/if}
   </div>
 {/if}
 {#if error}<div class="banner bad selectable">{error}</div>{/if}
@@ -68,22 +72,23 @@
   <div class="grow">
     <div class="label">ModStaller {ui.update.current ?? version}</div>
     <div class="faint tiny">
-      {#if ui.update.state === "unsupported"}Automatische Updates gibt es nur in der AppImage bzw. der mit dem Setup installierten Windows-Version.
-      {:else if ui.update.state === "checking"}Suche nach Updates …
-      {:else if ui.update.state === "none"}Aktuell – keine neuere Version auf GitHub.
-      {:else if ui.update.state === "error"}Update-Prüfung fehlgeschlagen: {ui.update.message}
-      {:else}Version {ui.update.version} ist verfügbar – siehe unten links.{/if}
+      {#if ui.update.state === "unsupported"}{t("Automatic updates exist only in the AppImage and in the Windows version installed with the setup.")}
+      {:else if ui.update.state === "checking"}{t("Looking for updates …")}
+      {:else if ui.update.state === "none"}{t("Up to date – no newer version on GitHub.")}
+      {:else if ui.update.state === "error"}{t("Update check failed: {message}", { message: ui.update.message ?? "" })}
+      {:else}{t("Version {version} is available – see bottom left.", { version: ui.update.version ?? "" })}{/if}
     </div>
   </div>
   {#if ui.update.state !== "unsupported"}
     <button class="btn sm" disabled={ui.update.state === "checking" || ui.update.state === "downloading"}
             onclick={() => window.updates.check()}>
-      <RefreshCw size={14} /> Nach Updates suchen
+      <RefreshCw size={14} /> {t("Check for updates")}
     </button>
   {/if}
 </div>
 
-{#if dataDir}<p class="faint foot">Daten unter <code class="selectable">{dataDir}</code></p>{/if}
+{#if dataDir}<p class="faint foot">{t("Data in")} <code class="selectable">{dataDir}</code></p>{/if}
+{#if logPath}<p class="faint foot">{t("Log in")} <code class="selectable">{logPath}</code></p>{/if}
 
 <style>
   .summary { margin-bottom: 14px; font-weight: 550; }
@@ -100,4 +105,5 @@
   .hint { margin-top: 4px; font-size: 13px; color: var(--text-2); }
   .updates { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 16px 18px; }
   .foot { margin-top: 16px; font-size: 12px; }
+  .foot + .foot { margin-top: 4px; }
 </style>

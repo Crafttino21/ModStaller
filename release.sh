@@ -4,8 +4,11 @@
 #   ./release.sh 0.2.0          Version setzen, Commit + Tag, pushen
 #   ./release.sh 0.3.0-beta.1   Vorabversion (nur fuer Beta-Nutzer)
 #
-# Den Rest macht GitHub: .github/workflows/release.yml testet, baut die
-# AppImage und legt die Release an. Installierte Apps finden sie von selbst.
+# Den Rest macht GitHub: .github/workflows/release.yml testet, baut
+# AppImage, Windows-Installer und CLI-Zip und legt die Release an.
+# Installierte Apps finden sie von selbst.
+#
+# Das Gegenstueck fuer Windows ist release.bat daneben.
 set -euo pipefail
 
 cd "$(dirname "$0")"

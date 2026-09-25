@@ -11,6 +11,7 @@ from .apple import anisette as anisette_mod
 from .apple.devservices import DeveloperServices
 from .apple.session import Session
 from .config import OUT_DIR, Settings, find_zsign
+from .i18n import _
 from .device.connection import ServiceProvider, device_info
 from .device.install import install_ipa
 from .errors import AppleError, SigningError
@@ -54,20 +55,19 @@ async def install(
     info = ipa_mod.inspect(ipa_path)
     on_step(f"IPA gelesen:\n{info.summary()}")
     if info.encrypted:
-        raise SigningError(
-            "Diese IPA ist App-Store-verschluesselt (FairPlay DRM) und kann "
-            "nicht neu signiert werden. Es braucht eine entschluesselte IPA."
-        )
+        raise SigningError(_(
+            "This IPA is App Store encrypted (FairPlay DRM) and cannot be "
+            "re-signed. A decrypted IPA is required."))
 
     # 2. Geraet - ebenfalls vor jedem Apple-Kontakt.
     async with ServiceProvider(udid) as sp:
         dev = await device_info(sp.lockdown)
-        on_step(f"\nGeraet: {dev.name}, iOS {dev.ios_version}")
+        on_step("\n" + _("Device: {name}, iOS {version}",
+                              name=dev.name, version=dev.ios_version))
         if not dev.developer_mode:
-            raise SigningError(
-                "Developer Mode ist aus. Auf dem iPhone unter Einstellungen > "
-                "Datenschutz & Sicherheit > Entwicklermodus aktivieren."
-            )
+            raise SigningError(_(
+                "Developer Mode is off. Turn it on under Settings > Privacy & "
+                "Security > Developer Mode on the iPhone."))
 
         # 3. Anmeldung und Team.
         session = Session.load()
@@ -86,7 +86,7 @@ async def install(
         api.register_device(team.team_id, dev.udid, dev.name)
 
         # 5. Zertifikat.
-        on_step("\nZertifikat besorgen …")
+        on_step("\n" + _("Obtaining the certificate …"))
         p12, password = ensure_certificate(
             api, team, dev.name, revoke_conflicting=revoke_conflicting_cert)
 
@@ -96,8 +96,9 @@ async def install(
         strip = (caps.is_free and bool(info.extensions)
                  if strip_extensions is None else strip_extensions)
         if strip and info.extensions:
-            on_step(f"  {len(info.extensions)} Extension(s) werden entfernt "
-                 f"(spart {len(info.extensions)} App-ID(s) vom Wochenkontingent)")
+            on_step("  " + _("Removing {count} extension(s) (saves {count} "
+                                 "App ID(s) from the weekly quota)",
+                                 count=len(info.extensions)))
 
         # 7. App-ID und Profil.
         #
@@ -117,10 +118,11 @@ async def install(
                                reuse_when_exhausted=True, protected=protected)
         new_id = app_id.identifier
         if new_id != wanted:
-            on_step(f"  Wochenkontingent ausgeschoepft - ModStaller benutzt die "
-                 f"freie App-ID\n  {new_id} weiter. Die App laeuft darunter "
-                 f"voellig normal; nur\n  die interne Kennung passt nicht zum "
-                 f"Namen.")
+            on_step(_(
+                "  Weekly quota exhausted - ModStaller reuses the free App ID"
+                "\n  {app_id}. The app runs under it perfectly normally; "
+                "only\n  the internal identifier does not match the name.",
+                app_id=new_id))
         profile_path = fetch_profile(api, team, app_id)
         prof = profile_info(profile_path)
         caps = caps.reconcile(prof)
@@ -199,9 +201,11 @@ async def refresh(
     for rec in due:
         source = Path(rec.source_ipa)
         if not source.is_file():
-            on_step(f"\n{rec.name}: Original-IPA fehlt ({source}) - uebersprungen.")
+            on_step("\n" + _("{name}: original IPA missing ({path}) - skipped.",
+                                   name=rec.name, path=source))
             continue
-        on_step(f"\n=== {rec.name} erneuern ({rec.expiry_text}) ===")
+        on_step("\n=== " + _("Renewing {name} ({expiry})",
+                                   name=rec.name, expiry=rec.expiry_text) + " ===")
         results.append(await install(
             source, udid=udid or rec.udid, team_id=rec.team_id,
             settings=settings, strip_extensions=rec.strip_extensions,

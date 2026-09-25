@@ -2,6 +2,7 @@
   import { CircleCheck, CircleX, LoaderCircle, Ban, Minimize2, Info } from "@lucide/svelte";
   import Modal from "./Modal.svelte";
   import { closeTask, ui } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
 
   const task = $derived(ui.task!);
   let logEl = $state<HTMLDivElement | undefined>();
@@ -30,7 +31,7 @@
       <h2>{task.title}</h2>
       <p class="muted">
         {#if task.state === "running"}
-          {task.log.at(-1) ?? "Wird gestartet …"}
+          {task.log.at(-1) ?? t("Starting …")}
         {:else}
           {task.state === "done" ? "Fertig" : task.state === "cancelled" ? "Abgebrochen" : "Fehlgeschlagen"}
         {/if}
@@ -40,7 +41,7 @@
 
   {#if task.state === "running" && task.pct !== null}
     <div class="bar"><div style:width="{task.pct}%"></div></div>
-    <div class="pct faint">{task.pct}% übertragen</div>
+    <div class="pct faint">{t("{percent}% transferred", { percent: task.pct })}</div>
   {:else if task.state === "running"}
     <div class="bar indeterminate"><div></div></div>
   {/if}
@@ -49,8 +50,7 @@
     <div class="banner info hint">
       <Info size={18} />
       <div class="grow">
-        Starte jetzt in der App eine Instanz (z.&nbsp;B. ein Spiel) – erst dann fragt sie nach
-        Speicher. Die Freischaltung gilt nur für diesen Start der App.
+        {t("Start an instance inside the app now (a game, for example) – only then does it ask for memory. The unlock applies to this launch of the app only.")}
       </div>
     </div>
   {/if}
@@ -68,7 +68,7 @@
       {#each task.log as line}
         <div>{line}</div>
       {:else}
-        <div class="faint">Noch keine Meldungen.</div>
+        <div class="faint">{t("No messages yet.")}</div>
       {/each}
     </div>
   </details>
@@ -78,7 +78,7 @@
       <button class="btn ghost" onclick={closeTask}><Minimize2 size={16} /> Im Hintergrund</button>
       <button class="btn danger" onclick={() => task.call.cancel()}>Abbrechen</button>
     {:else}
-      <button class="btn primary" onclick={closeTask}>Schließen</button>
+      <button class="btn primary" onclick={closeTask}>{t("Close")}</button>
     {/if}
   </div>
 </Modal>

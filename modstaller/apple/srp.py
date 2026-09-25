@@ -70,11 +70,16 @@ def derive_password(password: str, salt: bytes, iterations: int,
     Der Unterschied ist winzig und komplett ergebnisrelevant - Apple waehlt
     das Verfahren in der Antwort auf den ersten Request.
     """
-    digest = hashlib.sha256(password.encode("utf-8")).digest()
+    # CodeQL meldet hier "schwaches Hashen sensibler Daten" und meint: fuer
+    # Passwoerter gehoert eine langsame Ableitung her, kein schneller Hash.
+    # Stimmt - und genau das passiert zwei Zeilen weiter mit PBKDF2. Dieser
+    # Vorhash ist Apples s2k-Schritt und liegt im Protokoll fest; die
+    # Gegenseite rechnet dasselbe. Wer ihn ersetzt, kann sich nicht anmelden.
+    digest = hashlib.sha256(password.encode("utf-8")).digest()  # codeql[py/weak-sensitive-data-hashing]
     if protocol == "s2k_fo":
         digest = digest.hex().encode("utf-8")
     elif protocol != "s2k":
-        raise ValueError(f"Unbekanntes SRP-Protokoll: {protocol!r}")
+        raise ValueError(f"unknown SRP protocol: {protocol!r}")
     return hashlib.pbkdf2_hmac("sha256", digest, salt, iterations, 32)
 
 
@@ -108,8 +113,17 @@ class SRPClient:
         return _minimal(self.A)
 
     def _x(self, salt: bytes, password: bytes) -> int:
+        """``x = H(s | H(I? | ":" | p))`` - die Kernformel von SRP-6a.
+
+        Auch hier meldet CodeQL schwaches Hashen sensibler Daten. ``password``
+        ist an dieser Stelle aber nicht mehr das Passwort, sondern das bereits
+        mit PBKDF2 gedehnte Ergebnis aus :func:`derive_password`. Und welcher
+        Hash genommen wird, steht nicht uns zu: Apples Server rechnet mit
+        SHA-256 dasselbe, sonst passt der Beweis nicht. ``x`` verlaesst den
+        Rechner nie.
+        """
         inner = self.H((self.I if self.username_in_x else b"") + b":" + password
-                       ).digest()
+                       ).digest()  # codeql[py/weak-sensitive-data-hashing]
         return _hash_int(self.H, salt, inner)
 
     def process_challenge(self, salt: bytes, b_bytes: bytes,
@@ -117,14 +131,14 @@ class SRPClient:
         """Verarbeitet Apples ``s``/``B`` und liefert den Beweis ``M1``."""
         B = int.from_bytes(b_bytes, "big")
         if B % self.N == 0:
-            raise ValueError("Server hat ein ungueltiges B geschickt (B mod N == 0)")
+            raise ValueError("server sent an invalid B (B mod N == 0)")
 
         w = self._width
         # k und u werden nach RFC 5054 gepadded, ...
         k = _hash_int(self.H, _pad(self.N, w), _pad(self.g, w))
         u = _hash_int(self.H, _pad(self.A, w), _pad(B, w))
         if u == 0:
-            raise ValueError("Ungueltiges u (== 0)")
+            raise ValueError("invalid u (== 0)")
 
         x = self._x(salt, password)
         # S = (B - k*g^x) ^ (a + u*x)  mod N
@@ -140,7 +154,10 @@ class SRPClient:
 
         h = self.H()
         h.update(xor)
-        h.update(self.H(self.I).digest())
+        # Der Benutzername, gehasht - so schreibt RFC 5054 M1 vor. CodeQL
+        # zaehlt ihn zu den sensiblen Daten; hier ist er ein Protokollfeld,
+        # das ohnehin im Klartext an Apple geht.
+        h.update(self.H(self.I).digest())  # codeql[py/weak-sensitive-data-hashing]
         h.update(salt)
         h.update(self.A_bytes)
         h.update(_minimal(B))
@@ -151,7 +168,7 @@ class SRPClient:
     def verify_session(self, m2: bytes) -> bool:
         """Prueft Apples Gegenbeweis ``M2 = H(A | M1 | K)``."""
         if self.K is None or self.M1 is None:
-            raise RuntimeError("process_challenge() muss zuerst laufen")
+            raise RuntimeError("process_challenge() must run first")
         h = self.H()
         h.update(self.A_bytes)
         h.update(self.M1)

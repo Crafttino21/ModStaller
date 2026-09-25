@@ -6,6 +6,7 @@
   } from "@lucide/svelte";
   import { busy, refreshChecks, ui } from "../lib/state.svelte";
   import { fixCheck } from "../lib/actions";
+  import { t } from "../lib/i18n.svelte";
 
   let { compact = false }: { compact?: boolean } = $props();
 
@@ -23,21 +24,21 @@
       <h2>iPhone-Check</h2>
       <p class="muted small">
         {#if ui.checks.loading && !list.length}
-          Wird geprüft …
+          {t("Checking …")}
         {:else if !list.length}
-          {ui.checks.error || "Noch nicht geprüft."}
+          {ui.checks.error || t("Not checked yet.")}
         {:else if bad}
-          {bad} Punkt(e) verhindern das Sideloading.
+          {t("{count} point(s) prevent sideloading.", { count: bad })}
         {:else if warn}
           Bereit – {warn} Hinweis(e).
         {:else}
-          Alles bereit fürs Sideloading.
+          {t("Everything ready for sideloading.")}
         {/if}
       </p>
     </div>
-    <button class="btn sm ghost" title="Erneut prüfen" disabled={ui.checks.loading || busy()} onclick={refreshChecks}>
+    <button class="btn sm ghost" title={t("Check again")} disabled={ui.checks.loading || busy()} onclick={refreshChecks}>
       {#if ui.checks.loading}<LoaderCircle size={15} class="spin" />{:else}<RefreshCw size={15} />{/if}
-      {compact ? "" : "Erneut prüfen"}
+      {compact ? "" : t("Check again")}
     </button>
   </div>
 

@@ -1,20 +1,23 @@
 <script lang="ts">
   import {
-    LayoutGrid, Download, Package, UserRound, Smartphone, Stethoscope, LoaderCircle,
+    LayoutGrid, Download, Package, UserRound, Smartphone, Stethoscope, SlidersHorizontal, LoaderCircle,
   } from "@lucide/svelte";
   import PhoneMockup from "./PhoneMockup.svelte";
   import BatteryLevel from "./BatteryLevel.svelte";
   import UpdateNotice from "./UpdateNotice.svelte";
   import { go, ui, type View } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
 
-  const items: { view: View; label: string; icon: typeof LayoutGrid }[] = [
-    { view: "overview", label: "Übersicht", icon: LayoutGrid },
-    { view: "install", label: "Installieren", icon: Download },
-    { view: "apps", label: "Apps", icon: Package },
-    { view: "account", label: "Konto", icon: UserRound },
-    { view: "device", label: "Gerät", icon: Smartphone },
-    { view: "system", label: "Systemcheck", icon: Stethoscope },
-  ];
+  // $derived, damit ein Sprachwechsel die Beschriftungen sofort mitnimmt.
+  const items = $derived<{ view: View; label: string; icon: typeof LayoutGrid }[]>([
+    { view: "overview", label: t("Overview"), icon: LayoutGrid },
+    { view: "install", label: t("Install"), icon: Download },
+    { view: "apps", label: t("Apps"), icon: Package },
+    { view: "account", label: t("Account"), icon: UserRound },
+    { view: "device", label: t("Device"), icon: Smartphone },
+    { view: "system", label: t("System check"), icon: Stethoscope },
+    { view: "settings", label: t("Settings"), icon: SlidersHorizontal },
+  ]);
 
   const urgentCount = $derived(ui.status?.urgent.length ?? 0);
   const device = $derived(ui.status?.device);
@@ -38,7 +41,7 @@
     </div>
     <div>
       <div class="name">ModStaller</div>
-      <div class="sub">Sideloading für {window.backend.platform === "win32" ? "Windows" : "Linux"}</div>
+      <div class="sub">{t("Sideloading for {platform}", { platform: window.backend.platform === "win32" ? "Windows" : "Linux" })}</div>
     </div>
   </div>
 
@@ -69,7 +72,7 @@
       </button>
     {/if}
     {#if device}
-      <button class="device" onclick={() => go("device")} title="Zum Gerät">
+      <button class="device" onclick={() => go("device")} title={t("Go to device")}>
         <PhoneMockup form={device.formFactor} height={58} />
         <div class="dev-info">
           <div class="dev-name">{device.name}</div>
@@ -87,7 +90,7 @@
           <span>iPhone gesperrt?</span>
         {:else}
           <span class="dot" style:color="var(--text-3)"></span>
-          <span class="faint">Kein iPhone</span>
+          <span class="faint">{t("No iPhone")}</span>
         {/if}
       </div>
     {/if}

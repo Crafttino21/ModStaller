@@ -26,6 +26,7 @@ import asyncio
 from dataclasses import dataclass, field
 
 from ..errors import DeviceError
+from ..i18n import _
 from .gdb import REG_PC, REG_X0, REG_X1, REG_X16, GdbClient
 
 #: Der Debugger-Dienst hinter dem RSD-Tunnel (iOS 17+).
@@ -75,11 +76,11 @@ class JitResult:
     @property
     def summary(self) -> str:
         if not self.prepared_regions:
-            return ("Der Debugger hing an, die App hat aber keinen Bereich "
-                    "angefordert.")
+            return _("The debugger was attached, but the app did not request "
+                     "any region.")
         mb = self.prepared_bytes / (1024 * 1024)
-        return (f"{self.prepared_regions} Speicherbereich(e) freigegeben "
-                f"({mb:.1f} MB).")
+        return _("Released {count} memory region(s) ({size:.1f} MB).",
+                 count=self.prepared_regions, size=mb)
 
 
 def _is_brk(instruction: int) -> bool:
@@ -127,15 +128,15 @@ class Jit26Session:
         handled = 0
         while not self._detached:
             if handled >= MAX_BREAKPOINTS:
-                self._result.notes.append(
-                    "Abbruch: die App hat ungewoehnlich viele Haltepunkte "
-                    "ausgeloest.")
+                self._result.notes.append(_(
+                    "Aborted: the app triggered an unusual number of "
+                    "breakpoints."))
                 return
             stop = await self._gdb.cont(timeout=WAIT_FOR_APP)
             if not stop.is_stop:
-                self._result.notes.append(
-                    "Die App hat sich nicht mehr gemeldet - vermutlich lief "
-                    "sie einfach weiter.")
+                self._result.notes.append(_(
+                    "The app stopped reporting back - it probably just kept "
+                    "running."))
                 return
             handled += 1
             await self._handle(stop)
@@ -178,7 +179,7 @@ class Jit26Session:
     async def _dispatch(self, stop, thread: str) -> None:
         command = stop.register(REG_X16)
         if command == CMD_DETACH:
-            self._say("Die App meldet sich ab - JIT steht.")
+            self._say(_("The app is detaching - JIT is in place."))
             await self._gdb.detach()
             self._detached = True
             self._result.detached_cleanly = True
@@ -213,10 +214,12 @@ class Jit26Session:
             size = stop.register(REG_X1) or 0
             if address and size:
                 await self._rewrite(address, size)
-                self._say(f"{size // 1024} KB zum Patchen freigegeben")
+                self._say(_("{size} KB released for patching",
+                            size=size // 1024))
             return
 
-        self._result.notes.append(f"Unbekannter Befehl {command} uebersprungen.")
+        self._result.notes.append(_("Skipped unknown command {command}.",
+                                    command=command))
 
     async def _get_jit_mapping(self, stop, thread: str) -> None:
         """Der aeltere Weg, Speicher anzufordern (``brk #0x69``).
@@ -239,7 +242,7 @@ class Jit26Session:
         self._trace(f"x0 := 0x{address:x} zurueckgemeldet")
 
         if self._detach_after_first:
-            self._say("Die App laesst den Debugger gehen - JIT steht.")
+            self._say(_("The app lets the debugger go - JIT is in place."))
             await self._gdb.detach()
             self._detached = True
             self._result.detached_cleanly = True
@@ -252,17 +255,18 @@ class Jit26Session:
         nachruestet, sind hier fest eingebaut. Deshalb genuegt es, die
         Anfrage anzunehmen und weiterzumachen.
         """
-        self._trace("Die App bietet eine Debugger-Erweiterung an")
+        self._trace("The app offers a debugger extension")
         address = stop.register(REG_X0) or 0
         size = min(stop.register(REG_X1) or 0, _CHUNK)
         if address and size:
             try:
                 raw = await self._gdb.read_memory(address, size)
                 text = raw.split(b"\x00", 1)[0].decode("utf-8", "replace")
-                self._result.notes.append(
-                    "Die App hat eine Debugger-Erweiterung angeboten; die "
-                    "darin ueblichen Befehle sind fest eingebaut."
-                    + (f" (erkannt: {text[:60]!r}…)" if text else ""))
+                self._result.notes.append(_(
+                    "The app offered a debugger extension; the commands it "
+                    "usually adds are built in here.")
+                    + (_(" (detected: {text!r}…)", text=text[:60])
+                       if text else ""))
             except Exception:
                 pass
 
@@ -295,36 +299,34 @@ async def enable_jit(sp, bundle_id: str, *,
 
     rsd = await sp.rsd()
 
-    on_step("App angehalten starten …")
+    on_step(_("Launching the app suspended …"))
     try:
         async with DvtProvider(rsd) as dvt, ProcessControl(dvt) as control:
             pid = await control.launch(bundle_id, kill_existing=True,
                                        start_suspended=True)
     except Exception as exc:
-        raise DeviceError(
-            f"{bundle_id} liess sich nicht starten: {exc}"
-        ) from exc
+        raise DeviceError(_("{bundle_id} could not be launched: {error}",
+                            bundle_id=bundle_id, error=exc)) from exc
 
     result = JitResult(bundle_id=bundle_id, pid=pid)
 
     try:
         port = rsd.get_service_port(DEBUGPROXY)
     except Exception as exc:
-        raise DeviceError(
-            f"Der Debugger-Dienst ist nicht erreichbar: {exc}"
-        ) from exc
+        raise DeviceError(_("The debugger service is not reachable: {error}",
+                            error=exc)) from exc
 
     conn = await rsd.create_service_connection(port)
     gdb = GdbClient(conn)
     try:
         await gdb.start_no_ack_mode()
-        on_step(f"Debugger anhaengen (Prozess {pid}) …")
+        on_step(_("Attaching the debugger (process {pid}) …", pid=pid))
         if not (await gdb.attach(pid)).is_stop:
-            raise DeviceError(
-                "Der Debugger konnte sich nicht an die App haengen.")
+            raise DeviceError(_(
+                "The debugger could not attach to the app."))
 
-        on_step("Warte auf Anfragen der App … (jetzt im Programm die "
-                "Instanz starten)")
+        on_step(_("Waiting for requests from the app … (start the instance "
+                  "inside the app now)"))
         await Jit26Session(gdb, result, on_step, verbose=verbose).run()
     finally:
         try:

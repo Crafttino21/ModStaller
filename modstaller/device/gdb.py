@@ -15,6 +15,7 @@ import asyncio
 import re
 
 from ..errors import DeviceError
+from ..i18n import _
 
 DEFAULT_TIMEOUT = 20.0
 
@@ -128,16 +129,17 @@ class GdbClient:
     async def read_memory(self, address: int, length: int) -> bytes:
         reply = await self.send(f"m{address:x},{length:x}")
         if not reply or reply.startswith("E"):
-            raise DeviceError(
-                f"Speicher an 0x{address:x} nicht lesbar (Antwort: {reply!r})")
+            raise DeviceError(_(
+                "Memory at 0x{address:x} is not readable (reply: {reply!r})",
+                address=address, reply=reply))
         return bytes.fromhex(reply)
 
     async def write_memory(self, address: int, data: bytes) -> None:
         reply = await self.send(f"M{address:x},{len(data):x}:{data.hex()}")
         if reply.startswith("E"):
-            raise DeviceError(
-                f"Speicher an 0x{address:x} nicht schreibbar "
-                f"(Antwort: {reply!r})")
+            raise DeviceError(_(
+                "Memory at 0x{address:x} is not writable (reply: {reply!r})",
+                address=address, reply=reply))
 
     async def set_register(self, number: int, value: int, thread: str) -> None:
         await self.send(f"P{number:x}={int_to_le_hex(value)};thread:{thread};")

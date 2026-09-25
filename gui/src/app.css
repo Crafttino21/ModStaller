@@ -101,9 +101,17 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
   font: inherit;
   font-weight: 550;
   cursor: pointer;
+  /* nowrap ohne Deckel zieht mit seiner Mindestbreite die ganze Grid-Spalte
+     auf und laeuft aus der Karte - sichtbar beim Login, dessen Beschriftung
+     live die Schritte des Backends zeigt. */
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
   transition: background 0.15s, border-color 0.15s, transform 0.08s, opacity 0.15s;
 }
+
+/* Text in einem Knopf, der laenger werden kann: kuerzen statt ueberlaufen. */
+.btn .ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .btn:hover:not(:disabled) { border-color: var(--text-3); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -145,10 +153,15 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 
-.field { display: grid; gap: 6px; }
+.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .field label { font-size: 12.5px; font-weight: 550; color: var(--text-2); }
 
 input[type="text"], input[type="email"], input[type="password"], input[type="search"] {
+  /* Ohne Breite gilt die intrinsische Groesse (size=20 Zeichen). Die richtet
+     sich nach der Schriftgroesse und sprengt jeden schmalen Kasten - beim
+     Code-Feld mit 26px und weiter Laufweite lief das Feld aus dem Dialog. */
+  width: 100%;
+  min-width: 0;
   height: 40px;
   padding: 0 13px;
   border-radius: var(--radius-sm);

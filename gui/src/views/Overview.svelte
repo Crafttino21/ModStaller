@@ -9,24 +9,25 @@
   import BatteryLevel from "../components/BatteryLevel.svelte";
   import { busy, go, ui } from "../lib/state.svelte";
   import { date, days } from "../lib/format";
+  import { t } from "../lib/i18n.svelte";
   import { enableJit, refreshApps } from "../lib/actions";
 
   const st = $derived(ui.status);
   const urgent = $derived(st?.apps.filter((a) => a.urgent) ?? []);
 </script>
 
-<PageHeader title="Übersicht" subtitle="iPhone, Anmeldung und was demnächst abläuft – auf einen Blick." />
+<PageHeader title={t("Overview")} subtitle={t("iPhone, sign-in and what expires soon – at a glance.")} />
 
 {#if urgent.length}
   <div class="banner warn urgent">
     <TriangleAlert size={20} color="var(--warn)" />
     <div class="grow">
       <strong>{urgent[0].name}</strong>
-      {urgent[0].daysLeft < 0 ? "ist abgelaufen" : `läuft ab – ${days(urgent[0].daysLeft)}`}
-      {#if urgent.length > 1}<span class="muted"> und {urgent.length - 1} weitere</span>{/if}
+      {urgent[0].daysLeft < 0 ? t("has expired") : t("expires – {when}", { when: days(urgent[0].daysLeft) })}
+      {#if urgent.length > 1}<span class="muted"> {t("and {count} more", { count: urgent.length - 1 })}</span>{/if}
     </div>
     <button class="btn sm primary" disabled={busy() || !st?.device} onclick={() => refreshApps()}>
-      <RefreshCw size={15} /> Jetzt erneuern
+      <RefreshCw size={15} /> {t("Renew now")}
     </button>
   </div>
 {/if}
@@ -49,17 +50,17 @@
             <span class="chip"><BatteryLevel level={st.device.battery.level} charging={st.device.battery.charging} /></span>
           {/if}
           {#if st.device.developerMode}
-            <span class="chip ok"><span class="dot"></span>Entwicklermodus an</span>
+            <span class="chip ok"><span class="dot"></span>{t("Developer Mode on")}</span>
           {:else}
-            <span class="chip warn"><span class="dot"></span>Entwicklermodus aus</span>
+            <span class="chip warn"><span class="dot"></span>{t("Developer Mode off")}</span>
           {/if}
         </div>
       {:else if st?.deviceAttached}
-        <div class="value">Angesteckt, aber nicht bereit</div>
-        <div class="hint"><Lock size={13} /> {st.error || "iPhone entsperren und „Vertrauen“ bestätigen."}</div>
+        <div class="value">{t("Connected but not ready")}</div>
+        <div class="hint"><Lock size={13} /> {st.error || t("Unlock the iPhone and confirm “Trust”.")}</div>
       {:else}
-        <div class="value dim">Nicht verbunden</div>
-        <div class="hint">Per USB anstecken und entsperren.</div>
+        <div class="value dim">{t("Not connected")}</div>
+        <div class="hint">{t("Plug it in via USB and unlock it.")}</div>
       {/if}
     </div>
   </div>
@@ -67,13 +68,13 @@
   <button class="card tile link" onclick={() => go("account")}>
     <div class="tile-icon" class:on={st?.loggedIn}><UserRound size={22} /></div>
     <div class="grow">
-      <div class="label">Apple-Konto</div>
+      <div class="label">{t("Apple account")}</div>
       {#if st?.loggedIn}
-        <div class="value">Angemeldet</div>
-        <div class="hint">Kontingente und Zertifikate ansehen</div>
+        <div class="value">{t("Signed in")}</div>
+        <div class="hint">{t("View quotas and certificates")}</div>
       {:else}
-        <div class="value dim">Nicht angemeldet</div>
-        <div class="hint">Einmal anmelden, dann signiert ModStaller selbst.</div>
+        <div class="value dim">{t("Not signed in")}</div>
+        <div class="hint">{t("Sign in once, then ModStaller signs by itself.")}</div>
       {/if}
     </div>
     <ChevronRight size={18} class="chev" />
@@ -85,9 +86,9 @@
 {/if}
 
 <div class="section-head">
-  <h2>Deine Apps</h2>
+  <h2>{t("Your apps")}</h2>
   {#if st?.apps.length}
-    <button class="btn sm ghost" onclick={() => go("apps")}>Alle verwalten <ChevronRight size={15} /></button>
+    <button class="btn sm ghost" onclick={() => go("apps")}>{t("Manage all")} <ChevronRight size={15} /></button>
   {/if}
 </div>
 
@@ -99,10 +100,10 @@
   <div class="card empty">
     <Download size={30} />
     <div>
-      <h3 style="color: var(--text)">Noch keine App installiert</h3>
-      <p>Zieh eine IPA ins Fenster oder wähle eine aus deinen Downloads.</p>
+      <h3 style="color: var(--text)">{t("No app installed yet")}</h3>
+      <p>{t("Drag an IPA into the window or pick one from your Downloads.")}</p>
     </div>
-    <button class="btn primary" onclick={() => go("install")}>App installieren</button>
+    <button class="btn primary" onclick={() => go("install")}>{t("Install app")}</button>
   </div>
 {:else}
   <div class="grid">
@@ -117,9 +118,9 @@
           </div>
         </div>
         <div class="app-actions">
-          <button class="btn sm icon" title="JIT freischalten" disabled={busy() || !st.device}
+          <button class="btn sm icon" title={t("Enable JIT")} disabled={busy() || !st.device}
                   onclick={() => enableJit(app)}><Zap size={16} /></button>
-          <button class="btn sm icon" title="Jetzt erneuern" disabled={busy() || !st.device || app.sourceMissing}
+          <button class="btn sm icon" title={t("Renew now")} disabled={busy() || !st.device || app.sourceMissing}
                   onclick={() => refreshApps(app)}><RefreshCw size={16} /></button>
         </div>
       </div>

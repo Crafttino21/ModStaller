@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import ConfigError
+from .i18n import _
 
 APP_NAME = "modstaller"
 
@@ -110,10 +111,10 @@ def read_secret(path: Path) -> bytes:
     """Liest eine Secret-Datei und verweigert sie, wenn sie zu offen liegt."""
     mode = path.stat().st_mode
     if POSIX and mode & (stat.S_IRWXG | stat.S_IRWXO):
-        raise ConfigError(
-            f"{path} ist fuer Gruppe/Andere lesbar (Modus {oct(mode & 0o777)}). "
-            f"Korrigieren mit: chmod 600 {path}"
-        )
+        raise ConfigError(_(
+            "{path} is readable by group or others (mode {mode}). "
+            "Fix it with: chmod 600 {path}",
+            path=path, mode=oct(mode & 0o777)))
     return path.read_bytes()
 
 
@@ -122,8 +123,8 @@ class Settings:
     """Was in config.toml stehen darf. Keine Secrets."""
 
     #: "local" nutzt die ADI-Libraries auf diesem Rechner, "remote" einen
-    #: anisette-v3-Server. Lokal ist Default, damit keine Geraete-Identifier
-    #: das System verlassen.
+    #: anisette-v3-Server. Lokal ist Default - auch unter Windows -, damit
+    #: keine Geraete-Identifier das System verlassen.
     anisette_provider: str = "local"
     anisette_server: str = "https://ani.sidestore.io"
     default_udid: str | None = None
@@ -141,7 +142,8 @@ class Settings:
         try:
             raw = tomllib.loads(path.read_text())
         except tomllib.TOMLDecodeError as exc:
-            raise ConfigError(f"{path} ist kein gueltiges TOML: {exc}") from exc
+            raise ConfigError(_("{path} is not valid TOML: {error}",
+                                path=path, error=exc)) from exc
         known = {f for f in cls.__dataclass_fields__ if f != "extra"}
         kwargs = {k: v for k, v in raw.items() if k in known}
         return cls(**kwargs, extra={k: v for k, v in raw.items() if k not in known})

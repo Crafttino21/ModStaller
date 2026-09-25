@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from ..errors import DeviceError, DeviceNotFound, NotPaired
+from ..i18n import _
 from .connection import ServiceProvider, device_info
 
 OK, WARN, BAD, INFO, NA = "ok", "warn", "bad", "info", "na"
@@ -41,14 +42,14 @@ LOW_SPACE_BYTES = 1_000_000_000
 PAIR_TIMEOUT = 90.0
 DEVELOPER_MODE_TIMEOUT = 300.0
 
+#: Erst beim Abruf uebersetzen - beim Import steht die Sprache noch nicht fest.
 TRUST_HINT = (
-    "Beim ersten Start einer App: Einstellungen › Allgemein › VPN & "
-    "Geräteverwaltung › deine Apple-ID › „Vertrauen“. Pro Zertifikat einmal."
+    "When an app is started for the first time: Settings › General › VPN & "
+    "Device Management › your Apple ID › “Trust”. Once per certificate."
 )
 DEVELOPER_MODE_HINT = (
-    "Einstellungen › Datenschutz & Sicherheit › Entwicklermodus einschalten. "
-    "Das iPhone startet neu; danach „Einschalten“ bestätigen und den Code "
-    "eingeben."
+    "Settings › Privacy & Security › turn on Developer Mode. The iPhone "
+    "restarts; then confirm “Turn On” and enter the passcode."
 )
 
 
@@ -96,50 +97,51 @@ async def run_checks(udid: str | None = None) -> list[Check]:
     except NotPaired as exc:
         from pymobiledevice3.exceptions import PasswordRequiredError
         if isinstance(exc.__cause__, PasswordRequiredError):
-            return [Check("pairing", "iPhone entsperrt", BAD,
-                          "Das iPhone ist gesperrt.",
-                          manual="iPhone entsperren - die Prüfung läuft dann "
-                                 "von selbst weiter.")]
-        return [Check("pairing", "Mit diesem Rechner gekoppelt", BAD,
-                      "Das iPhone vertraut diesem Rechner noch nicht.",
-                      fix=FIX_PAIR, fix_label="Kopplung anfragen",
-                      manual="Am iPhone „Vertrauen“ tippen und den Code "
-                             "eingeben.")]
+            return [Check("pairing", _("iPhone unlocked"), BAD,
+                          _("The iPhone is locked."),
+                          manual=_("Unlock the iPhone - the check then "
+                                   "continues on its own."))]
+        return [Check("pairing", _("Paired with this computer"), BAD,
+                      _("The iPhone does not trust this computer yet."),
+                      fix=FIX_PAIR, fix_label=_("Request pairing"),
+                      manual=_("Tap “Trust” on the iPhone and enter the "
+                               "passcode."))]
 
 
 async def _checks(sp: ServiceProvider) -> list[Check]:
     info = await device_info(sp.lockdown)
     major = _major(info.ios_version)
-    checks = [Check("pairing", "Mit diesem Rechner gekoppelt", OK,
-                    f"{info.name} vertraut diesem Rechner.")]
+    checks = [Check("pairing", _("Paired with this computer"), OK,
+                    _("{name} trusts this computer.", name=info.name))]
 
     if major and major < 12:
-        checks.append(Check("ios", "iOS-Version", BAD,
-                            f"iOS {info.ios_version} ist zu alt - "
-                            "ModStaller braucht iOS 12 oder neuer."))
+        checks.append(Check("ios", _("iOS version"), BAD,
+                            _("iOS {version} is too old - ModStaller needs "
+                              "iOS 12 or newer.", version=info.ios_version)))
     else:
-        checks.append(Check("ios", "iOS-Version", OK,
+        checks.append(Check("ios", _("iOS version"), OK,
                             f"iOS {info.ios_version} ({info.build})"))
 
     needs_dev_mode = major >= 16
     if not needs_dev_mode:
-        checks.append(Check("developer-mode", "Entwicklermodus", NA,
-                            "Vor iOS 16 nicht nötig."))
+        checks.append(Check("developer-mode", _("Developer Mode"), NA,
+                            _("Not needed before iOS 16.")))
     elif info.developer_mode:
-        checks.append(Check("developer-mode", "Entwicklermodus", OK, "an"))
+        checks.append(Check("developer-mode", _("Developer Mode"), OK,
+                            _("on")))
     else:
         checks.append(Check(
-            "developer-mode", "Entwicklermodus", BAD,
-            "aus - sideloadete Apps starten nicht.",
-            fix=FIX_DEVELOPER_MODE, fix_label="Einschalten",
-            manual=DEVELOPER_MODE_HINT))
+            "developer-mode", _("Developer Mode"), BAD,
+            _("off - sideloaded apps will not start."),
+            fix=FIX_DEVELOPER_MODE, fix_label=_("Turn on"),
+            manual=_(DEVELOPER_MODE_HINT)))
 
     checks.append(await _ddi_check(sp, major,
                                    ready=info.developer_mode or not needs_dev_mode))
     checks.append(await _profiles_check(sp))
     checks.append(await _space_check(sp))
-    checks.append(Check("trust", "Entwickler vertrauen", INFO,
-                        "Lässt sich nicht automatisieren.", manual=TRUST_HINT))
+    checks.append(Check("trust", _("Trust developer"), INFO,
+                        _("Cannot be automated."), manual=_(TRUST_HINT)))
     return checks
 
 
@@ -147,7 +149,7 @@ async def _ddi_check(sp: ServiceProvider, major: int, *, ready: bool) -> Check:
     label = "Developer Disk Image"
     if not ready:
         return Check("ddi", label, NA,
-                     "Erst nach dem Entwicklermodus - nur für JIT nötig.")
+                     _("Only after Developer Mode - needed for JIT only."))
     from pymobiledevice3.services.mobile_image_mounter import (
         MobileImageMounterService,
     )
@@ -156,13 +158,14 @@ async def _ddi_check(sp: ServiceProvider, major: int, *, ready: bool) -> Check:
         async with MobileImageMounterService(lockdown=sp.lockdown) as mounter:
             mounted = await mounter.is_image_mounted(image_type)
     except Exception as exc:
-        return Check("ddi", label, INFO, f"Nicht abfragbar: {exc}")
+        return Check("ddi", label, INFO,
+                     _("Cannot be queried: {error}", error=exc))
     if mounted:
-        return Check("ddi", label, OK, "geladen - JIT ist möglich.")
+        return Check("ddi", label, OK, _("mounted - JIT is possible."))
     return Check("ddi", label, INFO,
-                 "Nicht geladen. Nur für JIT nötig; ModStaller lädt es dann "
-                 "ohnehin selbst.",
-                 fix=FIX_DDI, fix_label="Jetzt laden")
+                 _("Not mounted. Needed for JIT only; ModStaller mounts it "
+                   "itself when required."),
+                 fix=FIX_DDI, fix_label=_("Mount now"))
 
 
 async def _profiles(sp: ServiceProvider):
@@ -188,22 +191,25 @@ def _split_profiles(profiles) -> tuple[list, list]:
 
 
 async def _profiles_check(sp: ServiceProvider) -> Check:
-    label = "App-Plätze"
+    label = _("App slots")
     try:
         active, expired = _split_profiles(await _profiles(sp))
     except Exception as exc:
-        return Check("profiles", label, INFO, f"Profile nicht lesbar: {exc}")
+        return Check("profiles", label, INFO,
+                     _("Profiles not readable: {error}", error=exc))
 
-    detail = (f"{len(active)} aktive Entwickler-Profile auf dem iPhone "
-              f"(Gratis-Accounts: höchstens {FREE_APP_LIMIT} Apps).")
+    detail = _("{count} active developer profiles on the iPhone "
+               "(free accounts: at most {limit} apps).",
+               count=len(active), limit=FREE_APP_LIMIT)
     state = WARN if len(active) >= FREE_APP_LIMIT else OK
     if state == WARN:
-        detail += " Bei einem Gratis-Account ist kein Platz frei."
+        detail += " " + _("With a free account no slot is left.")
     if expired:
         return Check("profiles", label, state,
-                     f"{detail} {len(expired)} abgelaufene liegen noch herum.",
+                     detail + " " + _("{count} expired ones are still lying "
+                                      "around.", count=len(expired)),
                      fix=FIX_EXPIRED_PROFILES,
-                     fix_label="Abgelaufene entfernen")
+                     fix_label=_("Remove expired"))
     return Check("profiles", label, state, detail)
 
 
@@ -212,12 +218,14 @@ async def _space_check(sp: ServiceProvider) -> Check:
         usage = await sp.lockdown.get_value(domain="com.apple.disk_usage")
         free = int(usage["TotalDataAvailable"])
     except Exception:
-        return Check("space", "Freier Speicher", INFO, "Nicht abfragbar.")
+        return Check("space", _("Free storage"), INFO,
+                     _("Cannot be queried."))
     if free < LOW_SPACE_BYTES:
-        return Check("space", "Freier Speicher", WARN,
-                     f"Nur noch {_gb(free)} frei - große Apps passen "
-                     "womöglich nicht.")
-    return Check("space", "Freier Speicher", OK, f"{_gb(free)} frei")
+        return Check("space", _("Free storage"), WARN,
+                     _("Only {size} left - large apps may not fit.",
+                       size=_gb(free)))
+    return Check("space", _("Free storage"), OK,
+                 _("{size} free", size=_gb(free)))
 
 
 # -- Beheben -----------------------------------------------------------------
@@ -230,21 +238,19 @@ async def mount_developer_image(lockdown, on_step=lambda msg: None) -> None:
     )
     from pymobiledevice3.services.mobile_image_mounter import auto_mount
 
-    on_step("Developer Disk Image bereitstellen …")
+    on_step(_("Preparing Developer Disk Image …"))
     try:
         await auto_mount(lockdown)
     except AlreadyMountedError:
         pass
     except DeveloperDiskImageNotFoundError as exc:
-        raise DeviceError(
-            "Kein passendes Developer Disk Image gefunden - fuer sehr neue "
-            f"iOS-Versionen gibt es noch keins. ({exc})"
-        ) from exc
+        raise DeviceError(_(
+            "No matching Developer Disk Image found - for very new iOS "
+            "versions there is none yet. ({error})", error=exc)) from exc
     except Exception as exc:
-        raise DeviceError(
-            f"Developer Disk Image liess sich nicht laden: "
-            f"{exc or type(exc).__name__}"
-        ) from exc
+        raise DeviceError(_(
+            "Developer Disk Image could not be mounted: {error}",
+            error=exc or type(exc).__name__)) from exc
 
 
 async def run_fix(fix: str, udid: str | None = None, *,
@@ -257,10 +263,10 @@ async def run_fix(fix: str, udid: str | None = None, *,
             return await _enable_developer_mode(sp, on_step)
         if fix == FIX_DDI:
             await mount_developer_image(sp.lockdown, on_step)
-            return FixResult("Developer Disk Image ist geladen.")
+            return FixResult(_("Developer Disk Image is mounted."))
         if fix == FIX_EXPIRED_PROFILES:
             return await _remove_expired_profiles(sp, on_step)
-    raise DeviceError(f"Unbekannte Korrektur: {fix}")
+    raise DeviceError(_("Unknown fix: {fix}", fix=fix))
 
 
 async def _pair(udid: str | None, on_step) -> FixResult:
@@ -270,23 +276,23 @@ async def _pair(udid: str | None, on_step) -> FixResult:
     )
     from pymobiledevice3.lockdown import create_using_usbmux
 
-    on_step("Am iPhone erscheint gleich „Diesem Computer vertrauen?“ - "
-            "bitte „Vertrauen“ tippen und den Code eingeben …")
+    on_step(_("The iPhone will ask “Trust This Computer?” in a moment - "
+              "please tap “Trust” and enter the passcode …"))
     try:
         lockdown = await create_using_usbmux(
             serial=udid, label="ModStaller", autopair=True,
             pair_timeout=PAIR_TIMEOUT)
     except UserDeniedPairingError as exc:
-        raise DeviceError("Am iPhone wurde „Nicht vertrauen“ gewählt. "
-                          "Einfach erneut versuchen.") from exc
+        raise DeviceError(_("“Don’t Trust” was chosen on the iPhone. "
+                            "Just try again.")) from exc
     except PairingDialogResponsePendingError as exc:
-        raise DeviceError("Am iPhone kam keine Antwort. iPhone entsperren "
-                          "und erneut versuchen.") from exc
+        raise DeviceError(_("No answer from the iPhone. Unlock it and try "
+                            "again.")) from exc
     except PasswordRequiredError as exc:
-        raise DeviceError("Das iPhone ist gesperrt - bitte entsperren und "
-                          "erneut versuchen.") from exc
+        raise DeviceError(_("The iPhone is locked - please unlock it and try "
+                            "again.")) from exc
     await lockdown.close()
-    return FixResult("Gekoppelt - das iPhone vertraut diesem Rechner jetzt.")
+    return FixResult(_("Paired - the iPhone trusts this computer now."))
 
 
 async def _enable_developer_mode(sp: ServiceProvider, on_step) -> FixResult:
@@ -294,29 +300,28 @@ async def _enable_developer_mode(sp: ServiceProvider, on_step) -> FixResult:
     from pymobiledevice3.services.amfi import AmfiService
 
     amfi = AmfiService(sp.lockdown)
-    on_step("Entwicklermodus anfordern …")
+    on_step(_("Requesting Developer Mode …"))
     try:
-        on_step("Das iPhone startet gleich neu. Nicht abstecken - "
-                "ModStaller bestätigt die Nachfrage danach selbst.")
+        on_step(_("The iPhone will restart in a moment. Do not unplug it - "
+                  "ModStaller confirms the prompt afterwards itself."))
         await asyncio.wait_for(amfi.enable_developer_mode(enable_post_restart=True),
                                DEVELOPER_MODE_TIMEOUT)
     except DeviceHasPasscodeSetError:
         # Mit Code-Sperre bleibt der Schalter dem Menschen vorbehalten. Wir
         # sorgen wenigstens dafuer, dass er in den Einstellungen auftaucht.
-        on_step("Code-Sperre aktiv - der Schalter muss am iPhone umgelegt "
-                "werden. Er wird jetzt in den Einstellungen eingeblendet.")
+        on_step(_("Passcode set - the switch has to be flipped on the iPhone. "
+                  "It is now shown in Settings."))
         await amfi.reveal_developer_mode_option_in_ui()
         return FixResult(
-            "Wegen der Code-Sperre kann ModStaller den Entwicklermodus nicht "
-            "selbst einschalten. Der Schalter ist jetzt in den Einstellungen "
-            "sichtbar.",
-            manual=DEVELOPER_MODE_HINT)
+            _("Because a passcode is set, ModStaller cannot turn on Developer "
+              "Mode itself. The switch is now visible in Settings."),
+            manual=_(DEVELOPER_MODE_HINT))
     except asyncio.TimeoutError as exc:
-        raise DeviceError(
-            "Das iPhone hat sich nach dem Neustart nicht zurückgemeldet. "
-            "Entsperren, ggf. die Nachfrage „Entwicklermodus einschalten?“ "
-            "selbst bestätigen und die Prüfung wiederholen.") from exc
-    return FixResult("Entwicklermodus ist an.")
+        raise DeviceError(_(
+            "The iPhone did not report back after the restart. Unlock it, "
+            "confirm the “Turn on Developer Mode?” prompt yourself if "
+            "needed, and run the check again.")) from exc
+    return FixResult(_("Developer Mode is on."))
 
 
 async def _remove_expired_profiles(sp: ServiceProvider, on_step) -> FixResult:
@@ -324,10 +329,11 @@ async def _remove_expired_profiles(sp: ServiceProvider, on_step) -> FixResult:
 
     _, expired = _split_profiles(await _profiles(sp))
     if not expired:
-        return FixResult("Keine abgelaufenen Profile gefunden.")
+        return FixResult(_("No expired profiles found."))
     async with MisagentService(sp.lockdown) as mis:
         for p in expired:
             name = p.plist.get("Name", p.plist.get("UUID", "?"))
-            on_step(f"Entferne {name} …")
+            on_step(_("Removing {name} …", name=name))
             await mis.remove(p.plist["UUID"])
-    return FixResult(f"{len(expired)} abgelaufene(s) Profil(e) entfernt.")
+    return FixResult(_("Removed {count} expired profile(s).",
+                       count=len(expired)))

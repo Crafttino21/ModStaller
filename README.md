@@ -7,21 +7,6 @@ and installs it on your iPhone - no Mac, no jailbreak.
 Tested against: iPhone 16 Pro Max (iPhone17,2), iOS 27.0, CachyOS/Arch.
 See [Supported devices](#supported-devices) for the full compatibility list.
 
-## Status
-
-| Milestone | Scope | Status |
-|---|---|---|
-| M0 | Scaffolding, `doctor`, device connection | working |
-| M1 | Anisette + GSA login incl. 2FA | working |
-| M2 | Certificate, App ID, provisioning profile | working |
-| M3 | Signing and installing | working |
-| M4 | `refresh`, `uninstall`, `certs` | built, refresh not yet tested |
-| M5 | systemd timer for automatic refresh | open |
-
-First complete run on 2026-09-23: PojavLauncher 2.2 (17 injected dylibs,
-4 frameworks) signed and installed on an iPhone 16 Pro Max running iOS 27.0.
-Transport: lockdown - so the RSD tunnel is not needed for installation on
-iOS 27.
 
 ## Roadmap
 
@@ -29,16 +14,17 @@ ModStaller currently runs fully on **Linux**. Planned next:
 
 **Short term**
 
-- [ ] Test `refresh` end to end against a real 7-day expiry (finish M4)
-- [ ] systemd timer for automatic refresh (M5)
+- [x] Test `refresh` end to end against a real 7-day expiry (finish M4)
+- [ ] systemd timer for automatic refresh
+- [ ] add support for other apple devices like Apple TV's
 - [ ] Test on more devices, especially an A13/A14 iPhone without TXM and an
       older iOS version (see [Supported devices](#supported-devices))
 
 **Windows**
 
 - [x] CI builds: installer, CLI zip, auto-update
-- [ ] Full test pass on real Windows machines (pairing, install, JIT via RSD tunnel)
-- [ ] Automatic refresh via Windows Task Scheduler (counterpart to M5)
+- [x] Full test pass on real Windows machines (pairing, install, JIT via RSD tunnel)
+- [ ] Automatic refresh via Windows Task Scheduler 
 - [ ] Declare Windows as officially supported
 
 **Android**
@@ -138,9 +124,46 @@ Devices"** app from the Microsoft Store (or iTunes). On first launch
 SmartScreen will warn you because the .exe is not signed with a paid
 certificate - "More info" > "Run anyway".
 
-To build the AppImage yourself: `./build-appimage.sh` (only needs Docker;
-`--run` launches it afterwards). The Windows builds are produced by the GitHub
-pipeline.
+If the GUI ever reports that the backend is unreachable, the full log is in
+`%APPDATA%\ModStaller\logs\main.log` - the system check shows the path too.
+
+## Language
+
+The interface starts in English. **Settings › Language** switches it, and the
+choice is remembered. Seven languages ship with it: English, German, French,
+Spanish, Italian, Portuguese (Brazil) and Dutch.
+
+The switch covers the background service as well, so system checks, device
+checks and error messages change with it. English is the source language in
+the code, so a missing translation shows the English sentence rather than a
+key. Adding a language means one catalog file on each side and one line in
+`gui/src/lib/i18n.svelte.ts`:
+
+| Side | File |
+|---|---|
+| Interface | `gui/src/lib/locale/<code>.ts` |
+| Background service | `modstaller/locale/<code>.json` |
+
+`pytest tests/test_i18n.py` checks every catalog against the source: same
+placeholders, no entry left over from a sentence that no longer exists.
+
+To build it yourself, both build scripts live in `buildscripts/`:
+
+| Command | Builds |
+|---|---|
+| `./buildscripts/build-appimage.sh` | the AppImage - only needs Docker; `--run` launches it afterwards |
+| `buildscripts\build-windows.bat` | the Windows installer - needs Python 3.12+, Node 22+, and Visual Studio 2022 with C++ for `zsign.exe` (built once, then reused); `--dir` skips the installer, `--run` launches it afterwards |
+
+Both run the same steps as `.github/workflows/release.yml`, which produces the
+release artifacts.
+
+Cutting a release sets the version, commits, tags and pushes; GitHub does the
+rest. Same script twice, once per shell:
+
+```bash
+./release.sh 1.2.0        # Linux/macOS
+release.bat 1.2.0         # Windows
+```
 
 For development:
 
@@ -252,7 +275,7 @@ them. Use `--keep-extensions` to keep them.
 bundle ID stable - otherwise iOS would treat it as a different app and the
 stored data would be gone.
 
-## Three pitfalls solved here
+## Four pitfalls solved here
 
 **Apple's 503 smoke screen.** Since the end of August 2026, Apple rejects
 every GSA request at the edge with HTTP 503 if its `X-MMe-Client-Info` carries
@@ -284,9 +307,30 @@ sporadic 429 is a per-IP budget and is retried a limited number of times;
 that is harmless because the edge rejects the request before it reaches the
 auth service, so the SRP cookie is not consumed.
 
-Diagnosis and measurement method come from the investigations by SideStore
-(issue #1557) and OpenTagViewer (issue #226); the implementation here is
-original code.
+**Control Flow Guard kills the Windows build.** The Anisette provider runs
+Apple's ADI libraries in an ARM emulation (Unicorn). Under PyInstaller that
+emulation died instantly with `0xC0000409`, taking the whole backend - and
+with it the GUI's only connection to it - down with it. The same code ran
+fine from a normal `python -m modstaller`. The reason is one bit: PyInstaller's
+bootloader `.exe` is linked with Control Flow Guard, `python.exe` is not, and
+CFG applies to the *whole process*. Unicorn `longjmp`s out of JIT-generated
+code, MSVC's runtime finds no entry for that target in the CFG table and calls
+`__fastfail`. No Python exception, nothing to catch. The crash stack says it
+plainly:
+
+    VCRUNTIME140!__except_validate_jump_buffer_common   (int 29h)
+    VCRUNTIME140!longjmp
+    unicorn!uc_vmem_write+0x45753
+
+`packaging/build_backend.py` therefore clears that flag from the finished
+Windows binaries, which puts them on the same footing as an ordinary Python
+installation. `apple/anisette.py` measures the policy at runtime as a safety
+net: if CFG is ever active after all, you get a readable error and the option
+of an Anisette server, instead of a process that simply vanishes.
+
+Diagnosis and measurement method for the 503 and 429 findings come from the
+investigations by SideStore (issue #1557) and OpenTagViewer (issue #226); the
+implementation here is original code.
 
 ## Limits of free Apple accounts
 

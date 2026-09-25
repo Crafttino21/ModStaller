@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .i18n import _
+
 
 class ModStallerError(Exception):
     """Basis fuer alles, was ModStaller selbst als Fehler erkennt."""
@@ -68,7 +70,8 @@ class AppleAPIError(AppleError):
         self.code = code
         self.result_string = result_string
         self.user_string = user_string
-        super().__init__(user_string or result_string or f"Apple-Fehler {code}")
+        super().__init__(user_string or result_string
+                         or _("Apple error {code}", code=code))
 
 
 # --- Fehlercodes, auf die wir gezielt reagieren -----------------------------
@@ -83,28 +86,30 @@ CERTIFICATE_NOT_FOUND = 7252        # DELETE auf ein bereits geloeschtes Zertifi
 #: Codes, die wir als Erfolg durchwinken statt als Fehler zu werfen.
 BENIGN_CODES = frozenset({DEVICE_ALREADY_REGISTERED, CERTIFICATE_NOT_FOUND})
 
-#: Klartext-Hinweise, die dem Nutzer sagen, was er *tun* kann.
+#: Klartext-Hinweise, die dem Nutzer sagen, was er *tun* kann. Uebersetzt
+#: wird erst in remedy_for(): beim Import steht die Sprache noch nicht fest.
 REMEDIES: dict[int, str] = {
     APP_ID_QUOTA_EXCEEDED: (
-        "Apple laesst pro Woche zehn *neu angelegte* App-IDs zu. Vorhandene zu "
-        "loeschen hilft nicht - das Fenster zaehlt die Anlage, nicht den "
-        "Bestand. ModStaller weicht deshalb auf eine vorhandene, ungenutzte "
-        "App-ID aus; gibt es keine, hilft nur warten, bis das rollierende "
-        "Sieben-Tage-Fenster wieder aufgeht."
+        "Apple allows ten *newly created* App IDs per week. Deleting existing "
+        "ones does not help - the window counts creations, not the total. "
+        "ModStaller therefore falls back to an existing, unused App ID; if "
+        "there is none, the only option is to wait for the rolling seven-day "
+        "window to open again."
     ),
     APP_ID_UNAVAILABLE: (
-        "Dieser Bundle-Identifier ist bereits von einem anderen Apple-Account "
-        "belegt. ModStaller haengt automatisch ein anderes Suffix an."
+        "This bundle identifier is already taken by another Apple account. "
+        "ModStaller automatically appends a different suffix."
     ),
     INVALID_CSR: (
-        "Apple hat den Certificate Signing Request abgelehnt. Der Schluessel "
-        "wird neu erzeugt und einmal erneut eingereicht."
+        "Apple rejected the certificate signing request. The key is "
+        "regenerated and submitted once more."
     ),
 }
 
 
 def remedy_for(code: int) -> str:
-    return REMEDIES.get(code, "")
+    text = REMEDIES.get(code, "")
+    return _(text) if text else ""
 
 
 class AppleRateLimited(AppleError):
@@ -127,10 +132,10 @@ def describe(exc: BaseException) -> str | None:
     except ImportError:
         return None
     if isinstance(exc, requests.exceptions.RetryError):
-        return ("Apple hat wiederholt abgewiesen und der Versuch wurde "
-                "aufgegeben.\nMeist Drosselung - 15-60 Minuten warten.")
+        return _("Apple refused repeatedly and the attempt was given up.\n"
+                 "Usually throttling - wait 15 to 60 minutes.")
     if isinstance(exc, requests.exceptions.SSLError):
-        return f"TLS-Verbindung zu Apple fehlgeschlagen.\n{exc}"
+        return _("TLS connection to Apple failed.\n{error}", error=exc)
     if isinstance(exc, requests.exceptions.RequestException):
-        return f"Netzwerkproblem im Kontakt mit Apple.\n{exc}"
+        return _("Network problem while talking to Apple.\n{error}", error=exc)
     return None

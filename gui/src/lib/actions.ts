@@ -2,17 +2,24 @@
 
 import { ask, runTask, toast } from "./state.svelte";
 import { call } from "./rpc";
+import { t } from "./i18n.svelte";
 import type { App, DeviceCheck, FixResult, InstallOutcome, JitResult } from "./types";
 
+/** Mehr braucht es nicht, um eine App anzusprechen - so gehen auch die
+ *  Eintraege fremder Werkzeuge durch dieselben Vorgaenge. */
+type NamedApp = Pick<App, "bundleId" | "name">;
+
 export function installIpa(path: string, name: string, keepExtensions: boolean) {
-  runTask<InstallOutcome>("install", `${name} installieren`, "install",
+  runTask<InstallOutcome>("install", t("Install {name}", { name }), "install",
     { path, keepExtensions },
     (o) => ({
-      message: `${o.name} ist installiert und läuft ${Math.round(o.daysValid)} Tage.`,
+      message: t("{name} is installed and runs for {days} days.",
+                 { name: o.name, days: Math.round(o.daysValid) }),
       notes: [
-        `Bundle-ID ${o.bundleId} · Transport: ${o.transport}`,
-        ...(o.strippedExtensions ? ["App-Extensions wurden entfernt, um App-IDs zu sparen."] : []),
-        ...(o.daysValid < 10 ? ["Vor Ablauf in der Übersicht oder unter „Apps“ erneuern."] : []),
+        t("Bundle ID {id} · transport: {transport}",
+          { id: o.bundleId, transport: o.transport }),
+        ...(o.strippedExtensions ? [t("App extensions were removed to save App IDs.")] : []),
+        ...(o.daysValid < 10 ? [t("Renew before it expires, from the overview or under “Apps”.")] : []),
       ],
     }));
 }
@@ -20,54 +27,57 @@ export function installIpa(path: string, name: string, keepExtensions: boolean) 
 /** Ohne App: alle faelligen. */
 export function refreshApps(app?: App) {
   runTask<InstallOutcome[]>("refresh",
-    app ? `${app.name} erneuern` : "Fällige Apps erneuern",
+    app ? t("Renew {name}", { name: app.name }) : t("Renew due apps"),
     "refresh", app ? { bundleId: app.bundleId } : {},
     (list) => list.length
       ? {
           message: list.length === 1
-            ? `${list[0].name} ist erneuert – wieder ${Math.round(list[0].daysValid)} Tage gültig.`
-            : `${list.length} Apps erneuert.`,
+            ? t("{name} was renewed – valid for {days} days again.",
+                { name: list[0].name, days: Math.round(list[0].daysValid) })
+            : t("Renewed {count} apps.", { count: list.length }),
         }
-      : { message: "Nichts war fällig.", tone: "warn" });
+      : { message: t("Nothing was due."), tone: "warn" });
 }
 
-export function enableJit(app: App) {
-  runTask<JitResult>("jit", `JIT für ${app.name}`, "jit", { bundleId: app.bundleId },
+export function enableJit(app: NamedApp) {
+  runTask<JitResult>("jit", t("JIT for {name}", { name: app.name }), "jit", { bundleId: app.bundleId },
     (r) => r.preparedRegions
-      ? { message: r.summary, notes: [...r.notes, "Gilt nur für diesen Start – nach dem Beenden der App erneut freischalten."] }
+      ? { message: r.summary, notes: [...r.notes, t("Applies to this launch only – unlock again after quitting the app.")] }
       : {
           message: r.summary,
           tone: "warn",
           notes: [
             ...r.notes,
-            "Im Programm muss während des Wartens eine Instanz gestartet werden – erst dann fragt es nach Speicher.",
+            t("An instance has to be started inside the app while it waits – only then does it ask for memory."),
           ],
         });
 }
 
-export async function uninstallApp(app: App) {
+export async function uninstallApp(app: NamedApp, foreign = false) {
   const { ok } = await ask({
-    title: `${app.name} entfernen?`,
-    text: "Die App und ihre Daten werden vom iPhone gelöscht. Das macht einen der drei Plätze frei.",
-    confirm: "Entfernen",
+    title: t("Remove {name}?", { name: app.name }),
+    text: foreign
+      ? t("The app and its data are deleted from the iPhone. It comes from another tool – ModStaller cannot restore it.")
+      : t("The app and its data are deleted from the iPhone. That frees one of the three slots."),
+    confirm: t("Remove"),
     danger: true,
   });
   if (!ok) return;
-  runTask<{ transport: string }>("uninstall", `${app.name} entfernen`, "uninstall",
+  runTask<{ transport: string }>("uninstall", t("Remove {name}", { name: app.name }), "uninstall",
     { bundleId: app.bundleId },
-    () => ({ message: `${app.name} wurde vom iPhone entfernt.` }));
+    () => ({ message: t("{name} was removed from the iPhone.", { name: app.name }) }));
 }
 
 export async function logout() {
   const { ok, option } = await ask({
-    title: "Abmelden?",
-    text: "Die Sitzung wird verworfen. Installierte Apps laufen weiter, lassen sich aber erst nach erneuter Anmeldung erneuern.",
-    confirm: "Abmelden",
-    option: "Auch die Geräte-Identität verwerfen (Apple fragt dann wieder nach einem 2FA-Code)",
+    title: t("Sign out?"),
+    text: t("The session is discarded. Installed apps keep running but can only be renewed after signing in again."),
+    confirm: t("Sign out"),
+    option: t("Also discard the device identity (Apple will then ask for a two-factor code again)"),
   });
   if (!ok) return false;
   await call("logout", { forgetDevice: option });
-  toast("Abgemeldet.");
+  toast(t("Signed out."));
   return true;
 }
 
@@ -76,7 +86,7 @@ export function fixCheck(check: DeviceCheck) {
   runTask<FixResult>("fix", `${check.label}: ${check.fix_label}`, "device.fix", { fix: check.fix },
     (r) => ({
       message: r.message,
-      notes: r.manual ? [`Noch zu tun: ${r.manual}`] : [],
+      notes: r.manual ? [t("Still to do: {what}", { what: r.manual })] : [],
       tone: r.manual ? "warn" : "ok",
     }));
 }

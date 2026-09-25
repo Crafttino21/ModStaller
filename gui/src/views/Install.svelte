@@ -4,6 +4,7 @@
   } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import { busy, errorText, go, ui } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
   import { call } from "../lib/rpc";
   import { mb, relative } from "../lib/format";
   import { installIpa } from "../lib/actions";
@@ -58,13 +59,13 @@
   const blockers = $derived.by(() => {
     const out: { text: string; action?: () => void; label?: string }[] = [];
     if (!st) return out;
-    if (!st.loggedIn) out.push({ text: "Nicht bei Apple angemeldet.", action: () => go("account"), label: "Anmelden" });
+    if (!st.loggedIn) out.push({ text: t("Not signed in with Apple."), action: () => go("account"), label: t("Sign in") });
     if (!st.device && st.deviceAttached)
-      out.push({ text: "iPhone ist angesteckt, aber gesperrt oder nicht gekoppelt.", action: () => go("device"), label: "Beheben" });
-    else if (!st.device) out.push({ text: "Kein iPhone verbunden – per USB anstecken und entsperren." });
+      out.push({ text: t("The iPhone is plugged in but locked or not paired."), action: () => go("device"), label: t("Fix") });
+    else if (!st.device) out.push({ text: t("No iPhone connected – plug it in via USB and unlock it.") });
     else if (!st.device.developerMode)
-      out.push({ text: "Entwicklermodus ist aus.", action: () => go("device"), label: "Einschalten" });
-    if (info?.encrypted) out.push({ text: "Diese IPA ist App-Store-verschlüsselt (FairPlay) und lässt sich nicht neu signieren." });
+      out.push({ text: t("Developer Mode is off."), action: () => go("device"), label: t("Turn on") });
+    if (info?.encrypted) out.push({ text: t("This IPA is App Store encrypted (FairPlay) and cannot be re-signed.") });
     return out;
   });
 
@@ -73,7 +74,7 @@
   }
 </script>
 
-<PageHeader title="App installieren" subtitle="IPA wählen – ModStaller signiert sie mit deinem Apple-Konto und spielt sie aufs iPhone." />
+<PageHeader title={t("Install app")} subtitle={t("Pick an IPA – ModStaller signs it with your Apple account and puts it on the iPhone.")} />
 
 {#if !info && !inspecting}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -82,16 +83,16 @@
        ondragleave={() => (dragging = false)}
        ondrop={onDrop}>
     <div class="drop-icon"><Upload size={28} /></div>
-    <h2>IPA hierher ziehen</h2>
-    <p class="muted">oder</p>
-    <button class="btn primary" onclick={browse}><FolderOpen size={16} /> Datei auswählen</button>
+    <h2>{t("Drag an IPA here")}</h2>
+    <p class="muted">{t("or")}</p>
+    <button class="btn primary" onclick={browse}><FolderOpen size={16} /> {t("Choose a file")}</button>
   </div>
 
-  <h2 class="found-head">In deinen Ordnern gefunden</h2>
+  <h2 class="found-head">{t("Found in your folders")}</h2>
   {#if found === null}
     <div class="card list"><div class="skeleton" style="height:44px"></div></div>
   {:else if !found.length}
-    <p class="muted">Keine IPAs in Downloads, Dokumente, Desktop oder Schreibtisch.</p>
+    <p class="muted">{t("No IPAs in Downloads, Documents or Desktop.")}</p>
   {:else}
     <div class="card list">
       {#each found as f (f.path)}
@@ -107,23 +108,23 @@
     </div>
   {/if}
 {:else if inspecting}
-  <div class="card empty"><LoaderCircle size={28} class="spin" /><p>IPA wird gelesen …</p></div>
+  <div class="card empty"><LoaderCircle size={28} class="spin" /><p>{t("Reading the IPA …")}</p></div>
 {:else if info}
   <div class="card detail">
     <div class="detail-head">
       <div class="app-icon"><Box size={28} /></div>
       <div class="grow">
         <h2>{info.name}</h2>
-        <p class="muted">Version {info.version || "?"} · ab iOS {info.minimumOs || "?"} · {mb(info.size)}</p>
+        <p class="muted">{t("Version {version} · from iOS {ios}", { version: info.version || "?", ios: info.minimumOs || "?" })} · {mb(info.size)}</p>
         <p class="faint mono small selectable">{info.bundleId}</p>
       </div>
-      <button class="btn icon ghost" title="Andere IPA" onclick={() => (info = null)}><X size={18} /></button>
+      <button class="btn icon ghost" title={t("Different IPA")} onclick={() => (info = null)}><X size={18} /></button>
     </div>
 
     <div class="stats">
-      <div class="stat"><Puzzle size={17} /><b>{info.extensions.length}</b> Extensions</div>
-      <div class="stat"><Layers size={17} /><b>{info.frameworks.length}</b> Frameworks</div>
-      <div class="stat"><Sparkles size={17} /><b>{info.dylibs.length}</b> injizierte dylibs</div>
+      <div class="stat"><Puzzle size={17} /><b>{info.extensions.length}</b> {t("extensions")}</div>
+      <div class="stat"><Layers size={17} /><b>{info.frameworks.length}</b> {t("frameworks")}</div>
+      <div class="stat"><Sparkles size={17} /><b>{info.dylibs.length}</b> {t("injected dylibs")}</div>
     </div>
 
     {#if info.extensions.length}
@@ -131,10 +132,9 @@
         <input type="checkbox" bind:checked={keepExtensions} />
         <span class="switch"></span>
         <div>
-          <div>Extensions behalten</div>
+          <div>{t("Keep extensions")}</div>
           <div class="faint small">
-            Kostet {info.extensions.length} App-ID(s) vom Wochenkontingent (10 pro Woche bei Gratis-Accounts).
-            Die App selbst läuft auch ohne.
+            {t("Costs {count} App ID(s) from the weekly quota (10 per week on free accounts). The app itself runs without them.", { count: info.extensions.length })}
           </div>
         </div>
       </label>
@@ -149,9 +149,9 @@
     {/each}
 
     <div class="actions">
-      <button class="btn ghost" onclick={() => (info = null)}>Zurück</button>
+      <button class="btn ghost" onclick={() => (info = null)}>{t("Back")}</button>
       <button class="btn primary" disabled={busy() || blockers.length > 0} onclick={start}>
-        Signieren &amp; installieren
+        {t("Sign & install")}
       </button>
     </div>
   </div>

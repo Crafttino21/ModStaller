@@ -3,6 +3,7 @@
   // auf Knopfdruck - und nie, waehrend am iPhone gerade etwas laeuft.
   import { ArrowDownToLine, RotateCw, Sparkles, LoaderCircle } from "@lucide/svelte";
   import { busy, ui } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
 
   const u = $derived(ui.update);
 </script>
@@ -11,11 +12,11 @@
   <div class="update">
     <div class="head">
       <Sparkles size={15} />
-      <span>Version {u.version} {u.state === "ready" ? "ist bereit" : "ist da"}</span>
+      <span>{u.state === "ready" ? t("Version {version} is ready", { version: u.version ?? "" }) : t("Version {version} is available", { version: u.version ?? "" })}</span>
     </div>
     {#if u.state === "available"}
       {#if u.notes}
-        <details><summary>Was ist neu?</summary><p class="selectable">{u.notes}</p></details>
+        <details><summary>{t("What's new?")}</summary><p class="selectable">{u.notes}</p></details>
       {/if}
       <button class="btn sm primary" onclick={() => window.updates.download()}>
         <ArrowDownToLine size={14} /> Herunterladen

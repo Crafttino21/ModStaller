@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   let { level, charging }: { level: number; charging: boolean } = $props();
 
   const color = $derived(
@@ -6,7 +7,7 @@
   );
 </script>
 
-<span class="battery" title={charging ? `Lädt – ${level} %` : `Akku ${level} %`}>
+<span class="battery" title={charging ? t("Charging … {level} %", { level }) : t("Battery {level} %", { level })}>
   <svg viewBox="0 0 26 12" aria-hidden="true">
     <rect x="0.75" y="0.75" width="21.5" height="10.5" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.5" />
     <rect x="23.2" y="3.8" width="1.8" height="4.4" rx="0.9" fill="currentColor" opacity="0.5" />

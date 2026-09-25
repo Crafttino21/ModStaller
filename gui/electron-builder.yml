@@ -6,6 +6,7 @@ directories:
   buildResources: build
 files:
   - electron/**
+  - "!electron/*.test.cjs"
   - dist/**
   - package.json
 # Backend und zsign liegen ausserhalb des asar-Archivs: sie werden als

@@ -21,6 +21,7 @@ from urllib3.util.retry import Retry
 
 from ..config import GSA_CA_BUNDLE
 from ..errors import AnisetteClientInfoRejected, AppleRateLimited
+from ..i18n import _
 from . import clientinfo
 
 GSA_HOST = "gsa.apple.com"
@@ -158,13 +159,12 @@ def check_edge_rejection(response: requests.Response, client_info: str) -> None:
         return
     if len(response.content) > _EDGE_REJECT_MAX_BODY:
         return
-    raise AnisetteClientInfoRejected(
-        "Apple hat den Request an der Edge abgewiesen (HTTP 503, "
-        f"{len(response.content)} Byte). Das ist kein Ausfall, sondern eine "
-        "Ablehnung des Client-Info-Strings. Gesendet wurde:\n"
-        f"  {client_info}\n"
-        f"Erwartet wird ein String mit {clientinfo.AKD_IDENTIFIER!r}."
-    )
+    raise AnisetteClientInfoRejected(_(
+        "Apple rejected the request at the edge (HTTP 503, {size} bytes). "
+        "That is not an outage but a rejection of the client info string. "
+        "Sent was:\n  {sent}\nExpected is a string containing {wanted!r}.",
+        size=len(response.content), sent=client_info,
+        wanted=clientinfo.AKD_IDENTIFIER))
 
 
 def check_rate_limit(response: requests.Response, *, what: str = "Apple",
@@ -181,23 +181,22 @@ def check_rate_limit(response: requests.Response, *, what: str = "Apple",
     wait = ""
     if retry_after.isdigit():
         secs = int(retry_after)
-        wait = (f" Apple nennt {secs // 60} Minuten." if secs >= 60
-                else f" Apple nennt {secs} Sekunden.")
+        wait = (" " + _("Apple says {minutes} minutes.", minutes=secs // 60)
+                if secs >= 60
+                else " " + _("Apple says {seconds} seconds.", seconds=secs))
 
     # Apple legt gelegentlich einen Grund bei. Mitnehmen - beim naechsten
     # Versuch ist das der einzige Anhaltspunkt, den wir haben.
     detail = ""
     body = (response.content or b"")[:400].decode("utf-8", "replace").strip()
     if body:
-        detail = f"\nApples Antwort: {body}"
+        detail = "\n" + _("Apple’s reply: {body}", body=body)
     for header in ("X-Apple-I-Request-ID", "X-Apple-Edge-Response", "X-Apple-Jingle-Correlation-Key"):
         if header in response.headers:
             detail += f"\n{header}: {response.headers[header]}"
 
-    raise AppleRateLimited(
-        f"{what} hat auch nach {attempts} Versuchen auf frischer Verbindung "
-        f"gedrosselt (HTTP 429).{wait}\n"
-        "Apple fuehrt ein Budget pro IP-Adresse, das sich alle Anmeldungen im "
-        "selben Netz teilen. Ein paar Minuten warten und erneut versuchen."
-        + detail
-    )
+    raise AppleRateLimited(_(
+        "{what} still throttled on a fresh connection after {attempts} "
+        "attempts (HTTP 429).{wait}\nApple keeps a budget per IP address "
+        "that every sign-in on the same network shares. Wait a few minutes "
+        "and try again.", what=what, attempts=attempts, wait=wait) + detail)

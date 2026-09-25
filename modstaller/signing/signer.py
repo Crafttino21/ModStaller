@@ -12,12 +12,32 @@ was Apple dem Account tatsaechlich gewaehrt hat.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..errors import SigningError
+from ..i18n import _
+
+#: Wie zsign aufgerufen wird - an beiden Aufrufstellen gleich.
+#:
+#: ``encoding``: ohne Angabe dekodiert ``text=True`` mit der Codepage des
+#: Systems (cp1252 auf deutschem Windows); ein Sonderzeichen in zsigns Ausgabe
+#: wuerde dann mitten in ``subprocess.run`` einen UnicodeDecodeError werfen.
+#:
+#: ``creationflags``: zsign ist ein Konsolenprogramm. Das ``windowsHide`` der
+#: Oberflaeche gilt nur fuer das Backend, nicht fuer dessen Kindprozesse -
+#: ohne CREATE_NO_WINDOW blitzt bei jedem Signieren ein Fenster auf.
+RUN_KWARGS: dict = {
+    "capture_output": True,
+    "text": True,
+    "encoding": "utf-8",
+    "errors": "replace",
+}
+if os.name == "nt":
+    RUN_KWARGS["creationflags"] = subprocess.CREATE_NO_WINDOW
 
 
 @dataclass
@@ -42,9 +62,10 @@ def _redact(cmd: list[str], password: str) -> str:
 def sign(req: SignRequest, *, timeout: float = 900.0,
          zsign: str = "zsign") -> Path:
     if not req.ipa.is_file():
-        raise SigningError(f"IPA nicht gefunden: {req.ipa}")
+        raise SigningError(_("IPA not found: {path}", path=req.ipa))
     if not req.profile.is_file():
-        raise SigningError(f"Provisioning-Profil nicht gefunden: {req.profile}")
+        raise SigningError(_("Provisioning profile not found: {path}",
+                             path=req.profile))
 
     req.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -68,20 +89,21 @@ def sign(req: SignRequest, *, timeout: float = 900.0,
     cmd.append(str(req.ipa))
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        proc = subprocess.run(cmd, timeout=timeout, **RUN_KWARGS)
     except FileNotFoundError as exc:
-        raise SigningError(
-            "zsign nicht gefunden. Installieren mit: paru -S zsign-bin"
-        ) from exc
+        raise SigningError(_(
+            "zsign not found. Install it with: paru -S zsign-bin"
+        )) from exc
     except subprocess.TimeoutExpired as exc:
-        raise SigningError(f"zsign hat nach {timeout:.0f}s nicht beendet.") from exc
+        raise SigningError(_("zsign did not finish within {seconds:.0f}s.",
+                             seconds=timeout)) from exc
 
     if proc.returncode != 0 or not req.output.exists():
         detail = (proc.stderr or proc.stdout or "").strip()
-        raise SigningError(
-            f"Signieren fehlgeschlagen (Exit {proc.returncode}).\n"
-            f"Aufruf: {_redact(cmd, req.p12_password)}\n{detail[-1200:]}"
-        )
+        raise SigningError(_(
+            "Signing failed (exit {code}).\nCall: {call}\n{detail}",
+            code=proc.returncode, call=_redact(cmd, req.p12_password),
+            detail=detail[-1200:]))
     return req.output
 
 
@@ -89,11 +111,12 @@ def check_identity(p12: Path, password: str, zsign: str = "zsign") -> str:
     """Prueft die Identitaet und gibt zsigns Beschreibung zurueck."""
     proc = subprocess.run(
         [zsign, "-C", "-k", str(p12), "-p", password],
-        capture_output=True, text=True, timeout=120,
+        timeout=120, **RUN_KWARGS,
     )
     out = (proc.stdout + proc.stderr).strip()
     if proc.returncode != 0:
-        raise SigningError(f"Zertifikat/Schluessel nicht brauchbar:\n{out[-800:]}")
+        raise SigningError(_("Certificate or key unusable:\n{detail}",
+                             detail=out[-800:]))
     return out
 
 
