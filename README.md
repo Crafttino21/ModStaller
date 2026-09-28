@@ -432,8 +432,8 @@ ModStaller only talks to Apple's servers and your own devices. JavaScript
 that an app sends for JIT runs in an isolated QuickJS context whose only
 capabilities are the debugger commands for that app's own process.
 
-Found a security issue? Please report it privately via GitHub's security
-advisories instead of a public issue.
+Found a security issue? Please report it privately as described in
+[SECURITY.md](SECURITY.md) - not as a public issue.
 
 ## Credits
 
