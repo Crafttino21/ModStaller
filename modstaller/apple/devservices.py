@@ -49,15 +49,20 @@ class Team:
     name: str
     type: str
     status: str
+    #: Apple's own statement: the membership "Xcode Free Provisioning
+    #: Program" (measured 2026-09). None if the answer lacks it.
+    free_only: bool | None = None
 
     @property
     def is_free(self) -> bool:
-        """Only reliable if Apple explicitly calls the type "Free".
+        """Reliable when Apple says so (``free_only``).
 
-        Otherwise Apple reports ``Individual`` for single accounts -
-        regardless of whether they are paid. Guessing here means guessing
-        wrong; only the lifetime of a real profile answers the question.
+        Otherwise only if the type is explicitly "Free": Apple reports
+        ``Individual`` for single accounts regardless of whether they are
+        paid - then only the lifetime of a real profile answers it.
         """
+        if self.free_only is not None:
+            return self.free_only
         return self.type.lower().startswith("free")
 
     def __str__(self) -> str:
@@ -87,6 +92,18 @@ class AppID:
     app_id_id: str
     identifier: str
     name: str
+    #: Free accounts: App IDs expire seven days after they were created.
+    expires_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class AppIdQuota:
+    """Apple's own count (``listAppIds``): how many App IDs may be created in
+    the rolling seven-day window and how many of them are still open.
+    Deleted App IDs keep counting - that is why this can be lower than
+    ``maximum`` minus the App IDs that exist. None: Apple did not say."""
+    maximum: int | None
+    available: int | None
 
 
 @dataclass(frozen=True)
@@ -171,7 +188,8 @@ class DeveloperServices:
         data = self._post("listTeams.action")
         return [
             Team(team_id=t["teamId"], name=t.get("name", "?"),
-                 type=t.get("type", "?"), status=t.get("status", "?"))
+                 type=t.get("type", "?"), status=t.get("status", "?"),
+                 free_only=_free_only(t))
             for t in data.get("teams", [])
         ]
 
@@ -223,12 +241,19 @@ class DeveloperServices:
     # -- App-IDs -----------------------------------------------------------
 
     def list_app_ids(self, team_id: str) -> list[AppID]:
+        return self.app_id_overview(team_id)[0]
+
+    def app_id_overview(self, team_id: str) -> tuple[list[AppID], AppIdQuota]:
+        """The App IDs and Apple's count of how many more may be created."""
         data = self._post("ios/listAppIds.action", team_id=team_id)
-        return [
+        ids = [
             AppID(app_id_id=a.get("appIdId", ""), identifier=a.get("identifier", ""),
-                  name=a.get("name", ""))
+                  name=a.get("name", ""),
+                  expires_at=_as_datetime(a.get("expirationDate")))
             for a in data.get("appIds", [])
         ]
+        return ids, AppIdQuota(maximum=_as_int(data.get("maxQuantity")),
+                               available=_as_int(data.get("availableQuantity")))
 
     def add_app_id(self, team_id: str, identifier: str, name: str) -> AppID:
         # Apple accepts only letters, digits and spaces in the name.
@@ -255,6 +280,39 @@ class DeveloperServices:
             raise AppleError(_("Apple returned an empty provisioning profile."))
         return Profile(content=bytes(content),
                        expires_at=_profile_expiry(bytes(content)))
+
+
+def _free_only(team: dict) -> bool | None:
+    """Is this Apple's free provisioning program? None if it doesn't say.
+
+    The memberships decide: a free account has "Xcode Free Provisioning
+    Program" and no paid program next to it. ``xcodeFreeOnly`` is no help
+    on its own - measured 2026-09 it is False on a free account; only a
+    True is taken at its word.
+    """
+    names = [str(m.get("name", "")).lower() for m in team.get("memberships") or []
+             if isinstance(m, dict)]
+    if names:
+        free = any("free provisioning" in n for n in names)
+        paid = any("program" in n and "free" not in n for n in names)
+        return free and not paid
+    if team.get("xcodeFreeOnly") is True:
+        return True
+    return None
+
+
+def _as_int(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_datetime(value) -> datetime | None:
+    """plistlib hands out naive datetimes in UTC - make that explicit."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return None
 
 
 def _profile_expiry(blob: bytes) -> datetime | None:

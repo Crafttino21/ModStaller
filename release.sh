@@ -4,6 +4,10 @@
 #   ./release.sh 0.2.0          Version setzen, Commit + Tag, pushen
 #   ./release.sh 0.3.0-beta.1   Vorabversion (nur fuer Beta-Nutzer)
 #
+# Die Nummer muss neuer sein als jede bisherige Release und dem Schema
+# X.Y.Z bzw. X.Y.Z-alpha.N/-beta.N/-rc.N folgen (packaging/check-version.py) -
+# sonst bietet der Updater sie niemandem an.
+#
 # Den Rest macht GitHub: .github/workflows/release.yml testet, baut
 # AppImage, Windows-Installer und CLI-Zip und legt die Release an.
 # Installierte Apps finden sie von selbst.
@@ -26,12 +30,18 @@ if [ -n "$(git status --porcelain)" ]; then
   git status --short >&2
   exit 1
 fi
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git fetch -q origin "$BRANCH" 2>/dev/null || true
+# Auch Tags, die von einem anderen Rechner aus gepusht wurden.
+git fetch -q --tags origin 2>/dev/null || true
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   red "Tag $TAG gibt es schon."
   exit 1
 fi
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-git fetch -q origin "$BRANCH" 2>/dev/null || true
+# Schon veroeffentlicht, nicht neuer als die letzte Release, falsches Schema?
+if ! python3 packaging/check-version.py "$VERSION"; then
+  exit 1
+fi
 if [ -n "$(git rev-list HEAD..origin/"$BRANCH" 2>/dev/null)" ]; then
   red "origin/$BRANCH ist weiter als dein Stand - erst: git pull"
   exit 1

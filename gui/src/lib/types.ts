@@ -101,10 +101,71 @@ export interface IpaInfo {
   version: string;
   minimumOs: string;
   extensions: string[];
+  extensionDetails: ExtensionDetail[];
+  hasWatch: boolean;
+  /** Das Original-Icon als data:-URL - null, wenn es nur im Assets.car steckt. */
+  icon: string | null;
   frameworks: string[];
   dylibs: string[];
   encrypted: boolean;
   size: number;
+}
+
+export interface ExtensionDetail {
+  path: string;
+  bundleId: string;
+  name: string;
+  /** NSExtensionPointIdentifier - was fuer eine Extension. */
+  point: string;
+  /** Traegt die ID der App als Praefix - nur dann laesst sie sich behalten. */
+  movable: boolean;
+}
+
+/** Wie viele App-IDs diese Woche noch angelegt werden duerfen (modstaller/quota.py). */
+export interface Quota {
+  maximum: number | null;
+  available: number | null;
+  /** Unix-Zeit - nur gesetzt, wenn gerade keine frei ist (Schaetzung). */
+  nextFreeAt: number | null;
+  /** Wann die bekannten Anlagen im Fenster wieder frei werden. */
+  returnsAt: number[];
+}
+
+/** App-Slots mit Free-Profil auf dem iPhone - null ohne iPhone. */
+export interface Slots {
+  max: number | null;
+  used: number;
+  apps: { bundleId: string; name: string }[];
+}
+
+export interface InstallPlan {
+  teamId: string;
+  teamName: string;
+  isFree: boolean;
+  defaultBundleId: string;
+  mainId: string;
+  spare: string | null;
+  /** Die behaltenen Extensions - ohne eigene Wahl die Voreinstellung. */
+  keep: string[];
+  extensions: { path: string; identifier: string }[];
+  newAppIds: string[];
+  notes: string[];
+  /** Reicht das Kontingent nicht: warum. */
+  error: string | null;
+  quota: Quota;
+  spares: { identifier: string; appIdId: string; expiresAt: number | null }[];
+  slots: Slots | null;
+}
+
+/** Was der Editor im Installieren-Screen geaendert hat. */
+export interface InstallChoice {
+  displayName?: string;
+  bundleId?: string;
+  /** PNG als data:-URL, 1024 x 1024. */
+  icon?: string;
+  extensions?: string[];
+  spareAppId?: string;
+  account?: string;
 }
 
 export interface InstallOutcome {
@@ -113,6 +174,8 @@ export interface InstallOutcome {
   transport: string;
   daysValid: number;
   strippedExtensions: boolean;
+  keptExtensions: number;
+  newAppIds: number;
 }
 
 export interface JitResult {
@@ -138,6 +201,8 @@ export interface Team {
   usageKnown: boolean;
   maxAppIdsPerWeek: number | null;
   maxAppsPerDevice: number | null;
+  quota: Quota;
+  slots: Slots | null;
 }
 
 export interface AppId {
@@ -146,6 +211,8 @@ export interface AppId {
   name: string;
   /** Gehoert zu einer App, die ModStaller installiert hat. */
   inUse: boolean;
+  /** Free-Accounts: Unix-Zeit, zu der die App-ID ablaeuft. */
+  expiresAt: number | null;
 }
 
 export interface Cert {

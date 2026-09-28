@@ -4,17 +4,18 @@ import { ask, runTask, toast } from "./state.svelte";
 import { call } from "./rpc";
 import { t } from "./i18n.svelte";
 import type {
-  Account, App, DeviceCheck, FixResult, InstallOutcome, JitResult, UsbSetupResult,
+  Account, App, DeviceCheck, FixResult, InstallChoice, InstallOutcome, JitResult, UsbSetupResult,
 } from "./types";
 
 /** Mehr braucht es nicht, um eine App anzusprechen - so gehen auch die
  *  Eintraege fremder Werkzeuge durch dieselben Vorgaenge. */
 type NamedApp = Pick<App, "bundleId" | "name">;
 
-/** ``account``: adsid des Apple-Accounts - sonst der aktive. */
-export function installIpa(path: string, name: string, keepExtensions: boolean, account?: string) {
+/** ``choice``: was der Editor geaendert hat (Name, Icon, Bundle-ID, welche
+ *  Extensions bleiben, eine freie App-ID) und mit welchem Account. */
+export function installIpa(path: string, name: string, choice: InstallChoice = {}) {
   runTask<InstallOutcome>("install", t("Install {name}", { name }), "install",
-    { path, keepExtensions, ...(account ? { account } : {}) },
+    { path, ...choice },
     (o) => ({
       message: t("{name} is installed and runs for {days} days.",
                  { name: o.name, days: Math.round(o.daysValid) }),
@@ -22,6 +23,7 @@ export function installIpa(path: string, name: string, keepExtensions: boolean, 
         t("Bundle ID {id} · transport: {transport}",
           { id: o.bundleId, transport: o.transport }),
         ...(o.strippedExtensions ? [t("App extensions were removed to save App IDs.")] : []),
+        ...(o.newAppIds ? [t("{count} new App ID(s) created.", { count: o.newAppIds })] : []),
         ...(o.daysValid < 10 ? [t("Renew before it expires, from the overview or under “Apps”.")] : []),
       ],
     }));

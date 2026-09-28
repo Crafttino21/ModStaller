@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,14 +11,15 @@ from typing import Callable
 from .apple import anisette as anisette_mod
 from .apple.devservices import DeveloperServices
 from .apple.session import Session, remember_teams, session_for_team
-from .config import OUT_DIR, Settings, find_zsign
+from .config import ICONS_DIR, OUT_DIR, WORK_DIR, Settings, find_zsign
 from .i18n import _
 from .device.connection import ServiceProvider, device_info
 from .device.install import install_ipa
 from .errors import AppleError, SigningError
+from .plan import make_plan, resolve_keep
 from .provisioning import (
-    Capabilities, derive_bundle_id, ensure_app_id, ensure_certificate,
-    fetch_profile, pick_team, profile_info,
+    Capabilities, ensure_app_id, ensure_certificate, fetch_profile, pick_team,
+    profile_info,
 )
 from .signing import ipa as ipa_mod
 from .signing.signer import SignRequest, sign
@@ -31,6 +33,8 @@ class InstallOutcome:
     transport: str
     days_valid: float
     stripped_extensions: bool
+    kept_extensions: int = 0
+    new_app_ids: int = 0
 
 
 def _say(msg: str) -> None:
@@ -48,6 +52,10 @@ async def install(
     revoke_conflicting_cert: bool = False,
     bundle_id: str | None = None,
     renewing: "store.InstallRecord | None" = None,
+    display_name: str | None = None,
+    icon: Path | None = None,
+    keep_extensions: list[str] | None = None,
+    spare_app_id: str | None = None,
     progress: Callable[[int], None] | None = None,
     on_step: Callable[[str], None] = _say,
 ) -> InstallOutcome:
@@ -59,6 +67,13 @@ async def install(
     since. ``renewing`` is that app's record; its history is kept.
     ``account`` is the adsid of the Apple account to sign with - the active
     one if not given.
+
+    From the install screen's editor: ``display_name`` and ``icon`` (a
+    square PNG) replace name and icon; ``keep_extensions`` lists the
+    extensions that stay (None: none on free accounts, all on paid ones -
+    or ``strip_extensions`` as before); ``spare_app_id`` puts the app under
+    an existing, unused App ID. A ``bundle_id`` given without ``renewing``
+    is the editor's own choice.
     """
     settings = settings or Settings.load()
 
@@ -103,17 +118,20 @@ async def install(
         p12, password = ensure_certificate(
             api, team, dev.name, revoke_conflicting=revoke_conflicting_cert)
 
-        # 6. Extensions: on free accounts each one costs an App ID from a
-        #    quota of ten per week. The default is therefore to remove them -
-        #    the app itself runs just fine without them.
-        strip = (caps.is_free and bool(info.extensions)
-                 if strip_extensions is None else strip_extensions)
-        if strip and info.extensions:
+        # 6. Which extensions stay. On free accounts each costs an App ID
+        #    from a quota of ten per week - so by default none do; the app
+        #    itself runs just fine without them.
+        keep = resolve_keep(info, keep_extensions, caps.is_free, strip_extensions)
+        drop = [p for p in info.extensions if p not in keep]
+        if drop:
             on_step("  " + _("Removing {count} extension(s) (saves {count} "
-                                 "App ID(s) from the weekly quota)",
-                                 count=len(info.extensions)))
+                             "App ID(s) from the weekly quota)", count=len(drop)))
+        if info.has_watch:
+            on_step("  " + _("Removing the Apple Watch app - it cannot be "
+                             "installed this way."))
 
-        # 7. App ID and profile.
+        # 7. App IDs and profiles - planned first, so a quota that does not
+        #    suffice stops us before anything is created.
         #
         # The installed apps protect their App IDs from being recycled -
         # otherwise a foreign app would eventually lose the ability to be
@@ -125,15 +143,21 @@ async def install(
         except Exception:
             pass
 
-        wanted = bundle_id or derive_bundle_id(info.bundle_id, team.team_id)
-        on_step(f"\nApp ID {wanted} …")
-        # A pinned ID never falls back to a spare one: that would be a
-        # second app next to the one we are meant to renew.
-        app_id = ensure_app_id(api, team, wanted, info.name,
-                               reuse_when_exhausted=bundle_id is None,
-                               protected=protected)
+        existing, quota = api.app_id_overview(team.team_id)
+        plan = make_plan(info, team_id=team.team_id, is_free=caps.is_free,
+                         app_ids=existing, quota=quota, keep=keep,
+                         bundle_id=bundle_id, spare=spare_app_id,
+                         pinned=renewing is not None, protected=protected)
+        for note in plan.notes:
+            on_step("  " + note)
+        on_step(f"\nApp ID {plan.main_id} …")
+        # A chosen or pinned ID never falls back to a spare one: that would
+        # be a second app next to the one the user asked for.
+        app_id = ensure_app_id(api, team, plan.main_id, display_name or info.name,
+                               reuse_when_exhausted=not (bundle_id or spare_app_id),
+                               protected=protected, existing=existing)
         new_id = app_id.identifier
-        if new_id != wanted:
+        if new_id != plan.main_id:
             on_step(_(
                 "  Weekly quota exhausted - ModStaller reuses the free App ID"
                 "\n  {app_id}. The app runs under it perfectly normally; "
@@ -145,15 +169,41 @@ async def install(
         on_step(f"  Profile valid: {prof.days_left:.1f} days "
              f"({caps.describe()})")
 
-        # 8. Sign.
+        # Every kept extension needs its own App ID and profile - zsign
+        # picks the matching one per bundle.
+        ext_profiles: list[Path] = []
+        by_path = {e.path: e for e in info.extension_details}
+        for path in keep:
+            ext = by_path[path]
+            ident = ext.bundle_id_for(info.bundle_id, new_id)
+            on_step(f"App ID {ident} …")
+            ext_app = ensure_app_id(api, team, ident,
+                                    f"{display_name or info.name} {ext.name}",
+                                    existing=existing)
+            ext_profiles.append(fetch_profile(api, team, ext_app))
+
+        # 8. Sign. Only some extensions stay: unpack without the others and
+        #    let zsign sign the folder.
         out = OUT_DIR / f"{new_id}.ipa"
         on_step("\nSigning …")
         started = time.time()
-        sign(SignRequest(
-            ipa=info.path, output=out, p12=p12, p12_password=password,
-            profile=profile_path, bundle_id=new_id,
-            strip_extensions=strip,
-        ), zsign=find_zsign(settings.zsign_path) or settings.zsign_path)
+        source = info.path
+        unpacked: Path | None = None
+        if keep and drop:
+            from .signing.prepare import unpack_without
+            unpacked = unpack_without(info.path, info.app_dir, drop, WORK_DIR)
+            source = unpacked
+        try:
+            sign(SignRequest(
+                ipa=source, output=out, p12=p12, p12_password=password,
+                profile=profile_path, extra_profiles=ext_profiles,
+                bundle_id=new_id, display_name=display_name or None,
+                strip_extensions=bool(info.extensions) and not keep,
+                strip_watch=info.has_watch, icon=icon,
+            ), zsign=find_zsign(settings.zsign_path) or settings.zsign_path)
+        finally:
+            if unpacked is not None:
+                shutil.rmtree(unpacked, ignore_errors=True)
         on_step(f"  done in {time.time() - started:.1f}s "
              f"({out.stat().st_size / 1e6:.0f} MB)")
 
@@ -161,11 +211,19 @@ async def install(
         on_step("\nInstalling …")
         result = await install_ipa(sp, out, progress=progress)
 
-        # 10. Remember it, so the refresh later knows what to do.
+        # 10. Remember it, so the refresh later knows what to do - including
+        #     the editor's choices.
+        kept_icon = ""
+        if icon is not None and icon.is_file():
+            ICONS_DIR.mkdir(parents=True, exist_ok=True)
+            stored = ICONS_DIR / f"{new_id}.png"
+            if icon.resolve() != stored.resolve():
+                shutil.copyfile(icon, stored)
+            kept_icon = str(stored)
         store.record(store.InstallRecord(
             bundle_id=new_id,
             original_bundle_id=info.bundle_id,
-            name=info.name,
+            name=display_name or info.name,
             team_id=team.team_id,
             udid=dev.udid,
             source_ipa=str(info.path.resolve()),
@@ -176,14 +234,19 @@ async def install(
             installed_at=(renewing.installed_at if renewing
                           else time.time()),
             last_refresh_at=time.time() if renewing else 0.0,
-            strip_extensions=strip,
+            strip_extensions=not keep,
             adsid=session.adsid,
+            display_name=display_name or "",
+            icon_path=kept_icon,
+            kept_extensions=keep,
         ))
 
-    return InstallOutcome(bundle_id=new_id, name=info.name,
+    return InstallOutcome(bundle_id=new_id, name=display_name or info.name,
                           transport=result.transport,
                           days_valid=prof.days_left,
-                          stripped_extensions=strip)
+                          stripped_extensions=bool(drop),
+                          kept_extensions=len(keep),
+                          new_app_ids=len(plan.new_app_ids))
 
 
 async def refresh(
@@ -239,6 +302,10 @@ async def refresh(
             account=account,
             settings=settings, strip_extensions=rec.strip_extensions,
             bundle_id=rec.bundle_id, renewing=rec,
+            display_name=rec.display_name or None,
+            icon=(Path(rec.icon_path) if rec.icon_path
+                  and Path(rec.icon_path).is_file() else None),
+            keep_extensions=rec.kept_extensions,
             progress=progress, on_step=on_step,
         ))
     return results

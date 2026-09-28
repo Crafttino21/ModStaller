@@ -4,6 +4,8 @@
     UserPlus, CircleUser,
   } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
+  import QuotaMeter from "../components/QuotaMeter.svelte";
+  import { date } from "../lib/format";
   import { ask, errorText, refreshStatus, toast, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import { logout } from "../lib/actions";
@@ -258,16 +260,18 @@
         <div class="metric">
           <div class="m-label"><Users size={15} /> {t("App IDs in the account")}</div>
           <div class="m-value">{used}{#if free}<span class="faint sub-value">· {t("{count} free", { count: free })}</span>{/if}</div>
-          {#if max}
-            <p class="faint quota">
-              {@html t("Apple allows {max} <b>newly created</b> ones per week. Existing ones do not count – deleting therefore gives back no quota. When the window is full, ModStaller reuses a free one.", { max })}
-            </p>
+          {#if max && free}
+            <p class="faint quota">{t("Unused ones are reused automatically when the weekly quota is used up – or pick one yourself when installing.")}</p>
           {/if}
         </div>
         <div class="metric">
           <div class="m-label"><Smartphone size={15} /> {t("Registered devices")}</div>
           <div class="m-value">{team.devices}</div>
         </div>
+      </div>
+
+      <div class="quota-box">
+        <QuotaMeter quota={team.quota} isFree={team.isFree} slots={team.slots} />
       </div>
 
       {#if team.appIds.length}
@@ -284,6 +288,7 @@
                 <div class="grow">
                   <code class="selectable">{a.identifier}</code>
                   {#if a.name && a.name !== a.identifier}<div class="faint id-name">{a.name}</div>{/if}
+                  {#if a.expiresAt}<div class="faint id-name">{t("expires {date}", { date: date(a.expiresAt) })}</div>{/if}
                 </div>
                 {#if team.usageKnown}
                   <span class="chip {a.inUse ? 'ok' : ''}">{a.inUse ? t("in use") : t("free")}</span>
@@ -343,6 +348,7 @@
   .m-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .sub-value { margin-left: 8px; font-size: 15px; font-weight: 550; }
   .quota { margin: 0; font-size: 12px; line-height: 1.45; }
+  .quota-box { margin-top: 12px; }
   details { margin-top: 14px; }
   summary { cursor: pointer; font-size: 12.5px; color: var(--text-2); font-weight: 550; }
   .hint { margin-top: 10px; }

@@ -42,7 +42,11 @@ Windows. See [Supported devices](#supported-devices) for the full list.
   iOS 26/27). See [JIT](#jit).
 - **iPhone check**: pairing, Developer Mode, Developer Disk Image, app
   slots and free storage, with one-click fixes where Apple allows them.
-- **Account management**: team, quotas, App IDs, certificates.
+- **IPA editor** before installing: icon, name on the home screen, bundle
+  ID, and which app extensions stay - one by one.
+- **Account management**: team, App IDs, certificates - with Apple's real
+  weekly App ID quota (how many are left, when the next one frees up) and
+  the app slots on the iPhone.
 - **Auto-updates** for the AppImage, the Linux installation and the Windows
   installer.
 - **Seven languages**: English, German, French, Spanish, Italian, Portuguese
@@ -211,6 +215,25 @@ everything is in place.
 The GUI shows up front whether the iPhone is connected, whether you are
 signed in and what is about to expire. IPAs can simply be dragged into the
 window.
+
+**Before installing** the IPA can be edited: tap the icon to pick a new one
+(any image, cropped to a square), change the name on the home screen or the
+bundle ID, and tick which extensions stay. Below it ModStaller shows live
+what that costs:
+
+* Free accounts may create **10 App IDs per 7 days** - Apple counts
+  creations, so deleting one gives nothing back. The bar shows how many are
+  left and when the next one frees up. Every kept extension needs an App ID
+  of its own.
+* If the quota does not suffice, the install is stopped *before* anything is
+  created, with two ways out: leave out extensions, or reuse an existing,
+  unused App ID.
+* Free profiles allow **3 apps** on the iPhone at once. When they are taken,
+  the install screen lists them with a button to remove one.
+
+The choices are remembered, so renewing an app repeats them. On the command
+line: `modstaller install app.ipa --name … --bundle-id … --icon icon.png
+--keep-extension PlugIns/Share.appex`.
 
 As soon as an iPhone is plugged in, the **iPhone check** runs: pairing, iOS
 version, Developer Mode, Developer Disk Image, used app slots and free

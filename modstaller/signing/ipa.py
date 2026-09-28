@@ -18,6 +18,30 @@ from ..i18n import _
 
 
 @dataclass
+class ExtensionInfo:
+    """One app extension (PlugIns/*.appex)."""
+    path: str                   # "PlugIns/Share.appex"
+    bundle_id: str
+    name: str
+    #: NSExtensionPointIdentifier - what kind of extension it is
+    #: ("com.apple.widgetkit-extension", "com.apple.share-services", ...).
+    point: str = ""
+
+    def bundle_id_for(self, app_original: str, app_new: str) -> str | None:
+        """The extension's ID once the app is called ``app_new``.
+
+        zsign replaces the app's old ID inside every extension ID
+        (ModifyPluginsBundleId) - the same rule here, so the App ID we
+        register is exactly the one that gets signed. None: the extension
+        does not carry the app's ID as its prefix, so it cannot be moved
+        to our team (iOS requires that prefix).
+        """
+        if not self.bundle_id.startswith(app_original + "."):
+            return None
+        return self.bundle_id.replace(app_original, app_new)
+
+
+@dataclass
 class IPAInfo:
     path: Path
     bundle_id: str
@@ -29,6 +53,8 @@ class IPAInfo:
     frameworks: list[str] = field(default_factory=list)
     dylibs: list[str] = field(default_factory=list)
     encrypted: bool = False
+    extension_details: list[ExtensionInfo] = field(default_factory=list)
+    has_watch: bool = False
 
     @property
     def app_id_demand(self) -> int:
@@ -103,6 +129,10 @@ def inspect(path: str | Path) -> IPAInfo:
         # re-signed.
         encrypted = any(n.startswith(prefix + "SC_Info/") for n in names)
 
+        extensions = under("PlugIns/", ".appex")
+        details = [_extension(zf, prefix, ext) for ext in extensions]
+        has_watch = any(n.startswith(prefix + "Watch/") for n in names)
+
     return IPAInfo(
         path=path,
         bundle_id=info.get("CFBundleIdentifier", ""),
@@ -110,8 +140,52 @@ def inspect(path: str | Path) -> IPAInfo:
         version=info.get("CFBundleShortVersionString", "?"),
         minimum_os=info.get("MinimumOSVersion", ""),
         app_dir=app,
-        extensions=under("PlugIns/", ".appex"),
+        extensions=extensions,
         frameworks=under("Frameworks/", ".framework"),
         dylibs=dylibs,
         encrypted=encrypted,
+        extension_details=details,
+        has_watch=has_watch,
     )
+
+
+def _extension(zf: zipfile.ZipFile, prefix: str, path: str) -> ExtensionInfo:
+    name = path.rsplit("/", 1)[-1].removesuffix(".appex")
+    try:
+        info = plistlib.loads(zf.read(f"{prefix}{path}/Info.plist"))
+    except Exception:
+        return ExtensionInfo(path=path, bundle_id="", name=name)
+    ns = info.get("NSExtension") if isinstance(info.get("NSExtension"), dict) else {}
+    return ExtensionInfo(
+        path=path,
+        bundle_id=str(info.get("CFBundleIdentifier", "")),
+        name=str(info.get("CFBundleDisplayName") or info.get("CFBundleName") or name),
+        point=str(ns.get("NSExtensionPointIdentifier", "")),
+    )
+
+
+def icon_png(path: str | Path) -> bytes | None:
+    """The app's icon as a standard PNG - None if it only lives in
+    Assets.car or the IPA declares none."""
+    from .icon import best_icon, icon_names
+    with zipfile.ZipFile(path) as zf:
+        names = zf.namelist()
+        apps = sorted({n.split("/")[1] for n in names
+                       if n.startswith("Payload/") and n.count("/") >= 2
+                       and n.split("/")[1].endswith(".app")})
+        if not apps:
+            return None
+        prefix = f"Payload/{apps[0]}/"
+        try:
+            info = plistlib.loads(zf.read(prefix + "Info.plist"))
+        except Exception:
+            return None
+        wanted = icon_names(info)
+        if not wanted:
+            return None
+        # Only files directly in the bundle root - that is where they live.
+        files = {n[len(prefix):]: zf.read(n) for n in names
+                 if n.startswith(prefix) and "/" not in n[len(prefix):]
+                 and n.lower().endswith(".png")
+                 and any(n[len(prefix):].startswith(w) for w in wanted)}
+    return best_icon(files, wanted)

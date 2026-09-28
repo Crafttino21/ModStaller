@@ -12,6 +12,8 @@ const dict: Dict = {
     "<b>JIT</b> est nécessaire pour les applications Java et les émulateurs (les lanceurs Minecraft, par exemple) : ModStaller démarre l’application avec un débogueur attaché et libère de la mémoire dès qu’elle en demande.",
   "Account":
     "Compte",
+  "Action":
+    "Action",
   "Active":
     "Actif",
   "Active account ({account})":
@@ -28,6 +30,8 @@ const dict: Dict = {
     "Tout",
   "All areas":
     "Tous les domaines",
+  "All {max} app slots of the free profile are taken – iOS will refuse a further app. Remove one first:":
+    "Les {max} emplacements du profil gratuit sont occupés – iOS refusera une app de plus. Supprimez-en d’abord une :",
   "Also delete sign-ins, settings and logs":
     "Supprimer aussi les connexions, les réglages et les journaux",
   "Also discard the device identity (Apple will then ask for a two-factor code again)":
@@ -44,14 +48,16 @@ const dict: Dict = {
     "Identifiant d’app supprimé.",
   "App IDs in the account":
     "Identifiants d’app du compte",
+  "App IDs this week":
+    "App ID cette semaine",
   "App extensions were removed to save App IDs.":
     "Les extensions ont été retirées pour économiser des identifiants d’app.",
   "Apple account":
     "Compte Apple",
   "Apple allows only a few at a time. A foreign one (from AltStore or SideStore, say) cannot be used by ModStaller – its private key lives with the tool that requested it.":
     "Apple n’en autorise que quelques-uns à la fois. Un certificat étranger (d’AltStore ou de SideStore, par exemple) est inutilisable par ModStaller – sa clé privée reste chez l’outil qui l’a demandé.",
-  "Apple allows {max} <b>newly created</b> ones per week. Existing ones do not count – deleting therefore gives back no quota. When the window is full, ModStaller reuses a free one.":
-    "Apple en autorise {max} <b>nouvellement créés</b> par semaine. Les existants ne comptent pas – supprimer ne rend donc aucun quota. Quand la fenêtre est pleine, ModStaller réutilise un identifiant libre.",
+  "Apple counts App IDs created in the last 7 days – deleting one does not give it back.":
+    "Apple compte les App ID créés ces 7 derniers jours – en supprimer un ne le rend pas.",
   "Apple device service is not running":
     "Le service d’appareils Apple est arrêté",
   "Apple device service missing":
@@ -64,6 +70,8 @@ const dict: Dict = {
     "Ne vaut que pour ce lancement – à réactiver après avoir quitté l’application.",
   "Apps":
     "Applications",
+  "Apps on the iPhone (free profile)":
+    "Apps sur l’iPhone (profil gratuit)",
   "Asking Apple – this takes a few seconds …":
     "Interrogation d’Apple – cela prend quelques secondes …",
   "Automatic updates exist only in the AppImage and in the Windows version installed with the setup.":
@@ -80,6 +88,8 @@ const dict: Dict = {
     "Les versions bêta apportent les nouveautés plus tôt, mais peuvent être instables et contenir des bugs.",
   "Beta – may be unstable":
     "Bêta – peut être instable",
+  "Bundle ID":
+    "Bundle ID",
   "Bundle ID {id} · transport: {transport}":
     "Bundle ID {id} · transport : {transport}",
   "Cancel":
@@ -88,14 +98,20 @@ const dict: Dict = {
     "Annulé",
   "Cancelled.":
     "Annulé.",
+  "Cannot be kept – its ID does not belong to the app.":
+    "Impossible de la conserver – son ID n’appartient pas à l’app.",
   "Certificate revoked.":
     "Certificat révoqué.",
+  "Change icon":
+    "Changer l’icône",
   "Charging … {level} %":
     "En charge – {level} %",
   "Check again":
     "Vérifier à nouveau",
   "Check for updates":
     "Rechercher des mises à jour",
+  "Checking the App ID quota …":
+    "Vérification du quota d’App ID…",
   "Checking …":
     "Vérification …",
   "Choose a file":
@@ -114,8 +130,6 @@ const dict: Dict = {
     "Copier",
   "Copying is not possible.":
     "Impossible de copier.",
-  "Costs {count} App ID(s) from the weekly quota (10 per week on free accounts). The app itself runs without them.":
-    "Coûte {count} identifiant(s) d’app du quota hebdomadaire (10 par semaine sur les comptes gratuits). L’application fonctionne aussi sans.",
   "Create a desktop shortcut":
     "Créer un raccourci sur le bureau",
   "Data in":
@@ -148,6 +162,8 @@ const dict: Dict = {
     "Glissez un IPA ici",
   "Drag an IPA into the window or pick one from your Downloads.":
     "Glissez un IPA dans la fenêtre ou choisissez-en un dans vos téléchargements.",
+  "Each kept extension needs an App ID of its own.":
+    "Chaque extension conservée a besoin de son propre App ID.",
   "Enable JIT":
     "Activer le JIT",
   "Errors":
@@ -160,8 +176,14 @@ const dict: Dict = {
     "Tout est prêt.",
   "Explorer shows the iPhone but ModStaller doesn’t? Unplug it, unlock it and plug it back in – if that doesn’t help, restart the PC.":
     "L’Explorateur affiche l’iPhone mais pas ModStaller ? Débranchez-le, déverrouillez-le et rebranchez-le – sinon, redémarrez le PC.",
+  "Extension":
+    "Extension",
+  "Extensions":
+    "Extensions",
   "Failed":
     "Échec",
+  "Files":
+    "Fichiers",
   "Filter":
     "Filtrer",
   "Fix":
@@ -172,6 +194,8 @@ const dict: Dict = {
     "Trouvés dans vos dossiers",
   "Free":
     "Gratuit",
+  "Free again: {dates}":
+    "De nouveau libres : {dates}",
   "From other tools":
     "D’autres outils",
   "Full log:":
@@ -200,10 +224,12 @@ const dict: Dict = {
     "Il est installé, mais arrêté. Windows demande une confirmation au démarrage.",
   "JIT for {name}":
     "JIT pour {name}",
-  "Keep extensions":
-    "Conserver les extensions",
+  "Keyboard":
+    "Clavier",
   "Language":
     "Langue",
+  "Leave out all extensions":
+    "Omettre toutes les extensions",
   "Leaving the beta channel keeps the installed beta until a newer stable version is out.":
     "En quittant le canal bêta, la bêta installée est conservée jusqu’à la sortie d’une version stable plus récente.",
   "Live":
@@ -236,6 +262,10 @@ const dict: Dict = {
     "ModStaller {version} est déjà installé.",
   "ModStaller {version} is installed.":
     "ModStaller {version} est installé.",
+  "Must be unique at Apple. Empty: ModStaller picks one that fits your team.":
+    "Doit être unique chez Apple. Vide : ModStaller en choisit un adapté à votre équipe.",
+  "Name on the home screen":
+    "Nom sur l’écran d’accueil",
   "New installs sign with the active account. Renewals always use the account that installed the app.":
     "Les nouvelles installations sont signées avec le compte actif. Les renouvellements utilisent toujours le compte qui a installé l’app.",
   "No IPAs in Downloads, Documents or Desktop.":
@@ -256,6 +286,8 @@ const dict: Dict = {
     "Aucune application installée ne dépend actuellement de cet identifiant d’app.",
   "No messages yet.":
     "Pas encore de messages.",
+  "No new App ID needed – the ones this install uses already exist.":
+    "Aucun nouvel App ID nécessaire – ceux utilisés existent déjà.",
   "Not checked yet.":
     "Pas encore vérifié.",
   "Not connected":
@@ -276,20 +308,28 @@ const dict: Dict = {
     "Rien n’arrive à échéance",
   "Nothing was due.":
     "Rien n’était à renouveler.",
+  "Notifications":
+    "Notifications",
   "One click fixes it – see above.":
     "Un clic suffit – voir ci-dessus.",
   "Only for your user – no administrator rights needed. Your sign-ins and settings stay where they are.":
     "Uniquement pour votre utilisateur – sans droits d’administrateur. Vos connexions et réglages restent où ils sont.",
+  "Original icon":
+    "Icône d’origine",
   "Overview":
     "Vue d’ensemble",
   "Paid":
     "Payant",
+  "Paid account – no weekly limit on App IDs and no limit on apps.":
+    "Compte payant – pas de limite hebdomadaire d’App ID ni de limite d’apps.",
   "Password":
     "Mot de passe",
   "Pause":
     "Pause",
   "Paused":
     "En pause",
+  "Photo editing":
+    "Retouche photo",
   "Pick an IPA – ModStaller signs it with your Apple account and puts it on the iPhone.":
     "Choisissez un IPA – ModStaller le signe avec votre compte Apple et l’installe sur l’iPhone.",
   "Plug it in via USB and unlock it.":
@@ -340,12 +380,18 @@ const dict: Dict = {
     "Réparer",
   "Restart":
     "Redémarrer",
+  "Reuse an unused App ID …":
+    "Réutiliser un App ID inutilisé…",
   "Revoke":
     "Révoquer",
   "Revoke certificate?":
     "Révoquer le certificat ?",
   "SRP-6a: Apple gets proof that you know the password – not the password itself.":
     "SRP-6a : Apple obtient la preuve que vous connaissez le mot de passe – pas le mot de passe lui-même.",
+  "Safari":
+    "Safari",
+  "Screen broadcast":
+    "Diffusion d’écran",
   "Search":
     "Rechercher",
   "Set up automatically":
@@ -356,6 +402,8 @@ const dict: Dict = {
     "Réglages",
   "Settings › Privacy & Security › Developer Mode – otherwise no sideloaded app will start.":
     "Réglages › Confidentialité et sécurité › Mode développeur – sinon aucune application sideloadée ne démarrera.",
+  "Share":
+    "Partage",
   "Show teams and certificates":
     "Afficher les équipes et certificats",
   "Sideloading for {platform}":
@@ -388,6 +436,8 @@ const dict: Dict = {
     "Déconnecté.",
   "Signed-in accounts":
     "Comptes connectés",
+  "Siri & Shortcuts":
+    "Siri et Raccourcis",
   "Source missing ({path}) – renewing is not possible.":
     "Source manquante ({path}) – renouvellement impossible.",
   "Stable channel":
@@ -416,22 +466,32 @@ const dict: Dict = {
     "Équipes et certificats de {account}",
   "Terminal":
     "Terminal",
+  "That image cannot be read.":
+    "Impossible de lire cette image.",
   "That is not an IPA file.":
     "Ce n’est pas un fichier IPA.",
+  "The Apple Watch app is removed – it cannot be installed this way.":
+    "L’app Apple Watch est supprimée – elle ne peut pas être installée ainsi.",
   "The ModStaller service in the background has stopped":
     "Le service ModStaller en arrière-plan s’est arrêté",
   "The app and its data are deleted from the iPhone. It comes from another tool – ModStaller cannot restore it.":
     "L’application et ses données sont supprimées de l’iPhone. Elle vient d’un autre outil – ModStaller ne peut pas la restaurer.",
   "The app and its data are deleted from the iPhone. That frees one of the three slots.":
     "L’application et ses données sont supprimées de l’iPhone. Cela libère l’un des trois emplacements.",
+  "The app runs under the unused App ID {id}.":
+    "L’app utilise l’App ID inutilisé {id}.",
   "The backend did not report in.":
     "Le service de fond ne s’est pas manifesté.",
   "The backend has stopped.":
     "Le service de fond s’est arrêté.",
+  "The bundle ID is not valid – letters, digits and hyphens, separated by dots.":
+    "Le bundle ID n’est pas valide – lettres, chiffres et tirets, séparés par des points.",
   "The connected iPhone.":
     "L’iPhone connecté.",
   "The iPhone is plugged in but locked or not paired.":
     "L’iPhone est branché mais verrouillé ou non appairé.",
+  "The next one frees up around {date}.":
+    "Le prochain se libère vers le {date}.",
   "The session is discarded. Installed apps keep running but can only be renewed after signing in again.":
     "La session est abandonnée. Les applications installées continuent de fonctionner mais ne pourront être renouvelées qu’après une nouvelle connexion.",
   "There already is a different `modstaller` command in ~/.local/bin – it was left untouched.":
@@ -440,6 +500,10 @@ const dict: Dict = {
     "Cet IPA est chiffré par l’App Store (FairPlay) et ne peut pas être re-signé.",
   "This does not give back weekly quota: Apple counts newly created App IDs, not existing ones. When the window is full, ModStaller falls back to a free App ID by itself.":
     "Cela ne rend aucun quota hebdomadaire : Apple compte les identifiants d’app nouvellement créés, pas ceux qui existent. Quand la fenêtre est pleine, ModStaller bascule de lui-même sur un identifiant libre.",
+  "This install needs {cost} – {missing} more than are left.":
+    "Cette installation en nécessite {cost} – {missing} de plus que ce qui reste.",
+  "This install uses {cost} of them.":
+    "Cette installation en utilise {cost}.",
   "To renew, unlock or remove, the iPhone has to be connected and unlocked.":
     "Pour renouveler, activer ou retirer, l’iPhone doit être branché et déverrouillé.",
   "Translations that are missing fall back to English.":
@@ -448,6 +512,10 @@ const dict: Dict = {
     "Réessayer",
   "Turn on":
     "Activer",
+  "Undo":
+    "Annuler",
+  "Undo changes":
+    "Annuler les modifications",
   "Uninstall":
     "Désinstaller",
   "Uninstall now":
@@ -456,6 +524,8 @@ const dict: Dict = {
     "Déverrouillez l’iPhone et confirmez « Se fier ».",
   "Unplug the iPhone and plug it in again.":
     "Débranchez l’iPhone et rebranchez-le.",
+  "Unused ones are reused automatically when the weekly quota is used up – or pick one yourself when installing.":
+    "Les inutilisés sont réutilisés automatiquement quand le quota hebdomadaire est épuisé – ou choisissez-en un lors de l’installation.",
   "Up to date – no newer version on GitHub.":
     "À jour – aucune version plus récente sur GitHub.",
   "Update check failed: {message}":
@@ -464,6 +534,8 @@ const dict: Dict = {
     "Mettre à jour vers {version}",
   "Updates":
     "Mises à jour",
+  "VPN / network":
+    "VPN / réseau",
   "Version {version} for Linux":
     "Version {version} pour Linux",
   "Version {version} is available":
@@ -490,6 +562,8 @@ const dict: Dict = {
     "Où ModStaller est installé",
   "Whether an app depends on it cannot be determined without a connected iPhone.":
     "Impossible de déterminer si une application en dépend sans iPhone connecté.",
+  "Widget":
+    "Widget",
   "Windows shows the iPhone in Explorer through its own photo driver – ModStaller needs Apple’s device service for USB. ModStaller can set it up for you: “Apple Devices” from the Microsoft Store, otherwise just Apple’s USB driver.":
     "Windows affiche l’iPhone dans l’Explorateur via son propre pilote photo – ModStaller a besoin du service d’appareils d’Apple pour l’USB. ModStaller peut le configurer pour vous : « Appareils Apple » depuis le Microsoft Store, sinon seulement le pilote USB d’Apple.",
   "Without a connected iPhone it cannot be said which App IDs are in use right now – apps of other tools depend on them too.":
@@ -536,6 +610,8 @@ const dict: Dict = {
     "hier",
   "{account} now signs new installs.":
     "{account} signe désormais les nouvelles installations.",
+  "{available} of {max} left":
+    "{available} sur {max} disponibles",
   "{count} accounts signed in":
     "{count} comptes connectés",
   "{count} day left":
@@ -556,6 +632,8 @@ const dict: Dict = {
     "encore {count} heures",
   "{count} new":
     "{count} nouvelles",
+  "{count} new App ID(s) created.":
+    "{count} nouvel(s) App ID créé(s).",
   "{count} point(s) prevent sideloading.":
     "{count} point(s) empêchent le sideloading.",
   "{count} point(s) to clear up.":
@@ -570,6 +648,8 @@ const dict: Dict = {
     "{name} a été renouvelée – de nouveau valable {days} jours.",
   "{percent}% transferred":
     "{percent}% transférés",
+  "{used} of {max} used":
+    "{used} sur {max} utilisés",
   "~/.local/bin is not on your PATH yet – the `modstaller` command works in the terminal after logging in again.":
     "~/.local/bin n’est pas encore dans votre PATH – la commande `modstaller` fonctionnera dans le terminal après une nouvelle connexion.",
 };

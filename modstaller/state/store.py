@@ -35,6 +35,13 @@ class InstallRecord:
     #: The Apple account that signed it. Records from older versions don't
     #: have it - the team then tells (see session.session_for_team).
     adsid: str = ""
+    #: Choices from the install screen's editor - a renewal repeats them.
+    #: Empty: nothing changed there.
+    display_name: str = ""
+    icon_path: str = ""
+    #: Which extensions stay ("PlugIns/Foo.appex"). None: older record -
+    #: then ``strip_extensions`` decides, all or nothing.
+    kept_extensions: list[str] | None = None
 
     @property
     def days_left(self) -> float:

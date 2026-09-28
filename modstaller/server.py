@@ -143,6 +143,10 @@ class Server:
         #: (monotonic time, winsetup.ServiceState) - asking Windows takes a
         #: PowerShell start, too slow for every status poll.
         self.usb_service_probe: tuple[float, object] | None = None
+        #: adsid -> (monotonic time, api, teams, {team_id: (app_ids, quota)}).
+        #: The install screen asks for a plan on every edit - Apple is
+        #: asked at most every APPLE_CACHE_TTL seconds.
+        self.apple_cache: dict[str, tuple[float, object, list, dict]] = {}
         #: Accounts whose first name for the greeting was already looked up.
         self.name_lookups: set[str] = set()
         #: New log entries go to the interface as they happen.
@@ -527,7 +531,9 @@ def _app_dict(rec) -> dict:
 def _outcome_dict(o) -> dict:
     return {"bundleId": o.bundle_id, "name": o.name, "transport": o.transport,
             "daysValid": o.days_valid,
-            "strippedExtensions": o.stripped_extensions}
+            "strippedExtensions": o.stripped_extensions,
+            "keptExtensions": o.kept_extensions,
+            "newAppIds": o.new_app_ids}
 
 
 @method("status")
@@ -618,14 +624,66 @@ async def _ipa_find(server: Server, job: Job, params: dict):
 
 @method("ipa.inspect")
 async def _ipa_inspect(server: Server, job: Job, params: dict):
-    from .signing.ipa import inspect
-    info = await asyncio.to_thread(inspect, Path(_need(params, "path")))
+    import base64
+    from .plan import movable
+    from .signing.ipa import icon_png, inspect
+
+    path = Path(_need(params, "path"))
+    info = await asyncio.to_thread(inspect, path)
+    try:
+        png = await asyncio.to_thread(icon_png, path)
+    except Exception:
+        png = None      # a broken icon must not stop the install
+    can_keep = movable(info)
     return {"path": str(info.path), "bundleId": info.bundle_id,
             "name": info.name, "version": info.version,
             "minimumOs": info.minimum_os, "extensions": info.extensions,
+            "extensionDetails": [
+                {"path": e.path, "bundleId": e.bundle_id, "name": e.name,
+                 "point": e.point, "movable": e.path in can_keep}
+                for e in info.extension_details],
+            "hasWatch": info.has_watch,
+            "icon": ("data:image/png;base64," + base64.b64encode(png).decode()
+                     if png else None),
             "frameworks": info.frameworks, "dylibs": info.dylibs,
             "encrypted": info.encrypted,
             "size": info.path.stat().st_size}
+
+
+def _icon_param(params: dict) -> Path | None:
+    """The editor's icon: a PNG as data URL (the interface crops and scales
+    it to 1024 px). Written to a temporary file for zsign."""
+    import base64
+    import uuid
+    from .config import WORK_DIR
+    from .errors import SigningError
+
+    value = params.get("icon")
+    if not value:
+        return None
+    if not isinstance(value, str) or not value.startswith("data:image/png;base64,"):
+        raise SigningError(_("The icon must be a PNG image."))
+    data = base64.b64decode(value.split(",", 1)[1], validate=True)
+    if not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) > 8 * 1024 * 1024:
+        raise SigningError(_("The icon must be a PNG image."))
+    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    target = WORK_DIR / f"icon-{uuid.uuid4().hex[:12]}.png"
+    target.write_bytes(data)
+    return target
+
+
+def _keep_param(params: dict) -> list[str] | None:
+    keep = params.get("extensions")
+    if keep is None:
+        return None
+    if not isinstance(keep, list) or not all(isinstance(k, str) for k in keep):
+        raise RpcError(INVALID_PARAMS, "extensions: list of paths expected")
+    return keep
+
+
+def _text_param(params: dict, key: str) -> str | None:
+    value = params.get(key)
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 @method("install")
@@ -634,12 +692,130 @@ async def _install(server: Server, job: Job, params: dict):
 
     path = Path(_need(params, "path")).expanduser()
     keep = params.get("keepExtensions")
-    outcome = await job.isolated(lambda: install(
-        path, account=_account_param(params),
-        strip_extensions=False if keep else None,
-        revoke_conflicting_cert=bool(params.get("revokeConflictingCert")),
-        progress=job.progress, on_step=job.log))
+    icon = _icon_param(params)
+    try:
+        outcome = await job.isolated(lambda: install(
+            path, account=_account_param(params),
+            strip_extensions=False if keep else None,
+            revoke_conflicting_cert=bool(params.get("revokeConflictingCert")),
+            display_name=_text_param(params, "displayName"),
+            bundle_id=_text_param(params, "bundleId"),
+            icon=icon, keep_extensions=_keep_param(params),
+            spare_app_id=_text_param(params, "spareAppId"),
+            progress=job.progress, on_step=job.log))
+    finally:
+        if icon is not None:
+            icon.unlink(missing_ok=True)
+        server.apple_cache.clear()      # the App IDs have changed
     return _outcome_dict(outcome)
+
+
+#: How long a listTeams/listAppIds answer is good for the install screen.
+APPLE_CACHE_TTL = 30.0
+
+
+def _apple_view(server, adsid: str | None, team_id: str | None = None,
+                fresh: bool = False):
+    """(adsid, team, capabilities, app_ids, quota) - cached briefly."""
+    from .apple.session import active_adsid, remember_teams
+    from .provisioning import Capabilities, pick_team
+    adsid = adsid or active_adsid() or ""
+    hit = server.apple_cache.get(adsid)
+    if fresh or hit is None or time.monotonic() - hit[0] > APPLE_CACHE_TTL:
+        api = _api(adsid or None)
+        teams = api.list_teams()
+        remember_teams(adsid, teams)
+        hit = (time.monotonic(), api, teams, {})
+        server.apple_cache[adsid] = hit
+    _at, api, teams, per_team = hit
+    team = pick_team(teams, team_id)
+    if team.team_id not in per_team:
+        per_team[team.team_id] = api.app_id_overview(team.team_id)
+    ids, quota = per_team[team.team_id]
+    return adsid, team, Capabilities.for_team(team), ids, quota
+
+
+async def _read_device_apps(job) -> dict | None:
+    """Installed user apps with their metadata - None without an iPhone."""
+    from .device.connection import ServiceProvider
+    from .device.install import list_apps
+
+    async def read():
+        async with ServiceProvider() as sp:
+            return await list_apps(sp)
+    try:
+        return await job.isolated(read)
+    except Exception:
+        return None
+
+
+def _slots(apps: dict | None, max_apps: int | None, replacing: str = "") -> dict | None:
+    """The free profile's app slots on the iPhone: developer-signed apps
+    count. The app being replaced does not take a second one."""
+    from .device.install import app_origin
+    if apps is None:
+        return None
+    used = [{"bundleId": b, "name": _app_name(b, m)}
+            for b, m in apps.items()
+            if app_origin(m)["developerSigned"] and b.lower() != replacing.lower()]
+    return {"max": max_apps, "used": len(used),
+            "apps": sorted(used, key=lambda a: a["name"].lower())}
+
+
+def _quota_dict(q) -> dict:
+    return {"maximum": q.maximum, "available": q.available,
+            "nextFreeAt": q.next_free_at, "returnsAt": q.returns_at}
+
+
+@method("install.plan")
+async def _install_plan(server: Server, job: Job, params: dict):
+    """What an install with the editor's choices would cost - for the live
+    preview. Nothing is created."""
+    from .errors import SigningError
+    from .plan import QuotaExhausted, make_plan, resolve_keep, spare_candidates
+    from .provisioning import derive_bundle_id
+    from .quota import team_quota
+    from .signing.ipa import inspect
+    from .state import appid_log, store
+
+    info = await asyncio.to_thread(inspect, Path(_need(params, "path")))
+    apps = await _read_device_apps(job)
+    protected = {r.bundle_id for r in store.all_installs()} | set(apps or {})
+
+    def run():
+        adsid, team, caps, ids, quota = _apple_view(
+            server, _account_param(params), params.get("teamId"),
+            fresh=bool(params.get("refresh")))
+        keep = resolve_keep(info, _keep_param(params), caps.is_free)
+        kwargs = dict(team_id=team.team_id, app_ids=ids, quota=quota, keep=keep,
+                      bundle_id=_text_param(params, "bundleId"),
+                      spare=_text_param(params, "spareAppId"),
+                      protected=protected)
+        error = None
+        try:
+            plan = make_plan(info, is_free=caps.is_free, **kwargs)
+        except QuotaExhausted as exc:
+            error = str(exc)
+            plan = make_plan(info, is_free=False, **kwargs)   # still show it
+        q = team_quota(caps.is_free, ids, quota, appid_log.times(team.team_id))
+        return {
+            "teamId": team.team_id, "teamName": team.name, "isFree": caps.is_free,
+            "defaultBundleId": derive_bundle_id(info.bundle_id, team.team_id),
+            "mainId": plan.main_id, "spare": plan.spare,
+            "keep": keep,
+            "extensions": [{"path": p, "identifier": i} for p, i in plan.extensions],
+            "newAppIds": plan.new_app_ids, "notes": plan.notes, "error": error,
+            "quota": _quota_dict(q),
+            "spares": [{"identifier": a.identifier, "appIdId": a.app_id_id,
+                        "expiresAt": a.expires_at.timestamp() if a.expires_at else None}
+                       for a in spare_candidates(ids, protected)],
+            "slots": _slots(apps, caps.max_apps_per_device, plan.main_id),
+        }
+
+    try:
+        return await asyncio.to_thread(run)
+    except SigningError as exc:
+        raise RpcError(INVALID_PARAMS, str(exc)) from exc
 
 
 @method("refresh")
@@ -803,7 +979,8 @@ async def _account(server: Server, job: Job, params: dict):
     from .device.connection import ServiceProvider
     from .device.install import app_origin, list_apps
     from .provisioning import Capabilities, app_id_in_use
-    from .state import store
+    from .quota import team_quota
+    from .state import appid_log, store
 
     # An App ID is not only taken by what ModStaller installed: an app from
     # another tool can just as well depend on it. Without the device, "free"
@@ -821,7 +998,7 @@ async def _account(server: Server, job: Job, params: dict):
         protected |= {b for b, m in apps.items() if app_origin(m)["sideloaded"]}
         usage_known = True
     except Exception:
-        pass    # No iPhone plugged in - the account page stays usable.
+        apps = None     # No iPhone plugged in - the account page stays usable.
 
     from .apple.session import active_adsid
     adsid = _account_param(params) or active_adsid()
@@ -835,18 +1012,24 @@ async def _account(server: Server, job: Job, params: dict):
         out = []
         for team in teams:
             caps = Capabilities.for_team(team)
-            app_ids = api.list_app_ids(team.team_id)
+            app_ids, quota = api.app_id_overview(team.team_id)
+            q = team_quota(caps.is_free, app_ids, quota,
+                           appid_log.times(team.team_id))
             out.append({
                 "teamId": team.team_id, "name": team.name, "type": team.type,
                 "isFree": caps.is_free, "description": caps.describe(),
                 "devices": len(api.list_devices(team.team_id)),
                 "appIds": [{"appIdId": a.app_id_id, "identifier": a.identifier,
                             "name": a.name,
-                            "inUse": app_id_in_use(a.identifier, protected)}
+                            "inUse": app_id_in_use(a.identifier, protected),
+                            "expiresAt": (a.expires_at.timestamp()
+                                          if a.expires_at else None)}
                            for a in app_ids],
                 "usageKnown": usage_known,
                 "maxAppIdsPerWeek": caps.max_app_ids_per_week,
                 "maxAppsPerDevice": caps.max_apps_per_device,
+                "quota": _quota_dict(q),
+                "slots": _slots(apps, caps.max_apps_per_device),
             })
         return out
 
@@ -872,6 +1055,7 @@ async def _appids_delete(server: Server, job: Job, params: dict):
         api.delete_app_id(team.team_id, app_id_id)
 
     await asyncio.to_thread(run)
+    server.apple_cache.clear()
     return True
 
 

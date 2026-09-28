@@ -219,8 +219,12 @@ def _accounts(args) -> int:
 
 
 async def _account(args) -> int:
+    from datetime import datetime
+
     from .apple.devservices import DeveloperServices
     from .provisioning import Capabilities
+    from .quota import team_quota
+    from .state import appid_log
 
     session = _chosen_session(args)
     if session is None:
@@ -235,17 +239,23 @@ async def _account(args) -> int:
         print(t)
         print(f"  {caps.describe()}")
         print(f"  Devices: {len(api.list_devices(t.team_id))}")
-        app_ids = api.list_app_ids(t.team_id)
-        if caps.max_app_ids_per_week:
-            left = caps.max_app_ids_per_week - len(app_ids)
-            note = (f" - {left} left" if left > 0
-                    else " - quota used up, ModStaller will recycle an old "
-                         "one on the next install")
-            print(f"  App IDs: {len(app_ids)}/{caps.max_app_ids_per_week}{note}")
+        app_ids, quota = api.app_id_overview(t.team_id)
+        if caps.is_free:
+            # Apple's own count - deleted App IDs keep counting for 7 days.
+            q = team_quota(True, app_ids, quota, appid_log.times(t.team_id))
+            note = (f"{q.available} of {q.maximum} left this week"
+                    if q.available else
+                    "quota used up - ModStaller recycles an unused App ID")
+            print(f"  App IDs: {len(app_ids)} in the account, {note}")
+            if q.next_free_at:
+                when = datetime.fromtimestamp(q.next_free_at).strftime("%d.%m. %H:%M")
+                print(f"  Next one frees up around {when}")
         else:
-            print(f"  App IDs: {len(app_ids)}")
+            print(f"  App IDs: {len(app_ids)} (no weekly limit)")
         for a in app_ids:
-            print(f"    {a.identifier}")
+            exp = (f"  (expires {a.expires_at.astimezone():%d.%m. %H:%M})"
+                   if a.expires_at else "")
+            print(f"    {a.identifier}{exp}")
     return 0
 
 
@@ -345,10 +355,18 @@ async def _install(args) -> int:
                   file=sys.stderr)
             return 2
         account = session.adsid
+    icon = Path(args.icon).expanduser() if args.icon else None
+    if icon is not None and (not icon.is_file()
+                             or not icon.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"):
+        print(f"Not a PNG file: {icon}", file=sys.stderr)
+        return 2
     outcome = await run_install(
         Path(args.ipa), udid=args.udid, team_id=args.team, account=account,
         strip_extensions=False if args.keep_extensions else None,
         revoke_conflicting_cert=args.revoke_conflicting_cert,
+        display_name=args.name, bundle_id=args.bundle_id, icon=icon,
+        keep_extensions=args.keep_extension,
+        spare_app_id=args.spare_app_id,
         progress=progress,
     )
     print(f"\r  Installed via {outcome.transport}.")
@@ -496,7 +514,17 @@ def build_parser() -> argparse.ArgumentParser:
     ins.add_argument("--no-sign", action="store_true",
                      help="IPA is already signed, only install it")
     ins.add_argument("--keep-extensions", action="store_true",
-                     help="keep app extensions (costs one App ID each)")
+                     help="keep all app extensions (costs one App ID each)")
+    ins.add_argument("--keep-extension", action="append", metavar="PATH",
+                     help="keep only this extension, e.g. PlugIns/Share.appex "
+                          "(repeatable; costs one App ID each)")
+    ins.add_argument("--name", help="name on the home screen")
+    ins.add_argument("--bundle-id", help="bundle ID to install under "
+                                         "(default: derived from the IPA)")
+    ins.add_argument("--icon", metavar="PNG",
+                     help="square PNG that replaces the app icon")
+    ins.add_argument("--spare-app-id", metavar="ID",
+                     help="install under this existing, unused App ID")
     ins.add_argument("--revoke-conflicting-cert", action="store_true",
                      help="revoke other development certificates if "
                           "Apple's limit prevents creating our own (apps "

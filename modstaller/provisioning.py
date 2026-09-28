@@ -50,9 +50,13 @@ class Capabilities:
         :meth:`reconcile` corrects the guess as soon as a real profile
         exists and its lifetime answers the question.
         """
+        paid = cls(is_free=False, profile_days=365.0,
+                   max_app_ids_per_week=None, max_apps_per_device=None)
+        # Apple's own statement beats every guess (Team.free_only).
+        if team.free_only is not None:
+            return cls(is_free=True) if team.free_only else paid
         if team.type.lower().startswith(("company", "organization")):
-            return cls(is_free=False, profile_days=365.0,
-                       max_app_ids_per_week=None, max_apps_per_device=None)
+            return paid
         return cls(is_free=True)
 
     def reconcile(self, profile: Profile) -> "Capabilities":
@@ -244,7 +248,8 @@ def _machine_id() -> str:
 
 def ensure_app_id(api: DeveloperServices, team: Team, identifier: str,
                   name: str, *, reuse_when_exhausted: bool = False,
-                  protected: set[str] | None = None) -> AppID:
+                  protected: set[str] | None = None,
+                  existing: list[AppID] | None = None) -> AppID:
     """Obtains the App ID. The result may carry a different identifier.
 
     Apple counts **newly created** App IDs in a rolling seven-day window,
@@ -256,17 +261,26 @@ def ensure_app_id(api: DeveloperServices, team: Team, identifier: str,
     App ID. The app then runs under its bundle ID; to iOS that is an app of
     its own, and the name on the home screen is unaffected.
     """
-    existing = api.list_app_ids(team.team_id)
+    from .state import appid_log
+
+    if existing is None:
+        existing = api.list_app_ids(team.team_id)
     for candidate in existing:
-        if candidate.identifier == identifier:
+        if candidate.identifier.lower() == identifier.lower():
             return candidate
 
+    def add(ident: str) -> AppID:
+        created = api.add_app_id(team.team_id, ident, name)
+        # Apple keeps counting it for a week even if it is deleted.
+        appid_log.created(team.team_id, created.identifier)
+        return created
+
     try:
-        return api.add_app_id(team.team_id, identifier, name)
+        return add(identifier)
     except AppleAPIError as exc:
         if exc.code == APP_ID_UNAVAILABLE:
             # Identifier belongs to another account - vary the suffix.
-            return api.add_app_id(team.team_id, f"{identifier}.ms", name)
+            return add(f"{identifier}.ms")
         if exc.code == APP_ID_QUOTA_EXCEEDED and reuse_when_exhausted:
             spare = spare_app_id(existing, protected or set())
             if spare is not None:

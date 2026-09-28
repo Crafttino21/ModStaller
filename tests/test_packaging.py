@@ -105,3 +105,51 @@ def test_smoke_catches_a_broken_windows_device_listing(monkeypatch, service_up,
 def test_smoke_needs_the_usb_field_everywhere():
     assert not smoke_backend._usb_path_ok({}, windows=False)
     assert smoke_backend._usb_path_ok({"usbService": "ok"}, windows=False)
+
+
+_cv_spec = importlib.util.spec_from_file_location(
+    "check_version", ROOT / "packaging" / "check-version.py")
+check_version = importlib.util.module_from_spec(_cv_spec)
+_cv_spec.loader.exec_module(check_version)
+
+#: The tags as they really are - including the two without a dot.
+RELEASED = ["1.1.0-beta.3", "1.2.0", "1.2.1-beta.1", "1.2.1-beta.2",
+            "1.2.1-beta.3", "1.2.1-beta.4", "1.2.1-beta4", "1.2.1-beta5"]
+
+
+def test_versions_sort_like_electron_updater():
+    order = ["1.2.0", "1.2.1-beta.2", "1.2.1-beta.10", "1.2.1-beta4",
+             "1.2.1-beta5", "1.2.1-rc.1", "1.2.1", "1.10.0"]
+    for a, b in zip(order, order[1:]):
+        assert check_version.compare(a, b) < 0, f"{a} < {b}"
+        assert check_version.compare(b, a) > 0
+
+
+@pytest.mark.parametrize("version", ["1.2.0", "1.2.1-beta.4", "1.2.1-beta.3"])
+def test_a_released_or_older_version_is_refused(version):
+    assert check_version.check(version, RELEASED)
+
+
+def test_beta5_without_a_dot_is_a_trap_that_is_named():
+    """After "beta5", "beta.6" is older - the check says so and offers
+    what really comes after it."""
+    problems = check_version.check("1.2.1-beta.6", RELEASED)
+    assert "nicht neuer als 1.2.1-beta5" in problems[0]
+    for s in check_version.suggestions("1.2.1-beta5"):
+        assert check_version.compare(s, "1.2.1-beta5") > 0
+        assert not check_version.check(s, RELEASED)
+    assert "1.2.1-rc.1" in check_version.suggestions("1.2.1-beta5")
+
+
+@pytest.mark.parametrize("version", ["1.2.1-beta6", "1.3", "v1.3.0", "1.3.0-nightly.1"])
+def test_only_the_release_scheme_is_accepted(version):
+    assert "keine gueltige" in check_version.check(version, RELEASED)[0]
+
+
+@pytest.mark.parametrize("version", ["1.2.1-rc.1", "1.2.1", "1.2.2-beta.1", "2.0.0"])
+def test_newer_versions_pass(version):
+    assert check_version.check(version, RELEASED) == []
+
+
+def test_the_next_beta_is_suggested_after_a_proper_one():
+    assert check_version.suggestions("1.3.0-beta.2")[0] == "1.3.0-beta.3"

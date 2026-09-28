@@ -55,6 +55,8 @@ ANISETTE_DIR = SECRETS_DIR / "anisette"
 CERTS_DIR = SECRETS_DIR / "certs"
 PROFILES_DIR = DATA_DIR / "profiles"
 IPA_CACHE_DIR = DATA_DIR / "ipa"
+#: Icons chosen in the editor - kept so a renewal can apply them again.
+ICONS_DIR = DATA_DIR / "icons"
 WORK_DIR = CACHE_DIR / "work"
 OUT_DIR = CACHE_DIR / "out"
 LOCK_FILE = STATE_DIR / "modstaller.lock"

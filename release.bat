@@ -4,6 +4,10 @@ rem
 rem    release.bat 0.2.0          Version setzen, Commit + Tag, pushen
 rem    release.bat 0.3.0-beta.1   Vorabversion (nur fuer Beta-Nutzer)
 rem
+rem  Die Nummer muss neuer sein als jede bisherige Release und dem Schema
+rem  X.Y.Z bzw. X.Y.Z-alpha.N/-beta.N/-rc.N folgen (packaging\check-version.py) -
+rem  sonst bietet der Updater sie niemandem an.
+rem
 rem  Den Rest macht GitHub: .github/workflows/release.yml testet, baut
 rem  AppImage, Windows-Installer und CLI-Zip und legt die Release an.
 rem  Installierte Apps finden sie von selbst.
@@ -47,12 +51,6 @@ if defined DIRTY (
     exit /b 1
 )
 
-git rev-parse -q --verify "refs/tags/%TAG%" >nul 2>nul
-if not errorlevel 1 (
-    echo Tag %TAG% gibt es schon.
-    exit /b 1
-)
-
 set "BRANCH="
 for /f "delims=" %%b in ('git rev-parse --abbrev-ref HEAD') do set "BRANCH=%%b"
 if not defined BRANCH (
@@ -70,6 +68,18 @@ if defined AHEAD (
     echo origin/%BRANCH% ist weiter als dein Stand - erst: git pull
     exit /b 1
 )
+
+rem -- Neuer als alles Bisherige? -----------------------------------------
+rem
+rem  Auch Tags, die von einem anderen Rechner aus gepusht wurden.
+git fetch -q --tags origin 2>nul
+git rev-parse -q --verify "refs/tags/%TAG%" >nul 2>nul
+if not errorlevel 1 (
+    echo Tag %TAG% gibt es schon.
+    exit /b 1
+)
+python packaging\check-version.py "%VERSION%"
+if errorlevel 1 exit /b 1
 
 rem -- Version setzen, committen, taggen ----------------------------------
 
