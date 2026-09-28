@@ -1,15 +1,47 @@
 <script lang="ts">
   import {
     LogOut, KeyRound, ShieldCheck, TriangleAlert, LoaderCircle, RefreshCw, Users, Smartphone, Trash2,
+    UserPlus, CircleUser,
   } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import { ask, errorText, refreshStatus, toast, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import { logout } from "../lib/actions";
   import { locale, t } from "../lib/i18n.svelte";
-  import type { AppId, Cert, Team } from "../lib/types";
+  import type { Account, AppId, Cert, Team } from "../lib/types";
 
   const loggedIn = $derived(ui.status?.loggedIn ?? false);
+  const accounts = $derived(ui.status?.accounts ?? []);
+
+  // -- Mehrere Accounts ----------------------------------------------------
+  /** Welcher Account unten gezeigt wird - anfangs der aktive. */
+  let chosen = $state<string | null>(null);
+  const viewing = $derived(accounts.find((a) => a.adsid === chosen)
+                           ?? accounts.find((a) => a.active) ?? null);
+  /** Ein weiterer Account wird gerade angemeldet. */
+  let adding = $state(false);
+
+  function show(a: Account) {
+    if (a.adsid === viewing?.adsid) return;
+    chosen = a.adsid;
+    forget();
+  }
+
+  function forget() {
+    teams = null;
+    certs = null;
+    loadError = "";
+  }
+
+  async function makeActive(a: Account) {
+    try {
+      await call("accounts.setActive", { adsid: a.adsid });
+      toast(t("{account} now signs new installs.", { account: a.label }));
+      await refreshStatus(true);
+    } catch (err) {
+      toast(errorText(err), "bad", 8000);
+    }
+  }
 
   // -- Anmeldung -----------------------------------------------------------
   let appleId = $state("");
@@ -26,6 +58,11 @@
     try {
       await call("login", { appleId, password }, { onLog: (t) => (loginStep = t) });
       password = "";
+      appleId = "";
+      adding = false;
+      // Der neue Account ist jetzt der aktive - ihn zeigen.
+      chosen = null;
+      forget();
       toast(t("Signed in."));
       await refreshStatus(true);
     } catch (err) {
@@ -42,22 +79,27 @@
   let loading = $state(false);
 
   async function load() {
+    const account = viewing?.adsid;
+    if (!account) return;
     loading = true;
     loadError = "";
     try {
-      [teams, certs] = await Promise.all([
-        call<Team[]>("account"),
-        call<{ teamId: string; certs: Cert[] }>("certs.list"),
+      const [tm, cs] = await Promise.all([
+        call<Team[]>("account", { account }),
+        call<{ teamId: string; certs: Cert[] }>("certs.list", { account }),
       ]);
+      // Inzwischen auf einen anderen Account gewechselt? Dann gehoert das
+      // Ergebnis nicht mehr hierher.
+      if (account === viewing?.adsid) [teams, certs] = [tm, cs];
     } catch (err) {
-      loadError = errorText(err);
+      if (account === viewing?.adsid) loadError = errorText(err);
     } finally {
       loading = false;
     }
   }
 
   $effect(() => {
-    if (loggedIn && teams === null && !loading && !loadError) load();
+    if (viewing && teams === null && !loading && !loadError) load();
   });
 
   async function revoke(c: Cert) {
@@ -69,7 +111,7 @@
     });
     if (!ok) return;
     try {
-      await call("certs.revoke", { serial: c.serial, teamId: certs?.teamId });
+      await call("certs.revoke", { serial: c.serial, teamId: certs?.teamId, account: viewing?.adsid });
       toast(t("Certificate revoked."));
       load();
     } catch (err) {
@@ -96,7 +138,7 @@
     });
     if (!ok) return;
     try {
-      await call("appids.delete", { appIdId: a.appIdId, teamId: team.teamId });
+      await call("appids.delete", { appIdId: a.appIdId, teamId: team.teamId, account: viewing?.adsid });
       toast(t("App ID deleted."));
       load();
     } catch (err) {
@@ -104,30 +146,36 @@
     }
   }
 
-  async function doLogout() {
-    if (await logout()) {
-      teams = null;
-      certs = null;
-      await refreshStatus(true);
+  async function doLogout(a: Account) {
+    try {
+      if (await logout(a, accounts.length === 1)) {
+        if (chosen === a.adsid) chosen = null;
+        forget();
+        await refreshStatus(true);
+      }
+    } catch (err) {
+      toast(errorText(err), "bad", 8000);
     }
   }
 </script>
 
 <PageHeader title={t("Apple account")} subtitle={t("Your Apple account signs the apps. The password is never stored or transmitted.")}>
   {#snippet actions()}
-    {#if loggedIn}
+    {#if loggedIn && !adding}
       <button class="btn" onclick={load} disabled={loading}><RefreshCw size={16} /> {t("Refresh")}</button>
-      <button class="btn danger" onclick={doLogout}><LogOut size={16} /> {t("Sign out")}</button>
+      <button class="btn" onclick={() => (adding = true)}><UserPlus size={16} /> {t("Add account")}</button>
     {/if}
   {/snippet}
 </PageHeader>
 
-{#if !loggedIn}
+{#if !loggedIn || adding}
   <div class="login-wrap">
     <form class="card login" onsubmit={login}>
       <div class="icon"><KeyRound size={24} /></div>
-      <h2>{t("Sign in with Apple")}</h2>
-      <p class="muted">{t("An ordinary, free Apple ID is enough. Apple then asks for a code on your iPhone.")}</p>
+      <h2>{adding ? t("Add an Apple account") : t("Sign in with Apple")}</h2>
+      <p class="muted">{adding
+        ? t("It becomes the active account for new installs. Apps keep renewing with the account that installed them.")
+        : t("An ordinary, free Apple ID is enough. Apple then asks for a code on your iPhone.")}</p>
       <div class="field">
         <label for="aid">Apple ID</label>
         <input id="aid" type="email" autocomplete="username" bind:value={appleId} disabled={loggingIn} />
@@ -142,10 +190,43 @@
       <button class="btn primary big" type="submit" disabled={loggingIn || !appleId.trim() || !password}>
         {#if loggingIn}<LoaderCircle size={16} class="spin" /><span class="ellipsis" title={loginStep}>{loginStep}</span>{:else}{t("Sign in")}{/if}
       </button>
+      {#if adding && !loggingIn}
+        <button type="button" class="btn ghost" onclick={() => { adding = false; loginError = ""; }}>{t("Cancel")}</button>
+      {/if}
       <p class="faint tiny"><ShieldCheck size={13} /> {t("SRP-6a: Apple gets proof that you know the password – not the password itself.")}</p>
     </form>
   </div>
 {:else}
+  <div class="card pad">
+    <h2>{t("Signed-in accounts")}</h2>
+    {#if accounts.length > 1}
+      <p class="muted desc">{t("New installs sign with the active account. Renewals always use the account that installed the app.")}</p>
+    {/if}
+    <div class="accounts">
+      {#each accounts as a (a.adsid)}
+        <div class="acc" class:viewing={a.adsid === viewing?.adsid}>
+          <button class="acc-main" onclick={() => show(a)} title={t("Show teams and certificates")}>
+            <CircleUser size={20} />
+            <div class="grow">
+              <div class="acc-name selectable">{a.label}</div>
+              {#if a.firstName && a.firstName !== a.label}<div class="faint tiny">{a.firstName}</div>{/if}
+            </div>
+          </button>
+          {#if a.active}
+            <span class="chip accent">{t("Active")}</span>
+          {:else}
+            <button class="btn sm" onclick={() => makeActive(a)}>{t("Make active")}</button>
+          {/if}
+          <button class="btn sm icon danger" title={t("Sign out")} onclick={() => doLogout(a)}><LogOut size={15} /></button>
+        </div>
+      {/each}
+    </div>
+  </div>
+
+  {#if accounts.length > 1 && viewing}
+    <p class="faint viewing-note">{t("Teams and certificates of {account}", { account: viewing.label })}</p>
+  {/if}
+
   {#if loadError}
     <div class="banner bad small"><TriangleAlert size={16} color="var(--bad)" /><div class="grow selectable">{loadError}</div>
       <button class="btn sm" onclick={load}>{t("Again")}</button></div>
@@ -276,4 +357,12 @@
   .cert { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
   .cert + .cert { border-top: 1px solid var(--border); }
   .c-name { font-weight: 550; }
+  .accounts { display: grid; margin-top: 12px; }
+  .acc { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; }
+  .acc + .acc { margin-top: 4px; }
+  .acc.viewing { background: var(--surface-2); }
+  .acc-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; background: none; border: 0;
+              padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .acc-name { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .viewing-note { margin: 0 4px 10px; font-size: 12.5px; }
 </style>

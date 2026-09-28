@@ -32,6 +32,9 @@ class InstallRecord:
     installed_at: float = field(default_factory=time.time)
     last_refresh_at: float = 0.0
     strip_extensions: bool = False
+    #: The Apple account that signed it. Records from older versions don't
+    #: have it - the team then tells (see session.session_for_team).
+    adsid: str = ""
 
     @property
     def days_left(self) -> float:

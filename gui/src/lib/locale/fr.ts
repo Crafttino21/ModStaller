@@ -12,6 +12,16 @@ const dict: Dict = {
     "<b>JIT</b> est nécessaire pour les applications Java et les émulateurs (les lanceurs Minecraft, par exemple) : ModStaller démarre l’application avec un débogueur attaché et libère de la mémoire dès qu’elle en demande.",
   "Account":
     "Compte",
+  "Active":
+    "Actif",
+  "Active account ({account})":
+    "Compte actif ({account})",
+  "Add account":
+    "Ajouter un compte",
+  "Add an Apple account":
+    "Ajouter un compte Apple",
+  "After the running task.":
+    "Après la tâche en cours.",
   "Again":
     "Réessayer",
   "All":
@@ -58,6 +68,12 @@ const dict: Dict = {
     "Service de fond injoignable",
   "Battery {level} %":
     "Batterie {level} %",
+  "Beta channel":
+    "Canal bêta",
+  "Beta versions bring new features earlier, but they can be unstable and contain bugs.":
+    "Les versions bêta apportent les nouveautés plus tôt, mais peuvent être instables et contenir des bugs.",
+  "Beta – may be unstable":
+    "Bêta – peut être instable",
   "Bundle ID {id} · transport: {transport}":
     "Bundle ID {id} · transport : {transport}",
   "Cancel":
@@ -118,6 +134,8 @@ const dict: Dict = {
     "Autre IPA",
   "Done":
     "Terminé",
+  "Download":
+    "Télécharger",
   "Drag an IPA here":
     "Glissez un IPA ici",
   "Drag an IPA into the window or pick one from your Downloads.":
@@ -164,12 +182,16 @@ const dict: Dict = {
     "Installer {name}",
   "Is everything here that ModStaller needs?":
     "Tout ce dont ModStaller a besoin est-il présent ?",
+  "It becomes the active account for new installs. Apps keep renewing with the account that installed them.":
+    "Il devient le compte actif pour les nouvelles installations. Les apps continuent d’être renouvelées avec le compte qui les a installées.",
   "JIT for {name}":
     "JIT pour {name}",
   "Keep extensions":
     "Conserver les extensions",
   "Language":
     "Langue",
+  "Leaving the beta channel keeps the installed beta until a newer stable version is out.":
+    "En quittant le canal bêta, la bêta installée est conservée jusqu’à la sortie d’une version stable plus récente.",
   "Live":
     "En direct",
   "Log":
@@ -182,12 +204,16 @@ const dict: Dict = {
     "Journal dans",
   "Looking for updates …":
     "Recherche de mises à jour …",
+  "Make active":
+    "Rendre actif",
   "Manage App IDs ({count})":
     "Gérer les identifiants d’app ({count})",
   "Manage all":
     "Tout gérer",
   "ModStaller is starting …":
     "ModStaller démarre …",
+  "New installs sign with the active account. Renewals always use the account that installed the app.":
+    "Les nouvelles installations sont signées avec le compte actif. Les renouvellements utilisent toujours le compte qui a installé l’app.",
   "No IPAs in Downloads, Documents or Desktop.":
     "Aucun IPA dans Téléchargements, Documents ou Bureau.",
   "No app installed yet":
@@ -246,6 +272,8 @@ const dict: Dict = {
     "Relire",
   "Reading the IPA …":
     "Lecture de l’IPA …",
+  "Receive beta versions":
+    "Recevoir les versions bêta",
   "Recent activity":
     "Activité récente",
   "Refresh":
@@ -288,6 +316,8 @@ const dict: Dict = {
     "Réglages",
   "Settings › Privacy & Security › Developer Mode – otherwise no sideloaded app will start.":
     "Réglages › Confidentialité et sécurité › Mode développeur – sinon aucune application sideloadée ne démarrera.",
+  "Show teams and certificates":
+    "Afficher les équipes et certificats",
   "Sideloading for {platform}":
     "Sideloading pour {platform}",
   "Sideloads on the iPhone that do not come from ModStaller – from AltStore or SideStore, for instance. Renewing is not possible: the original IPA and the private key live with the other tool.":
@@ -304,16 +334,26 @@ const dict: Dict = {
     "Se déconnecter",
   "Sign out?":
     "Se déconnecter ?",
+  "Sign with":
+    "Signer avec",
   "Signed by someone else":
     "Signé par un tiers",
+  "Signed by {account}":
+    "Signée par {account}",
   "Signed in":
     "Connecté",
   "Signed in.":
     "Connecté.",
   "Signed out.":
     "Déconnecté.",
+  "Signed-in accounts":
+    "Comptes connectés",
   "Source missing ({path}) – renewing is not possible.":
     "Source manquante ({path}) – renouvellement impossible.",
+  "Stable channel":
+    "Canal stable",
+  "Stable versions are always offered. With the beta channel, pre-release versions (-beta.x) are offered as well.":
+    "Les versions stables sont toujours proposées. Avec le canal bêta, les préversions (-beta.x) le sont aussi.",
   "Start an instance inside the app now (a game, for example) – only then does it ask for memory. The unlock applies to this launch of the app only.":
     "Lancez maintenant une instance dans l’application (un jeu, par exemple) – ce n’est qu’alors qu’elle demande de la mémoire. L’activation ne vaut que pour ce lancement.",
   "Starting …":
@@ -326,6 +366,8 @@ const dict: Dict = {
     "Diagnostic",
   "System is ready – {count} step(s) still open.":
     "Le système est prêt – {count} étape(s) encore ouverte(s).",
+  "Teams and certificates of {account}":
+    "Équipes et certificats de {account}",
   "That is not an IPA file.":
     "Ce n’est pas un fichier IPA.",
   "The ModStaller service in the background has stopped":
@@ -360,6 +402,8 @@ const dict: Dict = {
     "À jour – aucune version plus récente sur GitHub.",
   "Update check failed: {message}":
     "Échec de la vérification des mises à jour : {message}",
+  "Updates":
+    "Mises à jour",
   "Version {version} is available":
     "La version {version} est disponible",
   "Version {version} is available – see bottom left.":
@@ -370,6 +414,8 @@ const dict: Dict = {
     "Version {version} · à partir d’iOS {ios}",
   "View quotas and certificates":
     "Voir les quotas et les certificats",
+  "Wait for the running task first":
+    "Attendez d’abord la fin de la tâche en cours",
   "Warnings":
     "Avertissements",
   "What ModStaller does – live. The complete history is in the log file.":
@@ -418,6 +464,10 @@ const dict: Dict = {
     "ou",
   "yesterday":
     "hier",
+  "{account} now signs new installs.":
+    "{account} signe désormais les nouvelles installations.",
+  "{count} accounts signed in":
+    "{count} comptes connectés",
   "{count} day left":
     "encore {count} jour",
   "{count} days ago":

@@ -11,6 +11,7 @@ const path = require("node:path");
 // Release-Notes kommen als HTML von GitHub - angezeigt wird reiner Text.
 // Eigene Datei, damit die Umwandlung ohne Electron pruefbar ist.
 const { plainNotes } = require("./notes.cjs");
+const channel = require("./channel.cjs");
 
 /** Wie viel stderr wir fuer die Fehleranzeige aufheben. */
 const STDERR_KEEP = 60;
@@ -216,8 +217,26 @@ function createWindow() {
 // bekommt ein fertig geladenes Update beim Beenden eingespielt.
 
 function setUpdateState(next) {
-  updateState = { ...next, current: app.getVersion() };
+  updateState = {
+    ...next,
+    current: app.getVersion(),
+    beta: betaChannel(),
+    prerelease: channel.isPrerelease(next.version),
+  };
   win?.webContents.send("update:state", updateState);
+}
+
+// Beta-Kanal: Betas (-beta.x) zusaetzlich zu den stabilen Versionen.
+function prefsFile() {
+  return path.join(app.getPath("userData"), "updates.json");
+}
+
+function betaChannel() {
+  return channel.readPrefs(prefsFile(), app.getVersion()).beta;
+}
+
+function applyChannel(autoUpdater) {
+  Object.assign(autoUpdater, channel.updaterFlags({ beta: betaChannel() }));
 }
 
 
@@ -237,6 +256,9 @@ function setupUpdates() {
   updater = autoUpdater;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  // Vor dem ersten Check - sonst entscheidet die Bibliothek nach der
+  // laufenden Version selbst.
+  applyChannel(autoUpdater);
 
   let version = null;
   autoUpdater.on("checking-for-update", () => setUpdateState({ state: "checking" }));
@@ -247,8 +269,10 @@ function setupUpdates() {
   });
   autoUpdater.on("download-progress", (p) =>
     setUpdateState({ state: "downloading", version, percent: Math.round(p.percent) }));
-  autoUpdater.on("update-downloaded", (info) =>
-    setUpdateState({ state: "ready", version: info.version }));
+  autoUpdater.on("update-downloaded", (info) => {
+    autoUpdater.autoInstallOnAppQuit = true;
+    setUpdateState({ state: "ready", version: info.version });
+  });
   autoUpdater.on("error", (err) =>
     setUpdateState({ state: "error", version, message: String(err?.message ?? err).split("\n")[0] }));
 
@@ -260,6 +284,20 @@ function setupUpdates() {
 ipcMain.handle("update:get", () => updateState);
 ipcMain.handle("update:check", () => updater?.checkForUpdates().catch(() => {}));
 ipcMain.handle("update:download", () => updater?.downloadUpdate().catch(() => {}));
+ipcMain.handle("update:getBeta", () => betaChannel());
+ipcMain.handle("update:setBeta", (_e, on) => {
+  channel.writePrefs(prefsFile(), { beta: Boolean(on) });
+  if (!updater) {
+    setUpdateState({ ...updateState });
+    return;
+  }
+  applyChannel(updater);
+  // Eine schon geladene Beta nicht mehr heimlich beim Beenden einspielen.
+  if (!on && updateState.state === "ready" && channel.isPrerelease(updateState.version)) {
+    updater.autoInstallOnAppQuit = false;
+  }
+  return updater.checkForUpdates().catch(() => {});
+});
 ipcMain.handle("update:install", () => {
   // isSilent=false, isForceRunAfter=true: danach startet die neue Version.
   updater?.quitAndInstall(false, true);

@@ -16,6 +16,9 @@
   let inspectError = $state("");
   let keepExtensions = $state(false);
   let dragging = $state(false);
+  /** adsid - leer heisst: der aktive Account. */
+  let account = $state("");
+  const accounts = $derived(ui.status?.accounts ?? []);
 
   call<FoundIpa[]>("ipa.find").then((f) => (found = f.sort((a, b) => b.modified - a.modified)), () => (found = []));
 
@@ -70,7 +73,7 @@
   });
 
   function start() {
-    if (info) installIpa(info.path, info.name, keepExtensions);
+    if (info) installIpa(info.path, info.name, keepExtensions, account || undefined);
   }
 </script>
 
@@ -138,6 +141,18 @@
           </div>
         </div>
       </label>
+    {/if}
+
+    {#if accounts.length > 1}
+      <div class="field account">
+        <label for="acc">{t("Sign with")}</label>
+        <select id="acc" bind:value={account}>
+          <option value="">{t("Active account ({account})", { account: accounts.find((a) => a.active)?.label ?? "" })}</option>
+          {#each accounts.filter((a) => !a.active) as a (a.adsid)}
+            <option value={a.adsid}>{a.label}</option>
+          {/each}
+        </select>
+      </div>
     {/if}
 
     {#each blockers as b}

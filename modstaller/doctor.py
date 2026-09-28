@@ -142,11 +142,14 @@ async def run_checks() -> list[Check]:
     except Exception as exc:
         checks.append(Check(label, False, str(exc)))
 
-    from .apple.session import Session
-    logged_in = Session.load() is not None
+    from .apple.session import list_accounts
+    accounts = len(list_accounts())
+    logged_in = accounts > 0
     checks.append(Check(
         _("Apple sign-in"), logged_in,
-        _("active") if logged_in else _("missing"),
+        (_("active") if accounts == 1
+         else _("{count} accounts", count=accounts) if logged_in
+         else _("missing")),
         hint="modstaller login", kind=TODO))
 
     from .device.connection import list_devices

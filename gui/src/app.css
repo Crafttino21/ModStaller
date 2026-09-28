@@ -156,7 +156,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .field label { font-size: 12.5px; font-weight: 550; color: var(--text-2); }
 
-input[type="text"], input[type="email"], input[type="password"], input[type="search"] {
+input[type="text"], input[type="email"], input[type="password"], input[type="search"], select {
   /* Ohne Breite gilt die intrinsische Groesse (size=20 Zeichen). Die richtet
      sich nach der Schriftgroesse und sprengt jeden schmalen Kasten - beim
      Code-Feld mit 26px und weiter Laufweite lief das Feld aus dem Dialog. */
@@ -173,7 +173,7 @@ input[type="text"], input[type="email"], input[type="password"], input[type="sea
   transition: border-color 0.15s, box-shadow 0.15s;
   user-select: text;
 }
-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 .banner {
   display: flex;

@@ -1,8 +1,18 @@
 <script lang="ts">
-  import { Languages, Check } from "@lucide/svelte";
+  import { Languages, Check, FlaskConical, TriangleAlert } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import { LANGUAGES, locale, setLocale, t } from "../lib/i18n.svelte";
-  import { applyLanguage } from "../lib/state.svelte";
+  import { applyLanguage, ui } from "../lib/state.svelte";
+
+  // -- Update-Kanal ----------------------------------------------------------
+  let beta = $state(false);
+  const updatesSupported = $derived(ui.update.state !== "unsupported");
+  window.updates.getBeta().then((b) => (beta = b), () => {});
+
+  function setBeta(on: boolean) {
+    beta = on;
+    window.updates.setBeta(on).catch(() => {});
+  }
 
   function pick(code: string) {
     if (code === locale()) return;
@@ -36,8 +46,47 @@
   </p>
 </div>
 
+<div class="card pad">
+  <h2><FlaskConical size={18} /> {t("Updates")}</h2>
+  <p class="muted desc">
+    {t("Stable versions are always offered. With the beta channel, pre-release versions (-beta.x) are offered as well.")}
+  </p>
+
+  <label class="toggle" class:off={!updatesSupported}>
+    <input type="checkbox" checked={beta} disabled={!updatesSupported}
+           onchange={(e) => setBeta(e.currentTarget.checked)} />
+    <span class="switch"></span>
+    <div>
+      <div>{t("Receive beta versions")}</div>
+      <div class="faint small">
+        {updatesSupported
+          ? t("Leaving the beta channel keeps the installed beta until a newer stable version is out.")
+          : t("Automatic updates exist only in the AppImage and in the Windows version installed with the setup.")}
+      </div>
+    </div>
+  </label>
+
+  {#if beta}
+    <div class="banner warn small warn-beta">
+      <TriangleAlert size={16} color="var(--warn)" />
+      <div class="grow">{t("Beta versions bring new features earlier, but they can be unstable and contain bugs.")}</div>
+    </div>
+  {/if}
+</div>
+
 <style>
-  .pad { padding: 22px; }
+  .pad { padding: 22px; margin-bottom: 14px; }
+  .toggle { display: flex; gap: 14px; align-items: flex-start; cursor: pointer; padding: 14px; margin-top: 16px;
+            border-radius: 12px; border: 1px solid var(--border); }
+  .toggle.off { cursor: default; opacity: 0.6; }
+  .toggle input { display: none; }
+  .switch { width: 38px; height: 22px; flex: none; border-radius: 99px; background: var(--border-strong); position: relative; transition: background 0.15s; margin-top: 1px; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+  .toggle input:checked + .switch { background: var(--accent); }
+  .toggle input:checked + .switch::after { transform: translateX(16px); }
+  .small { font-size: 12.5px; margin-top: 2px; }
+  .warn-beta { margin-top: 12px; font-size: 13px; }
+  .grow { flex: 1; min-width: 0; }
   h2 { display: flex; align-items: center; gap: 9px; font-size: 17px; }
   .desc { margin-top: 8px; font-size: 13px; max-width: 640px; }
   .langs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));

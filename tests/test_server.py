@@ -153,14 +153,15 @@ async def test_login_asks_the_ui_for_the_2fa_code(monkeypatch):
 
     def fake_login(apple_id, password, ani, code_prompt=None, debug=False):
         got["code"] = code_prompt()
-        return object()
+        return type("S", (), {"adsid": "a"})()
 
     class FakeApi:
         def __init__(self, session, ani):
             pass
 
         def list_teams(self):
-            return ["Team Santino [T1]"]
+            return [type("T", (), {"team_id": "T1",
+                                   "__str__": lambda _: "Team Santino [T1]"})()]
 
     monkeypatch.setattr("modstaller.apple.session.login", fake_login)
     monkeypatch.setattr("modstaller.apple.devservices.DeveloperServices",
@@ -173,6 +174,8 @@ async def test_login_asks_the_ui_for_the_2fa_code(monkeypatch):
         msg = await w.next()
         if msg.get("method") == "prompt.2fa":
             break
+    # With several accounts the dialog has to say whose code it is.
+    assert msg["params"] == {"appleId": "a@b.de"}
     w.send({"jsonrpc": "2.0", "id": msg["id"], "result": "123456"})
 
     reply = await w.reply_to(1)
@@ -222,19 +225,35 @@ async def test_first_name_is_looked_up_once_in_the_background(monkeypatch):
     import asyncio
     looked_up = []
 
-    def fake_api():
+    def fake_api(adsid=None):
         class Api:
             def list_teams(self):
-                looked_up.append(1)
+                looked_up.append(adsid)
                 return []
         return Api()
 
     monkeypatch.setattr(srv, "_api", fake_api)
     w = Wire()
-    srv._look_up_first_name(w.server)
-    srv._look_up_first_name(w.server)       # second poll: no second lookup
+    srv._look_up_first_name(w.server, "a")
+    srv._look_up_first_name(w.server, "a")  # second poll: no second lookup
+    srv._look_up_first_name(w.server, "b")  # but every account gets one
     for _ in range(50):
-        if looked_up:
+        if len(looked_up) == 2:
             break
         await asyncio.sleep(0.01)
-    assert looked_up == [1]
+    assert sorted(looked_up) == ["a", "b"]
+
+
+async def test_the_device_identity_stays_while_other_accounts_need_it():
+    from modstaller.apple import session as session_mod
+    for adsid, at in (("a", 1), ("b", 2)):
+        session_mod.Session(adsid=adsid, idms_token="i", identity_token="t",
+                            created_at=at, app_token="x").save()
+    w = Wire()
+    w.call(1, "logout", account="a", forgetDevice=True)
+    assert "error" in await w.reply_to(1)
+    assert len(session_mod.list_accounts()) == 2
+
+    w.call(2, "logout", account="a")
+    assert (await w.reply_to(2))["result"] is True
+    assert [s.adsid for s in session_mod.list_accounts()] == ["b"]

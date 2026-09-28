@@ -70,7 +70,9 @@
 
 <div class="card updates">
   <div class="grow">
-    <div class="label">ModStaller {ui.update.current ?? version}</div>
+    <div class="label">ModStaller {ui.update.current ?? version}
+      {#if ui.update.state !== "unsupported"}<span class="chip {ui.update.beta ? 'warn' : ''}">{ui.update.beta ? t("Beta channel") : t("Stable channel")}</span>{/if}
+    </div>
     <div class="faint tiny">
       {#if ui.update.state === "unsupported"}{t("Automatic updates exist only in the AppImage and in the Windows version installed with the setup.")}
       {:else if ui.update.state === "checking"}{t("Looking for updates …")}
@@ -91,6 +93,7 @@
 {#if logPath}<p class="faint foot">{t("Log in")} <code class="selectable">{logPath}</code></p>{/if}
 
 <style>
+  .label .chip { margin-left: 8px; vertical-align: middle; }
   .summary { margin-bottom: 14px; font-weight: 550; }
   .list { padding: 6px 18px; }
   .row { display: flex; gap: 14px; align-items: flex-start; padding: 14px 0; }

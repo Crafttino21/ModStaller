@@ -9,7 +9,7 @@ from typing import Callable
 
 from .apple import anisette as anisette_mod
 from .apple.devservices import DeveloperServices
-from .apple.session import Session
+from .apple.session import Session, remember_teams, session_for_team
 from .config import OUT_DIR, Settings, find_zsign
 from .i18n import _
 from .device.connection import ServiceProvider, device_info
@@ -42,6 +42,7 @@ async def install(
     *,
     udid: str | None = None,
     team_id: str | None = None,
+    account: str | None = None,
     settings: Settings | None = None,
     strip_extensions: bool | None = None,
     revoke_conflicting_cert: bool = False,
@@ -56,6 +57,8 @@ async def install(
     from the IPA - a renewal must hit exactly the app that is installed,
     even if it once got a recycled App ID or the IPA's own ID has changed
     since. ``renewing`` is that app's record; its history is kept.
+    ``account`` is the adsid of the Apple account to sign with - the active
+    one if not given.
     """
     settings = settings or Settings.load()
 
@@ -79,7 +82,7 @@ async def install(
                 "Security > Developer Mode on the iPhone."))
 
         # 3. Sign-in and team.
-        session = Session.load()
+        session = Session.load(account)
         if session is None:
             raise AppleError("Not signed in. First run: modstaller login")
         ani = anisette_mod.build(settings.anisette_provider,
@@ -87,6 +90,7 @@ async def install(
         api = DeveloperServices(session, ani)
 
         teams = api.list_teams()
+        remember_teams(session.adsid, teams)
         team = pick_team(teams, team_id or settings.default_team_id)
         caps = Capabilities.for_team(team)
         on_step(f"Team:   {team}")
@@ -173,6 +177,7 @@ async def install(
                           else time.time()),
             last_refresh_at=time.time() if renewing else 0.0,
             strip_extensions=strip,
+            adsid=session.adsid,
         ))
 
     return InstallOutcome(bundle_id=new_id, name=info.name,
@@ -221,12 +226,29 @@ async def refresh(
             on_step("\n" + _("{name}: original IPA missing ({path}) - skipped.",
                                    name=rec.name, path=source))
             continue
+        account = _account_for(rec)
+        if account is None:
+            on_step("\n" + _("{name}: the Apple account of team {team} is not "
+                             "signed in - skipped.",
+                             name=rec.name, team=rec.team_id))
+            continue
         on_step("\n=== " + _("Renewing {name} ({expiry})",
                                    name=rec.name, expiry=rec.expiry_text) + " ===")
         results.append(await install(
             source, udid=udid or rec.udid, team_id=rec.team_id,
+            account=account,
             settings=settings, strip_extensions=rec.strip_extensions,
             bundle_id=rec.bundle_id, renewing=rec,
             progress=progress, on_step=on_step,
         ))
     return results
+
+
+def _account_for(rec: "store.InstallRecord") -> str | None:
+    """The account that renews ``rec``: the one that signed it, else the one
+    its team belongs to. Records from before accounts were tracked fall back
+    to the active account - as they always did."""
+    if rec.adsid:
+        return rec.adsid if Session.load(rec.adsid) else None
+    session = session_for_team(rec.team_id) or Session.load()
+    return session.adsid if session else None

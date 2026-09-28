@@ -3,15 +3,16 @@
 import { ask, runTask, toast } from "./state.svelte";
 import { call } from "./rpc";
 import { t } from "./i18n.svelte";
-import type { App, DeviceCheck, FixResult, InstallOutcome, JitResult } from "./types";
+import type { Account, App, DeviceCheck, FixResult, InstallOutcome, JitResult } from "./types";
 
 /** Mehr braucht es nicht, um eine App anzusprechen - so gehen auch die
  *  Eintraege fremder Werkzeuge durch dieselben Vorgaenge. */
 type NamedApp = Pick<App, "bundleId" | "name">;
 
-export function installIpa(path: string, name: string, keepExtensions: boolean) {
+/** ``account``: adsid des Apple-Accounts - sonst der aktive. */
+export function installIpa(path: string, name: string, keepExtensions: boolean, account?: string) {
   runTask<InstallOutcome>("install", t("Install {name}", { name }), "install",
-    { path, keepExtensions },
+    { path, keepExtensions, ...(account ? { account } : {}) },
     (o) => ({
       message: t("{name} is installed and runs for {days} days.",
                  { name: o.name, days: Math.round(o.daysValid) }),
@@ -68,15 +69,20 @@ export async function uninstallApp(app: NamedApp, foreign = false) {
     () => ({ message: t("{name} was removed from the iPhone.", { name: app.name }) }));
 }
 
-export async function logout() {
+/** ``last``: der letzte angemeldete Account - nur dann laesst sich die
+ *  Geraeteidentitaet verwerfen, die alle Accounts teilen. */
+export async function logout(account: Account, last: boolean) {
   const { ok, option } = await ask({
     title: t("Sign out?"),
-    text: t("The session is discarded. Installed apps keep running but can only be renewed after signing in again."),
+    text: (account.appleId ? account.appleId + "\n\n" : "")
+      + t("The session is discarded. Installed apps keep running but can only be renewed after signing in again."),
     confirm: t("Sign out"),
-    option: t("Also discard the device identity (Apple will then ask for a two-factor code again)"),
+    option: last
+      ? t("Also discard the device identity (Apple will then ask for a two-factor code again)")
+      : undefined,
   });
   if (!ok) return false;
-  await call("logout", { forgetDevice: option });
+  await call("logout", { account: account.adsid, forgetDevice: last && option });
   toast(t("Signed out."));
   return true;
 }

@@ -18,6 +18,7 @@
     <div class="icon"><ShieldCheck size={26} /></div>
     <h2>{t("Confirmation code")}</h2>
     <p class="muted">{t("Apple sent a six-digit code to your iPhone.")}</p>
+    {#if ui.twoFactorFor}<p class="faint who selectable">{ui.twoFactorFor}</p>{/if}
     <!-- svelte-ignore a11y_autofocus -->
     <input type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
            placeholder="000000" bind:value={code} autofocus />
@@ -36,5 +37,6 @@
      sitzt der Code sichtbar links aus der Mitte. */
   input { margin-top: 10px; height: 54px; text-align: center; font-size: 26px; letter-spacing: 0.45em;
           text-indent: 0.45em; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .who { font-size: 13px; font-weight: 550; }
   .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 </style>

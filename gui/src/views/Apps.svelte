@@ -11,6 +11,9 @@
 
   const st = $derived(ui.status);
   const noDevice = $derived(!st?.device);
+  /** Mit mehreren Accounts: welcher eine App signiert hat. */
+  const signedBy = (adsid: string) =>
+    (st?.accounts.length ?? 0) > 1 ? st?.accounts.find((a) => a.adsid === adsid)?.label ?? "" : "";
 
   // -- Fremde Sideloads ------------------------------------------------------
   //
@@ -89,6 +92,9 @@
         <div class="grow">
           <div class="name">{app.name}</div>
           <div class="faint mono small selectable">{app.bundleId}</div>
+          {#if signedBy(app.adsid)}
+            <div class="faint small selectable">{t("Signed by {account}", { account: signedBy(app.adsid) })}</div>
+          {/if}
           <div class="small" class:warn={app.urgent}>{days(app.daysLeft)} · bis {date(app.expiresAt)}</div>
           {#if app.sourceMissing}
             <div class="small missing"><TriangleAlert size={13} /> {t("Source missing ({path}) – renewing is not possible.", { path: app.sourceIpa })}</div>

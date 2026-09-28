@@ -22,6 +22,21 @@ export interface App {
   urgent: boolean;
   sourceIpa: string;
   sourceMissing: boolean;
+  teamId: string;
+  /** Der Apple-Account, der sie signiert hat - leer bei alten Eintraegen. */
+  adsid: string;
+}
+
+/** Ein angemeldeter Apple-Account. */
+export interface Account {
+  adsid: string;
+  /** Leer bei Sitzungen aus Versionen vor der Mehr-Account-Unterstuetzung. */
+  appleId: string;
+  firstName: string;
+  /** Apple-ID, sonst Vorname, sonst adsid. */
+  label: string;
+  /** Neue Installationen signieren mit diesem Account. */
+  active: boolean;
 }
 
 /** Woher eine App auf dem iPhone stammt - aus ihrer Signatur abgeleitet. */
@@ -58,6 +73,7 @@ export interface Status {
   loggedIn: boolean;
   /** Vorname des Apple-Accounts fuer die Begruessung - leer, wenn unbekannt. */
   firstName: string;
+  accounts: Account[];
   apps: App[];
   urgent: string[];
   urgentDays: number;
@@ -202,6 +218,10 @@ export interface UpdateState {
   notes?: string;
   percent?: number;
   message?: string;
+  /** Beta-Kanal an: Betas (-beta.x) werden mit angeboten. */
+  beta?: boolean;
+  /** Die angebotene Version ist eine Beta. */
+  prerelease?: boolean;
 }
 
 declare global {
@@ -212,6 +232,8 @@ declare global {
       check(): Promise<void>;
       download(): Promise<void>;
       install(): Promise<void>;
+      getBeta(): Promise<boolean>;
+      setBeta(on: boolean): Promise<void>;
     };
     backend: {
       platform: string;

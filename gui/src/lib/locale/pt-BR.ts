@@ -12,6 +12,16 @@ const dict: Dict = {
     "<b>JIT</b> é necessário para apps em Java e emuladores (lançadores de Minecraft, por exemplo): o ModStaller inicia o app com um depurador anexado e libera memória assim que ele pede.",
   "Account":
     "Conta",
+  "Active":
+    "Ativa",
+  "Active account ({account})":
+    "Conta ativa ({account})",
+  "Add account":
+    "Adicionar conta",
+  "Add an Apple account":
+    "Adicionar uma conta Apple",
+  "After the running task.":
+    "Após a tarefa em andamento.",
   "Again":
     "Tentar de novo",
   "All":
@@ -58,6 +68,12 @@ const dict: Dict = {
     "Serviço em segundo plano inacessível",
   "Battery {level} %":
     "Bateria {level} %",
+  "Beta channel":
+    "Canal beta",
+  "Beta versions bring new features earlier, but they can be unstable and contain bugs.":
+    "Versões beta trazem novidades antes, mas podem ser instáveis e conter erros.",
+  "Beta – may be unstable":
+    "Beta – pode ser instável",
   "Bundle ID {id} · transport: {transport}":
     "Bundle ID {id} · transporte: {transport}",
   "Cancel":
@@ -118,6 +134,8 @@ const dict: Dict = {
     "Outro IPA",
   "Done":
     "Concluído",
+  "Download":
+    "Baixar",
   "Drag an IPA here":
     "Arraste um IPA para cá",
   "Drag an IPA into the window or pick one from your Downloads.":
@@ -164,12 +182,16 @@ const dict: Dict = {
     "Instalar {name}",
   "Is everything here that ModStaller needs?":
     "Está tudo aqui do que o ModStaller precisa?",
+  "It becomes the active account for new installs. Apps keep renewing with the account that installed them.":
+    "Ela se torna a conta ativa para novas instalações. Os apps continuam sendo renovados com a conta que os instalou.",
   "JIT for {name}":
     "JIT para {name}",
   "Keep extensions":
     "Manter as extensões",
   "Language":
     "Idioma",
+  "Leaving the beta channel keeps the installed beta until a newer stable version is out.":
+    "Ao sair do canal beta, a beta instalada é mantida até sair uma versão estável mais nova.",
   "Live":
     "Ao vivo",
   "Log":
@@ -182,12 +204,16 @@ const dict: Dict = {
     "Log em",
   "Looking for updates …":
     "Procurando atualizações …",
+  "Make active":
+    "Tornar ativa",
   "Manage App IDs ({count})":
     "Gerenciar os IDs de app ({count})",
   "Manage all":
     "Gerenciar tudo",
   "ModStaller is starting …":
     "O ModStaller está iniciando …",
+  "New installs sign with the active account. Renewals always use the account that installed the app.":
+    "Novas instalações são assinadas com a conta ativa. As renovações sempre usam a conta que instalou o app.",
   "No IPAs in Downloads, Documents or Desktop.":
     "Nenhum IPA em Downloads, Documentos ou Área de Trabalho.",
   "No app installed yet":
@@ -246,6 +272,8 @@ const dict: Dict = {
     "Ler de novo",
   "Reading the IPA …":
     "Lendo o IPA …",
+  "Receive beta versions":
+    "Receber versões beta",
   "Recent activity":
     "Atividade recente",
   "Refresh":
@@ -288,6 +316,8 @@ const dict: Dict = {
     "Configurações",
   "Settings › Privacy & Security › Developer Mode – otherwise no sideloaded app will start.":
     "Ajustes › Privacidade e Segurança › Modo de Desenvolvedor – senão nenhum app por sideload vai abrir.",
+  "Show teams and certificates":
+    "Mostrar equipes e certificados",
   "Sideloading for {platform}":
     "Sideload para {platform}",
   "Sideloads on the iPhone that do not come from ModStaller – from AltStore or SideStore, for instance. Renewing is not possible: the original IPA and the private key live with the other tool.":
@@ -304,16 +334,26 @@ const dict: Dict = {
     "Sair",
   "Sign out?":
     "Sair?",
+  "Sign with":
+    "Assinar com",
   "Signed by someone else":
     "Assinado por terceiros",
+  "Signed by {account}":
+    "Assinado por {account}",
   "Signed in":
     "Sessão iniciada",
   "Signed in.":
     "Sessão iniciada.",
   "Signed out.":
     "Sessão encerrada.",
+  "Signed-in accounts":
+    "Contas conectadas",
   "Source missing ({path}) – renewing is not possible.":
     "Origem ausente ({path}) – não dá para renovar.",
+  "Stable channel":
+    "Canal estável",
+  "Stable versions are always offered. With the beta channel, pre-release versions (-beta.x) are offered as well.":
+    "Versões estáveis são sempre oferecidas. Com o canal beta, versões prévias (-beta.x) também.",
   "Start an instance inside the app now (a game, for example) – only then does it ask for memory. The unlock applies to this launch of the app only.":
     "Inicie agora uma instância dentro do app (um jogo, por exemplo) – só então ele pede memória. A liberação vale só para esta execução.",
   "Starting …":
@@ -326,6 +366,8 @@ const dict: Dict = {
     "Verificação do sistema",
   "System is ready – {count} step(s) still open.":
     "O sistema está pronto – ainda {count} passo(s) em aberto.",
+  "Teams and certificates of {account}":
+    "Equipes e certificados de {account}",
   "That is not an IPA file.":
     "Isso não é um arquivo IPA.",
   "The ModStaller service in the background has stopped":
@@ -360,6 +402,8 @@ const dict: Dict = {
     "Em dia – nenhuma versão mais nova no GitHub.",
   "Update check failed: {message}":
     "Falha ao procurar atualizações: {message}",
+  "Updates":
+    "Atualizações",
   "Version {version} is available":
     "A versão {version} está disponível",
   "Version {version} is available – see bottom left.":
@@ -370,6 +414,8 @@ const dict: Dict = {
     "Versão {version} · a partir do iOS {ios}",
   "View quotas and certificates":
     "Ver cotas e certificados",
+  "Wait for the running task first":
+    "Aguarde primeiro a tarefa em andamento",
   "Warnings":
     "Avisos",
   "What ModStaller does – live. The complete history is in the log file.":
@@ -418,6 +464,10 @@ const dict: Dict = {
     "ou",
   "yesterday":
     "ontem",
+  "{account} now signs new installs.":
+    "{account} agora assina novas instalações.",
+  "{count} accounts signed in":
+    "{count} contas conectadas",
   "{count} day left":
     "resta {count} dia",
   "{count} days ago":

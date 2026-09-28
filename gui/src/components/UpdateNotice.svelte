@@ -1,7 +1,7 @@
 <script lang="ts">
   // Neue Version: Hinweis unten in der Seitenleiste. Laden und Neustart nur
   // auf Knopfdruck - und nie, waehrend am iPhone gerade etwas laeuft.
-  import { ArrowDownToLine, RotateCw, Sparkles, LoaderCircle } from "@lucide/svelte";
+  import { ArrowDownToLine, RotateCw, Sparkles, LoaderCircle, FlaskConical } from "@lucide/svelte";
   import { busy, ui } from "../lib/state.svelte";
   import { t } from "../lib/i18n.svelte";
 
@@ -14,22 +14,25 @@
       <Sparkles size={15} />
       <span>{u.state === "ready" ? t("Version {version} is ready", { version: u.version ?? "" }) : t("Version {version} is available", { version: u.version ?? "" })}</span>
     </div>
+    {#if u.prerelease}
+      <div class="beta"><FlaskConical size={13} /> {t("Beta – may be unstable")}</div>
+    {/if}
     {#if u.state === "available"}
       {#if u.notes}
         <details><summary>{t("What's new?")}</summary><p class="selectable">{u.notes}</p></details>
       {/if}
       <button class="btn sm primary" onclick={() => window.updates.download()}>
-        <ArrowDownToLine size={14} /> Herunterladen
+        <ArrowDownToLine size={14} /> {t("Download")}
       </button>
     {:else if u.state === "downloading"}
       <div class="bar"><div style:width="{u.percent ?? 0}%"></div></div>
       <div class="pct"><LoaderCircle size={12} class="spin" /> {u.percent ?? 0} %</div>
     {:else}
       <button class="btn sm primary" disabled={busy()} onclick={() => window.updates.install()}
-              title={busy() ? "Erst den laufenden Vorgang abwarten" : ""}>
-        <RotateCw size={14} /> Neu starten
+              title={busy() ? t("Wait for the running task first") : ""}>
+        <RotateCw size={14} /> {t("Restart")}
       </button>
-      {#if busy()}<div class="pct">Nach dem laufenden Vorgang.</div>{/if}
+      {#if busy()}<div class="pct">{t("After the running task.")}</div>{/if}
     {/if}
   </div>
 {/if}
@@ -42,6 +45,7 @@
   .head { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
   .head :global(svg) { color: var(--accent); flex: none; }
   .btn { width: 100%; }
+  .beta { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 550; color: var(--warn); }
   details { font-size: 12px; color: var(--text-2); }
   summary { cursor: pointer; }
   details p { margin-top: 6px; max-height: 140px; overflow: auto; white-space: pre-line; }

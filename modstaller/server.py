@@ -137,8 +137,8 @@ class Server:
         self.device_cache: dict[str, dict] = {}
         #: Serial -> what the log last said about it (see _log_device_changes).
         self.seen_devices: dict[str, dict] = {}
-        #: Whether the first name for the greeting was already looked up.
-        self.name_lookup_started = False
+        #: Accounts whose first name for the greeting was already looked up.
+        self.name_lookups: set[str] = set()
         #: New log entries go to the interface as they happen.
         self.book = logbook.BOOK
         self._unsubscribe = self.book.subscribe(
@@ -477,6 +477,8 @@ def _app_dict(rec) -> dict:
         "urgent": rec.days_left <= URGENT_DAYS,
         "sourceIpa": rec.source_ipa,
         "sourceMissing": not Path(rec.source_ipa).is_file(),
+        "teamId": rec.team_id,
+        "adsid": rec.adsid,
     }
 
 
@@ -488,15 +490,18 @@ def _outcome_dict(o) -> dict:
 
 @method("status")
 async def _status(server: Server, job: Job, params: dict):
-    from .apple.session import Session
+    from .apple.session import active_adsid, list_accounts
     from .device.connection import list_devices
     from .device.models import form_factor, marketing_name
     from .state import store
     from .status import URGENT_DAYS, Status, device_status
 
-    session = Session.load()
-    if session is not None and not session.first_name:
-        _look_up_first_name(server)
+    accounts = list_accounts()
+    active = active_adsid()
+    session = next((a for a in accounts if a.adsid == active), None)
+    for account in accounts:
+        if not account.first_name:
+            _look_up_first_name(server, account.adsid)
     st = Status(apps=store.all_installs(), logged_in=session is not None)
     serials = await list_devices()
     cache = server.device_cache
@@ -534,6 +539,7 @@ async def _status(server: Server, job: Job, params: dict):
         "deviceAttached": bool(serials),
         "loggedIn": st.logged_in,
         "firstName": session.first_name if session else "",
+        "accounts": [_account_dict(a, active) for a in accounts],
         "apps": [_app_dict(a) for a in st.apps],
         "urgent": [a.bundle_id for a in st.urgent],
         "urgentDays": URGENT_DAYS,
@@ -573,7 +579,8 @@ async def _install(server: Server, job: Job, params: dict):
     path = Path(_need(params, "path")).expanduser()
     keep = params.get("keepExtensions")
     outcome = await job.isolated(lambda: install(
-        path, strip_extensions=False if keep else None,
+        path, account=_account_param(params),
+        strip_extensions=False if keep else None,
         revoke_conflicting_cert=bool(params.get("revokeConflictingCert")),
         progress=job.progress, on_step=job.log))
     return _outcome_dict(outcome)
@@ -628,23 +635,29 @@ def _anisette():
     return anisette_mod.build(s.anisette_provider, s.anisette_server)
 
 
-def _look_up_first_name(server: Server) -> None:
+def _account_dict(session, active: str | None) -> dict:
+    return {"adsid": session.adsid, "appleId": session.apple_id,
+            "firstName": session.first_name, "label": session.label,
+            "active": session.adsid == active}
+
+
+def _look_up_first_name(server: Server, adsid: str) -> None:
     """Fills in the greeting's first name for a session from before it
-    existed - once per server, in the background.
+    existed - once per account and server, in the background.
 
     The status is polled every few seconds and must stay fast, so it only
     starts this; the next poll then carries the name. A failure (no
     network, Apple busy) is fine: the dashboard just says "Signed in", and
     the account page tries again.
     """
-    if server.name_lookup_started:
+    if adsid in server.name_lookups:
         return
-    server.name_lookup_started = True
+    server.name_lookups.add(adsid)
 
     def look_up() -> None:
         from .apple.session import remember_first_name
         try:
-            remember_first_name(_api().list_teams())
+            remember_first_name(_api(adsid).list_teams(), adsid)
         except Exception:
             pass
 
@@ -653,11 +666,18 @@ def _look_up_first_name(server: Server) -> None:
     task.add_done_callback(server._tasks.discard)
 
 
-def _api():
+def _account_param(params: dict) -> str | None:
+    """The optional ``account`` (adsid) a call is about - else the active
+    one."""
+    value = params.get("account")
+    return value if isinstance(value, str) and value else None
+
+
+def _api(adsid: str | None = None):
     from .apple.devservices import DeveloperServices
     from .apple.session import Session
     from .errors import AppleError
-    session = Session.load()
+    session = Session.load(adsid)
     if session is None:
         raise AppleError(_("Not signed in."))
     return DeveloperServices(session, _anisette())
@@ -666,32 +686,59 @@ def _api():
 @method("login")
 async def _login(server: Server, job: Job, params: dict):
     from .apple.devservices import DeveloperServices
-    from .apple.session import login
+    from .apple.session import login, remember_teams
 
     apple_id = _need(params, "appleId").strip()
     password = _need(params, "password")
 
     def prompt_code() -> str:
-        return server.ask_blocking("prompt.2fa") or ""
+        # With several accounts the code dialog has to say whose code it is.
+        return server.ask_blocking("prompt.2fa", {"appleId": apple_id}) or ""
 
     def run():
         job.log("Preparing Anisette …")
         ani = _anisette()
         job.log("Signing in to Apple …")
         session = login(apple_id, password, ani, code_prompt=prompt_code)
-        return [str(t) for t in DeveloperServices(session, ani).list_teams()]
+        teams = DeveloperServices(session, ani).list_teams()
+        remember_teams(session.adsid, teams)
+        return [str(t) for t in teams]
 
     return {"teams": await asyncio.to_thread(run)}
 
 
 @method("logout")
 async def _logout(server: Server, job: Job, params: dict):
-    from .apple.session import Session
-    Session.clear()
-    if params.get("forgetDevice"):
+    from .apple.session import Session, active_adsid, list_accounts
+    from .errors import AppleError
+    adsid = _account_param(params) or active_adsid()
+    forget = bool(params.get("forgetDevice"))
+    # The device identity is shared by every account: discarding it would
+    # force a new two-factor code on all the others as well.
+    if forget and any(a.adsid != adsid for a in list_accounts()):
+        raise AppleError(_("The device identity can only be discarded "
+                           "together with the last account."))
+    Session.clear(adsid)
+    if forget:
         from .apple.anisette import DEVICE_FILE, PROVISIONING_FILE
         for f in (PROVISIONING_FILE, DEVICE_FILE):
             f.unlink(missing_ok=True)
+    return True
+
+
+@method("accounts.list")
+async def _accounts_list(server: Server, job: Job, params: dict):
+    from .apple.session import active_adsid, list_accounts
+    active = active_adsid()
+    return [_account_dict(a, active) for a in list_accounts()]
+
+
+@method("accounts.setActive")
+async def _accounts_set_active(server: Server, job: Job, params: dict):
+    """Picks the account new installs sign with. Renewals don't care: they
+    always use the account that owns the app's team."""
+    from .apple.session import set_active
+    set_active(_need(params, "adsid"))
     return True
 
 
@@ -720,11 +767,15 @@ async def _account(server: Server, job: Job, params: dict):
     except Exception:
         pass    # No iPhone plugged in - the account page stays usable.
 
+    from .apple.session import active_adsid
+    adsid = _account_param(params) or active_adsid()
+
     def run():
-        from .apple.session import remember_first_name
-        api = _api()
+        from .apple.session import remember_first_name, remember_teams
+        api = _api(adsid)
         teams = api.list_teams()
-        remember_first_name(teams)
+        remember_teams(adsid, teams)
+        remember_first_name(teams, adsid)
         out = []
         for team in teams:
             caps = Capabilities.for_team(team)
@@ -760,7 +811,7 @@ async def _appids_delete(server: Server, job: Job, params: dict):
     app_id_id = _need(params, "appIdId")
 
     def run():
-        api = _api()
+        api = _api(_account_param(params))
         team = pick_team(api.list_teams(), params.get("teamId"))
         api.delete_app_id(team.team_id, app_id_id)
 
@@ -779,7 +830,7 @@ async def _certs_list(server: Server, job: Job, params: dict):
     from .provisioning import pick_team
 
     def run():
-        api = _api()
+        api = _api(_account_param(params))
         team = pick_team(api.list_teams(), params.get("teamId"))
         return {"teamId": team.team_id,
                 "certs": [_cert_dict(c)
@@ -794,7 +845,7 @@ async def _certs_revoke(server: Server, job: Job, params: dict):
     serial = _need(params, "serial")
 
     def run():
-        api = _api()
+        api = _api(_account_param(params))
         team = pick_team(api.list_teams(), params.get("teamId"))
         api.revoke_certificate(team.team_id, serial)
 

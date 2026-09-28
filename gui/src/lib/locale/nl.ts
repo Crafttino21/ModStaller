@@ -12,6 +12,16 @@ const dict: Dict = {
     "<b>JIT</b> is nodig voor Java-apps en emulators (Minecraft-launchers bijvoorbeeld): ModStaller start de app met een debugger eraan vast en geeft geheugen vrij zodra de app erom vraagt.",
   "Account":
     "Account",
+  "Active":
+    "Actief",
+  "Active account ({account})":
+    "Actief account ({account})",
+  "Add account":
+    "Account toevoegen",
+  "Add an Apple account":
+    "Een Apple-account toevoegen",
+  "After the running task.":
+    "Na de lopende taak.",
   "Again":
     "Opnieuw",
   "All":
@@ -58,6 +68,12 @@ const dict: Dict = {
     "Achtergronddienst onbereikbaar",
   "Battery {level} %":
     "Batterij {level} %",
+  "Beta channel":
+    "Bètakanaal",
+  "Beta versions bring new features earlier, but they can be unstable and contain bugs.":
+    "Bètaversies brengen nieuwe functies eerder, maar kunnen instabiel zijn en fouten bevatten.",
+  "Beta – may be unstable":
+    "Bèta – kan instabiel zijn",
   "Bundle ID {id} · transport: {transport}":
     "Bundle ID {id} · transport: {transport}",
   "Cancel":
@@ -118,6 +134,8 @@ const dict: Dict = {
     "Andere IPA",
   "Done":
     "Klaar",
+  "Download":
+    "Downloaden",
   "Drag an IPA here":
     "Sleep hier een IPA naartoe",
   "Drag an IPA into the window or pick one from your Downloads.":
@@ -164,12 +182,16 @@ const dict: Dict = {
     "{name} installeren",
   "Is everything here that ModStaller needs?":
     "Is alles aanwezig wat ModStaller nodig heeft?",
+  "It becomes the active account for new installs. Apps keep renewing with the account that installed them.":
+    "Het wordt het actieve account voor nieuwe installaties. Apps worden verder vernieuwd met het account dat ze heeft geïnstalleerd.",
   "JIT for {name}":
     "JIT voor {name}",
   "Keep extensions":
     "Extensies behouden",
   "Language":
     "Taal",
+  "Leaving the beta channel keeps the installed beta until a newer stable version is out.":
+    "Wie het bètakanaal verlaat, houdt de geïnstalleerde bèta tot er een nieuwere stabiele versie is.",
   "Live":
     "Live",
   "Log":
@@ -182,12 +204,16 @@ const dict: Dict = {
     "Logboek in",
   "Looking for updates …":
     "Zoeken naar updates …",
+  "Make active":
+    "Actief maken",
   "Manage App IDs ({count})":
     "App-ID’s beheren ({count})",
   "Manage all":
     "Alles beheren",
   "ModStaller is starting …":
     "ModStaller start op …",
+  "New installs sign with the active account. Renewals always use the account that installed the app.":
+    "Nieuwe installaties worden ondertekend met het actieve account. Vernieuwen gebeurt altijd met het account dat de app heeft geïnstalleerd.",
   "No IPAs in Downloads, Documents or Desktop.":
     "Geen IPA’s in Downloads, Documenten of Bureaublad.",
   "No app installed yet":
@@ -246,6 +272,8 @@ const dict: Dict = {
     "Opnieuw lezen",
   "Reading the IPA …":
     "IPA wordt gelezen …",
+  "Receive beta versions":
+    "Bètaversies ontvangen",
   "Recent activity":
     "Recente activiteit",
   "Refresh":
@@ -288,6 +316,8 @@ const dict: Dict = {
     "Instellingen",
   "Settings › Privacy & Security › Developer Mode – otherwise no sideloaded app will start.":
     "Instellingen › Privacy en beveiliging › Ontwikkelaarsmodus – anders start geen enkele gesideloade app.",
+  "Show teams and certificates":
+    "Teams en certificaten tonen",
   "Sideloading for {platform}":
     "Sideloaden voor {platform}",
   "Sideloads on the iPhone that do not come from ModStaller – from AltStore or SideStore, for instance. Renewing is not possible: the original IPA and the private key live with the other tool.":
@@ -304,16 +334,26 @@ const dict: Dict = {
     "Afmelden",
   "Sign out?":
     "Afmelden?",
+  "Sign with":
+    "Ondertekenen met",
   "Signed by someone else":
     "Door iemand anders ondertekend",
+  "Signed by {account}":
+    "Ondertekend door {account}",
   "Signed in":
     "Aangemeld",
   "Signed in.":
     "Aangemeld.",
   "Signed out.":
     "Afgemeld.",
+  "Signed-in accounts":
+    "Aangemelde accounts",
   "Source missing ({path}) – renewing is not possible.":
     "Bron ontbreekt ({path}) – vernieuwen kan niet.",
+  "Stable channel":
+    "Stabiel kanaal",
+  "Stable versions are always offered. With the beta channel, pre-release versions (-beta.x) are offered as well.":
+    "Stabiele versies worden altijd aangeboden. Met het bètakanaal ook voorversies (-beta.x).",
   "Start an instance inside the app now (a game, for example) – only then does it ask for memory. The unlock applies to this launch of the app only.":
     "Start nu in de app een instantie (een spel bijvoorbeeld) – pas dan vraagt hij om geheugen. De vrijgave geldt alleen voor deze start van de app.",
   "Starting …":
@@ -326,6 +366,8 @@ const dict: Dict = {
     "Systeemcontrole",
   "System is ready – {count} step(s) still open.":
     "Het systeem is klaar – nog {count} stap(pen) open.",
+  "Teams and certificates of {account}":
+    "Teams en certificaten van {account}",
   "That is not an IPA file.":
     "Dat is geen IPA-bestand.",
   "The ModStaller service in the background has stopped":
@@ -360,6 +402,8 @@ const dict: Dict = {
     "Actueel – geen nieuwere versie op GitHub.",
   "Update check failed: {message}":
     "Updatecontrole mislukt: {message}",
+  "Updates":
+    "Updates",
   "Version {version} is available":
     "Versie {version} is beschikbaar",
   "Version {version} is available – see bottom left.":
@@ -370,6 +414,8 @@ const dict: Dict = {
     "Versie {version} · vanaf iOS {ios}",
   "View quotas and certificates":
     "Quota en certificaten bekijken",
+  "Wait for the running task first":
+    "Wacht eerst tot de lopende taak klaar is",
   "Warnings":
     "Waarschuwingen",
   "What ModStaller does – live. The complete history is in the log file.":
@@ -418,6 +464,10 @@ const dict: Dict = {
     "of",
   "yesterday":
     "gisteren",
+  "{account} now signs new installs.":
+    "{account} ondertekent nu nieuwe installaties.",
+  "{count} accounts signed in":
+    "{count} accounts aangemeld",
   "{count} day left":
     "nog {count} dag",
   "{count} days ago":

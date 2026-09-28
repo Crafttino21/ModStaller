@@ -212,3 +212,65 @@ def test_the_name_from_sign_in_wins(tmp_path, monkeypatch):
     _session(tmp_path, monkeypatch, first_name="Sam")
     teams = [Team("T1", "Santino Fietz", "Individual", "active")]
     assert session_mod.remember_first_name(teams) == "Sam"
+
+
+# -- Several accounts --------------------------------------------------------
+
+
+def _account(adsid, created_at, **kw):
+    s = session_mod.Session(adsid=adsid, idms_token="i", identity_token="t",
+                            created_at=created_at, app_token="x", **kw)
+    s.save()
+    return s
+
+
+def test_the_old_single_session_becomes_the_active_account(tmp_path):
+    import json
+    from modstaller.config import write_secret
+    write_secret(session_mod.SESSION_FILE, json.dumps({
+        "adsid": "old", "idms_token": "i", "identity_token": "t",
+        "created_at": 0.0, "app_token": "x", "first_name": "Sam"}).encode())
+    assert session_mod.Session.load().first_name == "Sam"
+    assert session_mod.active_adsid() == "old"
+    assert not session_mod.SESSION_FILE.exists()
+
+
+def test_a_second_account_does_not_replace_the_first():
+    _account("a", 1, apple_id="a@x.de")
+    _account("b", 2, apple_id="b@x.de")
+    assert [s.adsid for s in session_mod.list_accounts()] == ["a", "b"]
+    assert session_mod.Session.load().adsid == "a"
+    session_mod.set_active("b")
+    assert session_mod.Session.load().adsid == "b"
+    assert session_mod.find_account("B@X.DE").adsid == "b"
+
+
+def test_signing_out_the_active_account_moves_the_next_one_up():
+    _account("a", 1)
+    _account("b", 2)
+    session_mod.remember_teams("a", [Team("T1", "A", "Individual", "active")])
+    session_mod.Session.clear()
+    assert session_mod.active_adsid() == "b"
+    assert session_mod.session_for_team("T1") is None
+    session_mod.Session.clear()
+    assert session_mod.active_adsid() is None
+    assert session_mod.Session.load() is None
+
+
+def test_setting_an_unknown_account_active_fails():
+    import pytest
+    from modstaller.errors import AppleError
+    with pytest.raises(AppleError):
+        session_mod.set_active("nobody")
+
+
+def test_a_team_is_mapped_to_its_account():
+    _account("a", 1)
+    _account("b", 2)
+    session_mod.remember_teams("b", [Team("T2", "B", "Individual", "active")])
+    assert session_mod.session_for_team("T2").adsid == "b"
+
+
+def test_an_adsid_cannot_escape_the_accounts_dir():
+    path = session_mod._account_file("../../evil")
+    assert path.parent == session_mod.ACCOUNTS_DIR

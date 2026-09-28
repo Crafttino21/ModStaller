@@ -58,6 +58,8 @@ export const ui = $state({
   task: null as Task | null,
   /** Offene 2FA-Rueckfrage des Backends. */
   twoFactor: null as null | ((code: string | null) => void),
+  /** Fuer welche Apple-ID der Code gebraucht wird. */
+  twoFactorFor: "",
   toasts: [] as Toast[],
   confirm: null as Confirm | null,
   /** Per Drag & Drop irgendwo ins Fenster gezogene IPA. */
@@ -227,7 +229,8 @@ export function closeTask() {
 
 // -- Backend -----------------------------------------------------------------
 
-handle("prompt.2fa", () => new Promise((resolve) => {
+handle("prompt.2fa", (params) => new Promise((resolve) => {
+  ui.twoFactorFor = String((params as { appleId?: string } | undefined)?.appleId ?? "");
   ui.twoFactor = (code) => {
     ui.twoFactor = null;
     resolve(code);

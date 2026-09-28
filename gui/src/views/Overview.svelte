@@ -72,7 +72,9 @@
       <div class="label">{t("Apple account")}</div>
       {#if st?.loggedIn}
         <div class="value">{st.firstName ? t("Hello, {name}!", { name: st.firstName }) : t("Signed in")}</div>
-        <div class="hint">{t("View quotas and certificates")}</div>
+        <div class="hint">{st.accounts.length > 1
+          ? t("{count} accounts signed in", { count: st.accounts.length })
+          : t("View quotas and certificates")}</div>
       {:else}
         <div class="value dim">{t("Not signed in")}</div>
         <div class="hint">{t("Sign in once, then ModStaller signs by itself.")}</div>

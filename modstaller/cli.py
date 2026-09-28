@@ -93,6 +93,15 @@ def _anisette():
     return anisette_mod.build(s.anisette_provider, s.anisette_server)
 
 
+def _chosen_session(args):
+    """The account from ``--account`` - else the active one. ``None`` if
+    it is not signed in."""
+    from .apple.session import Session, find_account
+    if args.account:
+        return find_account(args.account)
+    return Session.load()
+
+
 async def _login(args) -> int:
     import getpass
     from .apple.devservices import DeveloperServices
@@ -113,18 +122,37 @@ async def _login(args) -> int:
     print("Signing in to Apple …", flush=True)
     session = login(apple_id, password, ani, code_prompt=prompt_code,
                     debug=args.debug)
-    print("\nSigned in.")
+    print("\nSigned in - this is now the active account.")
 
+    from .apple.session import remember_teams
+    teams = DeveloperServices(session, ani).list_teams()
+    remember_teams(session.adsid, teams)
     print("\nTeams:")
-    for t in DeveloperServices(session, ani).list_teams():
+    for t in teams:
         print(f"  {t}")
     return 0
 
 
 def _logout(args) -> int:
-    from .apple.session import Session
-    Session.clear()
-    print("Signed out.")
+    from .apple.session import Session, list_accounts
+    if args.all:
+        leaving = list_accounts()
+    else:
+        one = _chosen_session(args)
+        if one is None:
+            print("Not signed in with that account.", file=sys.stderr)
+            return 3
+        leaving = [one]
+    remaining = len(list_accounts()) - len(leaving)
+    if args.forget_device and remaining:
+        # Shared by every account - the others would all need a 2FA code.
+        print("The device identity is shared by all accounts; it can only "
+              "be discarded together with the last one (use --all).",
+              file=sys.stderr)
+        return 2
+    for s in leaving:
+        Session.clear(s.adsid)
+        print(f"Signed out: {s.label}")
     if args.forget_device:
         from .apple.anisette import DEVICE_FILE, PROVISIONING_FILE
         for f in (PROVISIONING_FILE, DEVICE_FILE):
@@ -134,16 +162,39 @@ def _logout(args) -> int:
     return 0
 
 
+def _accounts(args) -> int:
+    from .apple.session import active_adsid, find_account, list_accounts, set_active
+    if args.use:
+        session = find_account(args.use)
+        if session is None:
+            print(f"No signed-in account matching {args.use!r}.",
+                  file=sys.stderr)
+            return 2
+        set_active(session.adsid)
+        print(f"Active account: {session.label}")
+        return 0
+    accounts = list_accounts()
+    if not accounts:
+        print("Not signed in. First run: modstaller login")
+        return 0
+    active = active_adsid()
+    for s in accounts:
+        mark = "*" if s.adsid == active else " "
+        print(f" {mark} {s.label}")
+    print("\n* = active (new installs sign with it)")
+    return 0
+
+
 async def _account(args) -> int:
     from .apple.devservices import DeveloperServices
-    from .apple.session import Session
     from .provisioning import Capabilities
 
-    session = Session.load()
+    session = _chosen_session(args)
     if session is None:
         print("Not signed in. First run: modstaller login", file=sys.stderr)
         return 3
 
+    print(f"Account: {session.label}\n")
     ani = _anisette()
     api = DeveloperServices(session, ani)
     for t in api.list_teams():
@@ -167,10 +218,9 @@ async def _account(args) -> int:
 
 async def _certs(args) -> int:
     from .apple.devservices import DeveloperServices
-    from .apple.session import Session
     from .provisioning import pick_team
 
-    session = Session.load()
+    session = _chosen_session(args)
     if session is None:
         print("Not signed in. First run: modstaller login", file=sys.stderr)
         return 3
@@ -254,8 +304,16 @@ async def _install(args) -> int:
             print(f"\r  Installed (transport: {res.transport})")
         return 0
 
+    account = None
+    if args.account:
+        session = _chosen_session(args)
+        if session is None:
+            print(f"No signed-in account matching {args.account!r}.",
+                  file=sys.stderr)
+            return 2
+        account = session.adsid
     outcome = await run_install(
-        Path(args.ipa), udid=args.udid, team_id=args.team,
+        Path(args.ipa), udid=args.udid, team_id=args.team, account=account,
         strip_extensions=False if args.keep_extensions else None,
         revoke_conflicting_cert=args.revoke_conflicting_cert,
         progress=progress,
@@ -353,6 +411,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="modstaller",
         description="iOS sideloader for Linux: sign and install IPAs.")
     p.add_argument("-u", "--udid", help="target device (default: the only one)")
+    p.add_argument("-a", "--account", metavar="APPLE_ID",
+                   help="Apple account to use (default: the active one)")
     p.add_argument("--debug", action="store_true",
                    help="show the full stack trace on unexpected errors")
     # The graphical interface is a separate client (gui/) that talks to us
@@ -367,13 +427,22 @@ def build_parser() -> argparse.ArgumentParser:
     log.add_argument("apple_id", nargs="?", help="Apple ID (prompted otherwise)")
     log.set_defaults(afunc=_login)
 
-    out = sub.add_parser("logout", help="Discard the sign-in")
+    out = sub.add_parser("logout", help="Sign an account out (default: the "
+                                        "active one)")
+    out.add_argument("--all", action="store_true",
+                     help="sign every account out")
     out.add_argument("--forget-device", action="store_true",
-                     help="also discard the device identity (forces 2FA)")
+                     help="also discard the device identity (forces 2FA; "
+                          "only with the last account)")
     out.set_defaults(func=_logout)
 
     sub.add_parser("account", help="Team, quotas, devices"
                    ).set_defaults(afunc=_account)
+
+    acc = sub.add_parser("accounts", help="Signed-in Apple accounts")
+    acc.add_argument("use", nargs="?", metavar="APPLE_ID",
+                     help="make this account the active one")
+    acc.set_defaults(func=_accounts)
 
     dev = sub.add_parser("device", help="Device info")
     devsub = dev.add_subparsers(dest="subcmd", required=True)

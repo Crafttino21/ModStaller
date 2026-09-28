@@ -38,4 +38,6 @@ contextBridge.exposeInMainWorld("updates", {
   check: () => ipcRenderer.invoke("update:check"),
   download: () => ipcRenderer.invoke("update:download"),
   install: () => ipcRenderer.invoke("update:install"),
+  getBeta: () => ipcRenderer.invoke("update:getBeta"),
+  setBeta: (on) => ipcRenderer.invoke("update:setBeta", on),
 });
