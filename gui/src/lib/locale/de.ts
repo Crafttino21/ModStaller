@@ -44,6 +44,8 @@ const dict: Dict = {
     "Eine normale, kostenlose Apple ID reicht. Danach fragt Apple einen Code auf deinem iPhone ab.",
   "Another operation is already running.":
     "Es läuft bereits ein Vorgang.",
+  "Any image; it is cropped to a square.":
+    "Beliebiges Bild, es wird quadratisch zugeschnitten.",
   "App ID deleted.":
     "App-ID gelöscht.",
   "App IDs in the account":
@@ -52,6 +54,8 @@ const dict: Dict = {
     "App-IDs diese Woche",
   "App extensions were removed to save App IDs.":
     "App-Extensions wurden entfernt, um App-IDs zu sparen.",
+  "App icon":
+    "App-Icon",
   "Apple account":
     "Apple-Konto",
   "Apple allows only a few at a time. A foreign one (from AltStore or SideStore, say) cannot be used by ModStaller – its private key lives with the tool that requested it.":
@@ -116,6 +120,8 @@ const dict: Dict = {
     "Wird geprüft …",
   "Choose a file":
     "Datei auswählen",
+  "Choose image …":
+    "Bild wählen …",
   "Close":
     "Schließen",
   "Confirm":
@@ -132,6 +138,8 @@ const dict: Dict = {
     "Kopieren nicht möglich.",
   "Create a desktop shortcut":
     "Verknüpfung auf dem Schreibtisch anlegen",
+  "Customize":
+    "Anpassen",
   "Data in":
     "Daten unter",
   "Delete":
@@ -266,6 +274,8 @@ const dict: Dict = {
     "Muss bei Apple eindeutig sein. Leer: ModStaller wählt eine passende für dein Team.",
   "Name on the home screen":
     "Name auf dem Home-Bildschirm",
+  "New icon – cropped to a square.":
+    "Neues Icon – quadratisch zugeschnitten.",
   "New installs sign with the active account. Renewals always use the account that installed the app.":
     "Neue Installationen signiert der aktive Account. Erneuert wird immer mit dem Account, der die App installiert hat.",
   "No IPAs in Downloads, Documents or Desktop.":
@@ -314,6 +324,8 @@ const dict: Dict = {
     "Ein Klick behebt das – siehe oben.",
   "Only for your user – no administrator rights needed. Your sign-ins and settings stay where they are.":
     "Nur für deinen Benutzer – ohne Administratorrechte. Deine Anmeldungen und Einstellungen bleiben, wo sie sind.",
+  "Optional – empty fields keep what the IPA says.":
+    "Optional – leere Felder behalten, was im IPA steht.",
   "Original icon":
     "Original-Icon",
   "Overview":

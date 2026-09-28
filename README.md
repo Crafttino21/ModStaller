@@ -108,9 +108,9 @@ and the output of `modstaller device info`.
 
 | Model | Chip | TXM/SPTM | Install | JIT |
 |---|---|---|---|---|
+| iPhone 17, 17 Pro, 17 Pro Max, iPhone Air and newer | A19 / A19 Pro and newer | yes | ✅ | ✅ (27.0.1) |
 | iPhone 16 Pro Max | A18 Pro | yes | ✅ | ✅ (iOS 27.0) |
 | iPhone 16 Pro, 16, 16 Plus, 16e | A18 Pro / A18 | yes | 🟡 | 🟡 |
-| iPhone 17, 17 Pro, 17 Pro Max, iPhone Air and newer | A19 / A19 Pro and newer | yes | 🟡 | 🟡 |
 | iPhone 15 Pro, 15 Pro Max | A17 Pro | yes | 🟡 | 🟡 |
 | iPhone 15, 15 Plus, 14 Pro, 14 Pro Max | A16 | yes | 🟡 | 🟡 |
 | iPhone 14, 14 Plus, 13 series, SE (3rd gen) | A15 | yes | 🟡 | 🟡 |

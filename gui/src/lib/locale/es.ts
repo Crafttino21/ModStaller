@@ -44,6 +44,8 @@ const dict: Dict = {
     "Basta un ID de Apple normal y gratuito. Apple pedirá después un código en tu iPhone.",
   "Another operation is already running.":
     "Ya hay una operación en curso.",
+  "Any image; it is cropped to a square.":
+    "Cualquier imagen; se recorta en cuadrado.",
   "App ID deleted.":
     "ID de app borrado.",
   "App IDs in the account":
@@ -52,6 +54,8 @@ const dict: Dict = {
     "App ID esta semana",
   "App extensions were removed to save App IDs.":
     "Se quitaron las extensiones para ahorrar ID de app.",
+  "App icon":
+    "Icono de la app",
   "Apple account":
     "Cuenta de Apple",
   "Apple allows only a few at a time. A foreign one (from AltStore or SideStore, say) cannot be used by ModStaller – its private key lives with the tool that requested it.":
@@ -116,6 +120,8 @@ const dict: Dict = {
     "Comprobando …",
   "Choose a file":
     "Elegir un archivo",
+  "Choose image …":
+    "Elegir imagen…",
   "Close":
     "Cerrar",
   "Confirm":
@@ -132,6 +138,8 @@ const dict: Dict = {
     "No se puede copiar.",
   "Create a desktop shortcut":
     "Crear un acceso directo en el escritorio",
+  "Customize":
+    "Personalizar",
   "Data in":
     "Datos en",
   "Delete":
@@ -266,6 +274,8 @@ const dict: Dict = {
     "Debe ser único en Apple. Vacío: ModStaller elige uno adecuado para tu equipo.",
   "Name on the home screen":
     "Nombre en la pantalla de inicio",
+  "New icon – cropped to a square.":
+    "Icono nuevo: recortado en cuadrado.",
   "New installs sign with the active account. Renewals always use the account that installed the app.":
     "Las nuevas instalaciones se firman con la cuenta activa. Las renovaciones usan siempre la cuenta que instaló la app.",
   "No IPAs in Downloads, Documents or Desktop.":
@@ -314,6 +324,8 @@ const dict: Dict = {
     "Se arregla con un clic: mira arriba.",
   "Only for your user – no administrator rights needed. Your sign-ins and settings stay where they are.":
     "Solo para tu usuario, sin permisos de administrador. Tus inicios de sesión y ajustes se quedan donde están.",
+  "Optional – empty fields keep what the IPA says.":
+    "Opcional: los campos vacíos conservan lo que dice el IPA.",
   "Original icon":
     "Icono original",
   "Overview":

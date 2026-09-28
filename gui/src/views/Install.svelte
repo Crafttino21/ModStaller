@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     Upload, FileArchive, FolderOpen, TriangleAlert, Puzzle, Layers, Box, X, LoaderCircle, Sparkles,
-    ImagePlus, RotateCcw, Watch, Trash2, Recycle, Scissors,
+    ImagePlus, RotateCcw, Watch, Trash2, Recycle, Scissors, SlidersHorizontal,
   } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import QuotaMeter from "../components/QuotaMeter.svelte";
@@ -271,50 +271,66 @@
     </div>
 
     <!-- Editor -->
-    <div class="editor">
-      <div class="field">
-        <label for="dn">{t("Name on the home screen")}</label>
-        <input id="dn" bind:value={displayName} placeholder={info.name} maxlength="60" />
+    <section class="sect">
+      <div class="sect-head">
+        <h3><SlidersHorizontal size={16} /> {t("Customize")}</h3>
+        <span class="faint tiny">{t("Optional – empty fields keep what the IPA says.")}</span>
       </div>
-      <div class="field">
-        <label for="bid">{t("Bundle ID")}</label>
-        <input id="bid" class="mono" bind:value={bundleId} disabled={!!spare}
-               class:invalid={!bundleIdValid}
-               placeholder={plan?.defaultBundleId ?? info.bundleId} spellcheck="false" />
-        <span class="faint tiny">
-          {spare
-            ? t("The app runs under the unused App ID {id}.", { id: spare })
-            : t("Must be unique at Apple. Empty: ModStaller picks one that fits your team.")}
-        </span>
-      </div>
-      {#if icon || iconError}
-        <div class="icon-row">
-          {#if iconError}<span class="bad-text tiny">{iconError}</span>{/if}
-          {#if icon}<button class="btn sm ghost" onclick={() => (icon = null)}><RotateCcw size={14} /> {t("Original icon")}</button>{/if}
+
+      <div class="icon-row">
+        <div class="icon-preview">
+          {#if icon || info.icon}<img src={icon ?? info.icon} alt="" />{:else}<Box size={22} />{/if}
         </div>
-      {/if}
-    </div>
+        <div class="grow">
+          <div class="row-title">{t("App icon")}</div>
+          <div class="faint tiny">{iconError || (icon ? t("New icon – cropped to a square.") : t("Any image; it is cropped to a square."))}</div>
+        </div>
+        <button class="btn sm" onclick={() => iconInput?.click()}><ImagePlus size={15} /> {t("Choose image …")}</button>
+        {#if icon}
+          <button class="btn sm ghost" onclick={() => (icon = null)}><RotateCcw size={14} /> {t("Original icon")}</button>
+        {/if}
+      </div>
+
+      <div class="fields">
+        <div class="field">
+          <label for="dn">{t("Name on the home screen")}</label>
+          <input id="dn" type="text" bind:value={displayName} placeholder={info.name} maxlength="60" />
+        </div>
+        <div class="field">
+          <label for="bid">{t("Bundle ID")}</label>
+          <input id="bid" type="text" class="mono" bind:value={bundleId} disabled={!!spare}
+                 class:invalid={!bundleIdValid}
+                 placeholder={plan?.defaultBundleId ?? info.bundleId} spellcheck="false" />
+          <span class="faint tiny">
+            {spare
+              ? t("The app runs under the unused App ID {id}.", { id: spare })
+              : t("Must be unique at Apple. Empty: ModStaller picks one that fits your team.")}
+          </span>
+        </div>
+      </div>
+    </section>
 
     {#if info.extensionDetails.length}
-      <div class="exts">
-        <div class="exts-head">
-          <h3>{t("Extensions")}</h3>
+      <section class="sect">
+        <div class="sect-head">
+          <h3><Puzzle size={16} /> {t("Extensions")}</h3>
           <span class="faint tiny">{t("Each kept extension needs an App ID of its own.")}</span>
         </div>
         {#each info.extensionDetails as ext (ext.path)}
           {@const on = keep?.includes(ext.path) ?? false}
-          <label class="ext" class:off={!ext.movable}>
+          <label class="toggle" class:off={!ext.movable}>
             <input type="checkbox" checked={on} disabled={!ext.movable || keep === null}
                    onchange={(e) => toggle(ext, e.currentTarget.checked)} />
+            <span class="switch"></span>
             <div class="grow">
               <div class="ext-name">{ext.name} <span class="chip">{kind(ext.point)}</span></div>
-              <div class="faint mono tiny">
+              <div class="faint mono tiny ellipsis">
                 {ext.movable ? (plan?.extensions.find((x) => x.path === ext.path)?.identifier ?? ext.bundleId) : t("Cannot be kept – its ID does not belong to the app.")}
               </div>
             </div>
           </label>
         {/each}
-      </div>
+      </section>
     {/if}
     {#if info.hasWatch}
       <p class="faint small note"><Watch size={14} /> {t("The Apple Watch app is removed – it cannot be installed this way.")}</p>
@@ -346,7 +362,7 @@
               <button class="btn sm" onclick={() => (keep = [])}><Scissors size={14} /> {t("Leave out all extensions")}</button>
             {/if}
             {#if plan.spares.length}
-              <select bind:value={spare} class="spare">
+              <select bind:value={spare} class="spare sm">
                 <option value="">{t("Reuse an unused App ID …")}</option>
                 {#each plan.spares as s (s.appIdId)}<option value={s.identifier}>{s.identifier}</option>{/each}
               </select>
@@ -455,30 +471,47 @@
                background: rgb(0 0 0 / 0.45); color: #fff; opacity: 0; transition: opacity 0.15s; }
   .app-icon:hover .icon-edit, .app-icon:focus-visible .icon-edit { opacity: 1; }
 
-  .editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 16px; }
-  .editor .field { display: grid; gap: 5px; align-content: start; }
-  .editor label { font-size: 12.5px; font-weight: 550; color: var(--text-2); }
   input.invalid { border-color: var(--bad); }
-  .icon-row { display: flex; gap: 10px; align-items: center; }
+  input.invalid:focus { box-shadow: 0 0 0 3px var(--bad-soft); }
   .tiny { font-size: 11.5px; }
-  .bad-text { color: var(--bad); }
+  .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .note { display: flex; gap: 6px; align-items: center; margin: 0; }
 
-  .exts { display: grid; gap: 4px; }
-  .exts-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-  .exts-head h3 { font-size: 14px; }
-  .ext { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
-         border: 1px solid var(--border); cursor: pointer; }
-  .ext.off { opacity: 0.6; cursor: default; }
-  .ext input { margin-top: 3px; }
+  /* Abschnitte wie auf der Einstellungsseite: Ueberschrift mit Icon, darunter
+     ruhige Flaechen statt nackter Formularelemente. */
+  .sect { display: grid; gap: 10px; }
+  .sect-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .sect-head h3 { display: flex; align-items: center; gap: 8px; font-size: 14.5px; }
+  .sect-head h3 :global(svg) { color: var(--accent); align-self: center; }
+  .icon-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+              border-radius: 12px; border: 1px solid var(--border); flex-wrap: wrap; }
+  .icon-preview { width: 44px; height: 44px; border-radius: 11px; overflow: hidden; flex: none;
+                  display: grid; place-items: center; background: var(--surface-2); color: var(--text-3); }
+  .icon-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .row-title { font-weight: 550; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 16px; }
+  .fields .field { align-content: start; }
+  .fields .tiny { margin-top: 1px; }
+
+  /* Derselbe Schalter wie in Settings.svelte. */
+  .toggle { display: flex; gap: 14px; align-items: center; cursor: pointer; padding: 12px 14px;
+            border-radius: 12px; border: 1px solid var(--border); }
+  .toggle.off { cursor: default; opacity: 0.55; }
+  .toggle input { display: none; }
+  .switch { width: 38px; height: 22px; flex: none; border-radius: 99px; background: var(--border-strong);
+            position: relative; transition: background 0.15s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+                   border-radius: 50%; background: #fff; transition: transform 0.15s; }
+  .toggle input:checked + .switch { background: var(--accent); }
+  .toggle input:checked + .switch::after { transform: translateX(16px); }
   .ext-name { font-weight: 550; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .ext .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .cost { display: grid; gap: 6px; }
   .cost p { margin: 0; }
   .fixes, .slots { font-size: 13px; }
   .fix-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  .spare { max-width: 100%; }
+  .spare { max-width: 100%; width: auto; }
+  select.sm { height: 30px; padding: 0 10px; font-size: 13px; border-radius: 8px; }
   .slot-list { display: grid; gap: 6px; margin-top: 10px; }
   .slot { display: flex; align-items: center; gap: 10px; }
   .stats { display: flex; gap: 10px; flex-wrap: wrap; }

@@ -44,6 +44,8 @@ const dict: Dict = {
     "Een gewone, gratis Apple ID is genoeg. Apple vraagt daarna om een code op je iPhone.",
   "Another operation is already running.":
     "Er loopt al een bewerking.",
+  "Any image; it is cropped to a square.":
+    "Elke afbeelding; die wordt vierkant bijgesneden.",
   "App ID deleted.":
     "App-ID verwijderd.",
   "App IDs in the account":
@@ -52,6 +54,8 @@ const dict: Dict = {
     "App-ID's deze week",
   "App extensions were removed to save App IDs.":
     "Extensies zijn verwijderd om App-ID’s te sparen.",
+  "App icon":
+    "App-pictogram",
   "Apple account":
     "Apple-account",
   "Apple allows only a few at a time. A foreign one (from AltStore or SideStore, say) cannot be used by ModStaller – its private key lives with the tool that requested it.":
@@ -116,6 +120,8 @@ const dict: Dict = {
     "Bezig met controleren …",
   "Choose a file":
     "Bestand kiezen",
+  "Choose image …":
+    "Afbeelding kiezen …",
   "Close":
     "Sluiten",
   "Confirm":
@@ -132,6 +138,8 @@ const dict: Dict = {
     "Kopiëren is niet mogelijk.",
   "Create a desktop shortcut":
     "Snelkoppeling op het bureaublad maken",
+  "Customize":
+    "Aanpassen",
   "Data in":
     "Gegevens in",
   "Delete":
@@ -266,6 +274,8 @@ const dict: Dict = {
     "Moet uniek zijn bij Apple. Leeg: ModStaller kiest er een die bij je team past.",
   "Name on the home screen":
     "Naam op het beginscherm",
+  "New icon – cropped to a square.":
+    "Nieuw pictogram – vierkant bijgesneden.",
   "New installs sign with the active account. Renewals always use the account that installed the app.":
     "Nieuwe installaties worden ondertekend met het actieve account. Vernieuwen gebeurt altijd met het account dat de app heeft geïnstalleerd.",
   "No IPAs in Downloads, Documents or Desktop.":
@@ -314,6 +324,8 @@ const dict: Dict = {
     "Eén klik lost het op – zie hierboven.",
   "Only for your user – no administrator rights needed. Your sign-ins and settings stay where they are.":
     "Alleen voor jouw gebruiker – zonder beheerdersrechten. Je aanmeldingen en instellingen blijven waar ze zijn.",
+  "Optional – empty fields keep what the IPA says.":
+    "Optioneel – lege velden houden wat in de IPA staat.",
   "Original icon":
     "Origineel pictogram",
   "Overview":

@@ -712,6 +712,7 @@ async def _install(server: Server, job: Job, params: dict):
 
 #: How long a listTeams/listAppIds answer is good for the install screen.
 APPLE_CACHE_TTL = 30.0
+_APPLE_VIEW_LOCK = threading.Lock()
 
 
 def _apple_view(server, adsid: str | None, team_id: str | None = None,
@@ -720,18 +721,21 @@ def _apple_view(server, adsid: str | None, team_id: str | None = None,
     from .apple.session import active_adsid, remember_teams
     from .provisioning import Capabilities, pick_team
     adsid = adsid or active_adsid() or ""
-    hit = server.apple_cache.get(adsid)
-    if fresh or hit is None or time.monotonic() - hit[0] > APPLE_CACHE_TTL:
-        api = _api(adsid or None)
-        teams = api.list_teams()
-        remember_teams(adsid, teams)
-        hit = (time.monotonic(), api, teams, {})
-        server.apple_cache[adsid] = hit
-    _at, api, teams, per_team = hit
-    team = pick_team(teams, team_id)
-    if team.team_id not in per_team:
-        per_team[team.team_id] = api.app_id_overview(team.team_id)
-    ids, quota = per_team[team.team_id]
+    # One after the other: a second plan request that arrives while the
+    # first still asks Apple then finds the answer in the cache.
+    with _APPLE_VIEW_LOCK:
+        hit = server.apple_cache.get(adsid)
+        if fresh or hit is None or time.monotonic() - hit[0] > APPLE_CACHE_TTL:
+            api = _api(adsid or None)
+            teams = api.list_teams()
+            remember_teams(adsid, teams)
+            hit = (time.monotonic(), api, teams, {})
+            server.apple_cache[adsid] = hit
+        _at, api, teams, per_team = hit
+        team = pick_team(teams, team_id)
+        if team.team_id not in per_team:
+            per_team[team.team_id] = api.app_id_overview(team.team_id)
+        ids, quota = per_team[team.team_id]
     return adsid, team, Capabilities.for_team(team), ids, quota
 
 

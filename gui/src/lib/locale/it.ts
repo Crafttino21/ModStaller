@@ -44,6 +44,8 @@ const dict: Dict = {
     "Basta un ID Apple normale e gratuito. Apple chiederà poi un codice sul tuo iPhone.",
   "Another operation is already running.":
     "C’è già un’operazione in corso.",
+  "Any image; it is cropped to a square.":
+    "Qualsiasi immagine; viene ritagliata a quadrato.",
   "App ID deleted.":
     "ID app eliminato.",
   "App IDs in the account":
@@ -52,6 +54,8 @@ const dict: Dict = {
     "App ID questa settimana",
   "App extensions were removed to save App IDs.":
     "Le estensioni sono state rimosse per risparmiare ID app.",
+  "App icon":
+    "Icona dell’app",
   "Apple account":
     "Account Apple",
   "Apple allows only a few at a time. A foreign one (from AltStore or SideStore, say) cannot be used by ModStaller – its private key lives with the tool that requested it.":
@@ -116,6 +120,8 @@ const dict: Dict = {
     "Controllo …",
   "Choose a file":
     "Scegli un file",
+  "Choose image …":
+    "Scegli immagine…",
   "Close":
     "Chiudi",
   "Confirm":
@@ -132,6 +138,8 @@ const dict: Dict = {
     "Impossibile copiare.",
   "Create a desktop shortcut":
     "Crea un collegamento sul desktop",
+  "Customize":
+    "Personalizza",
   "Data in":
     "Dati in",
   "Delete":
@@ -266,6 +274,8 @@ const dict: Dict = {
     "Deve essere univoco presso Apple. Vuoto: ModStaller ne sceglie uno adatto al tuo team.",
   "Name on the home screen":
     "Nome nella schermata Home",
+  "New icon – cropped to a square.":
+    "Nuova icona, ritagliata a quadrato.",
   "New installs sign with the active account. Renewals always use the account that installed the app.":
     "Le nuove installazioni vengono firmate con l’account attivo. I rinnovi usano sempre l’account che ha installato l’app.",
   "No IPAs in Downloads, Documents or Desktop.":
@@ -314,6 +324,8 @@ const dict: Dict = {
     "Basta un clic: vedi sopra.",
   "Only for your user – no administrator rights needed. Your sign-ins and settings stay where they are.":
     "Solo per il tuo utente, senza diritti di amministratore. I tuoi accessi e le impostazioni restano dove sono.",
+  "Optional – empty fields keep what the IPA says.":
+    "Facoltativo: i campi vuoti mantengono quanto indicato nell’IPA.",
   "Original icon":
     "Icona originale",
   "Overview":

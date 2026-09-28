@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import threading
 import uuid
 from pathlib import Path
 from typing import Protocol
@@ -40,6 +41,15 @@ from . import clientinfo
 PROVISIONING_FILE = ANISETTE_DIR / "provisioning.bin"
 LIBS_FILE = ANISETTE_DIR / "libs.bin"
 DEVICE_FILE = ANISETTE_DIR / "device.json"
+
+
+#: The local emulation is one ARM VM (Unicorn) over one set of ADI files.
+#: Two threads inside it at once corrupt its memory - UC_ERR_READ_UNMAPPED /
+#: UC_ERR_WRITE_UNMAPPED, seen on Windows once the install screen asked for
+#: a plan on every edit while the status poll ran (1.3.0-rc.2). So: one
+#: instance per process, and only one thread in it at a time.
+_LOCAL_LOCK = threading.RLock()
+_shared_ani = None
 
 
 class AnisetteProvider(Protocol):
@@ -150,13 +160,24 @@ class LocalProvider:
             device["server_friendly_description"]
         )
         self._cfg = AnisetteDeviceConfig(**device)
+        self._Anisette = Anisette
+        with _LOCAL_LOCK:
+            self._ani = self._shared(fresh=False)
 
-        existing = [p for p in (LIBS_FILE, PROVISIONING_FILE) if p.exists()]
-        if existing:
-            self._ani = Anisette.load(*existing, default_device_config=self._cfg)
-        else:
-            self._ani = Anisette.init(default_device_config=self._cfg)
-        self._persist()
+    def _shared(self, *, fresh: bool):
+        """The process-wide instance - loaded from the saved files once, or
+        again after the emulation broke (``fresh``). Call with the lock held."""
+        global _shared_ani
+        if _shared_ani is None or fresh:
+            existing = [p for p in (LIBS_FILE, PROVISIONING_FILE) if p.exists()]
+            if existing:
+                _shared_ani = self._Anisette.load(
+                    *existing, default_device_config=self._cfg)
+            else:
+                _shared_ani = self._Anisette.init(default_device_config=self._cfg)
+            self._ani = _shared_ani
+            self._persist()
+        return _shared_ani
 
     def _persist(self) -> None:
         if not LIBS_FILE.exists():
@@ -167,9 +188,23 @@ class LocalProvider:
             PROVISIONING_FILE.chmod(0o600)
 
     def headers(self) -> dict[str, str]:
+        with _LOCAL_LOCK:
+            try:
+                data = self._headers_once()
+            except Exception as exc:
+                # A broken emulation (Unicorn's UcError) is not the end: the
+                # state on disk is intact - load it again and retry once.
+                if type(exc).__name__ != "UcError":
+                    raise
+                self._ani = self._shared(fresh=True)
+                data = self._headers_once()
+        data["X-MMe-Client-Info"] = self.client_info()
+        return data
+
+    def _headers_once(self) -> dict[str, str]:
+        self._ani = self._shared(fresh=False)
         data = dict(self._ani.get_data())
         self._persist()
-        data["X-MMe-Client-Info"] = self.client_info()
         return data
 
     def client_info(self) -> str:

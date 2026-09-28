@@ -44,6 +44,8 @@ const dict: Dict = {
     "Un identifiant Apple ordinaire et gratuit suffit. Apple demande ensuite un code sur votre iPhone.",
   "Another operation is already running.":
     "Une opération est déjà en cours.",
+  "Any image; it is cropped to a square.":
+    "N’importe quelle image ; elle est recadrée en carré.",
   "App ID deleted.":
     "Identifiant d’app supprimé.",
   "App IDs in the account":
@@ -52,6 +54,8 @@ const dict: Dict = {
     "App ID cette semaine",
   "App extensions were removed to save App IDs.":
     "Les extensions ont été retirées pour économiser des identifiants d’app.",
+  "App icon":
+    "Icône de l’app",
   "Apple account":
     "Compte Apple",
   "Apple allows only a few at a time. A foreign one (from AltStore or SideStore, say) cannot be used by ModStaller – its private key lives with the tool that requested it.":
@@ -116,6 +120,8 @@ const dict: Dict = {
     "Vérification …",
   "Choose a file":
     "Choisir un fichier",
+  "Choose image …":
+    "Choisir une image…",
   "Close":
     "Fermer",
   "Confirm":
@@ -132,6 +138,8 @@ const dict: Dict = {
     "Impossible de copier.",
   "Create a desktop shortcut":
     "Créer un raccourci sur le bureau",
+  "Customize":
+    "Personnaliser",
   "Data in":
     "Données dans",
   "Delete":
@@ -266,6 +274,8 @@ const dict: Dict = {
     "Doit être unique chez Apple. Vide : ModStaller en choisit un adapté à votre équipe.",
   "Name on the home screen":
     "Nom sur l’écran d’accueil",
+  "New icon – cropped to a square.":
+    "Nouvelle icône – recadrée en carré.",
   "New installs sign with the active account. Renewals always use the account that installed the app.":
     "Les nouvelles installations sont signées avec le compte actif. Les renouvellements utilisent toujours le compte qui a installé l’app.",
   "No IPAs in Downloads, Documents or Desktop.":
@@ -314,6 +324,8 @@ const dict: Dict = {
     "Un clic suffit – voir ci-dessus.",
   "Only for your user – no administrator rights needed. Your sign-ins and settings stay where they are.":
     "Uniquement pour votre utilisateur – sans droits d’administrateur. Vos connexions et réglages restent où ils sont.",
+  "Optional – empty fields keep what the IPA says.":
+    "Facultatif – les champs vides gardent ce que contient l’IPA.",
   "Original icon":
     "Icône d’origine",
   "Overview":
