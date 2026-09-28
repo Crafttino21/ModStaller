@@ -125,9 +125,10 @@ def inspect(path: str | Path) -> IPAInfo:
             n[len(prefix):] for n in names
             if n.startswith(prefix + "Frameworks/") and n.endswith(".dylib")
         })
-        # Detect App Store DRM: then the binary is encrypted and cannot be
-        # re-signed.
-        encrypted = any(n.startswith(prefix + "SC_Info/") for n in names)
+        # App Store DRM: then the binary is encrypted and cannot be
+        # re-signed. The binary says so itself (cryptid) - SC_Info/ does
+        # not, decrypted IPAs often keep it (see macho.py).
+        encrypted = _main_binary_encrypted(zf, prefix, info, names)
 
         extensions = under("PlugIns/", ".appex")
         details = [_extension(zf, prefix, ext) for ext in extensions]
@@ -147,6 +148,22 @@ def inspect(path: str | Path) -> IPAInfo:
         extension_details=details,
         has_watch=has_watch,
     )
+
+
+def _main_binary_encrypted(zf: zipfile.ZipFile, prefix: str, info: dict,
+                           names: list[str]) -> bool:
+    """cryptid of the app's executable. Unreadable counts as *not*
+    encrypted: better zsign or iOS name the real problem than a good IPA
+    being refused."""
+    from .macho import NotMachO, is_encrypted
+    exe = info.get("CFBundleExecutable")
+    if not isinstance(exe, str) or prefix + exe not in names:
+        return False
+    try:
+        with zf.open(prefix + exe) as f:
+            return is_encrypted(f)
+    except (NotMachO, OSError, zipfile.BadZipFile, EOFError, ValueError):
+        return False
 
 
 def _extension(zf: zipfile.ZipFile, prefix: str, path: str) -> ExtensionInfo:

@@ -117,7 +117,11 @@ def sign(req: SignRequest, *, timeout: float = 900.0,
 
     if proc.returncode != 0 or not req.output.exists():
         detail = (proc.stderr or proc.stdout or "").strip()
-        raise SigningError(_(
+        hint = ""
+        if "Can't find TeamId" in detail or "asn1" in detail.lower():
+            hint = _("The provisioning profile is damaged or unreadable - "
+                     "just try again, it is downloaded anew.") + "\n\n"
+        raise SigningError(hint + _(
             "Signing failed (exit {code}).\nCall: {call}\n{detail}",
             code=proc.returncode, call=_redact(cmd, req.p12_password),
             detail=detail[-1200:]))

@@ -17,7 +17,13 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 
-from ..config import CERTS_DIR, read_secret, write_secret
+from typing import Callable, TypeVar
+
+from ..config import CERTS_DIR, read_secret, undo_text_mode, write_secret
+from ..errors import ConfigError
+from ..i18n import _
+
+T = TypeVar("T")
 
 KEY_SIZE = 2048
 
@@ -80,9 +86,49 @@ def pass_path(team_id: str) -> Path:
     return _team_dir(team_id) / "identity.pass"
 
 
+def _load_healed(path: Path, parse: Callable[[bytes], T]) -> T | None:
+    """``parse`` applied to the file - repaired first if need be.
+
+    Up to 1.3.0-rc.1, Windows wrote these files in text mode (every b"\n"
+    became b"\r\n", see config.O_BINARY). Such a file is repaired and
+    written back, so no new certificate is needed. None: unusable.
+    """
+    raw = read_secret(path)
+    try:
+        return parse(raw)
+    except Exception:
+        pass
+    fixed = undo_text_mode(raw)
+    if fixed == raw:
+        return None
+    try:
+        value = parse(fixed)
+    except Exception:
+        return None
+    write_secret(path, fixed)
+    return value
+
+
+def _certificate(raw: bytes) -> x509.Certificate:
+    try:
+        return x509.load_der_x509_certificate(raw)
+    except ValueError:
+        return x509.load_pem_x509_certificate(raw)
+
+
 def load_keypair(team_id: str) -> KeyPair | None:
     p = key_path(team_id)
-    return KeyPair.load(read_secret(p)) if p.exists() else None
+    if not p.exists():
+        return None
+    kp = _load_healed(p, KeyPair.load)
+    if kp is None:
+        # Not silently a new key: that would need a new certificate, and
+        # Apple allows only a few.
+        raise ConfigError(_(
+            "The private key {path} is damaged. Delete the folder {folder} - "
+            "ModStaller then requests a new certificate.",
+            path=p, folder=p.parent))
+    return kp
 
 
 def save_keypair(team_id: str, kp: KeyPair) -> None:
@@ -95,10 +141,7 @@ def build_p12(team_id: str, kp: KeyPair, cert_der: bytes) -> tuple[Path, str]:
     Returns:
         Path to the .p12 and its password.
     """
-    try:
-        cert = x509.load_der_x509_certificate(cert_der)
-    except ValueError:
-        cert = x509.load_pem_x509_certificate(cert_der)
+    cert = _certificate(cert_der)
 
     password = secrets.token_urlsafe(24)
     blob = pkcs12.serialize_key_and_certificates(
@@ -116,19 +159,22 @@ def build_p12(team_id: str, kp: KeyPair, cert_der: bytes) -> tuple[Path, str]:
 
 
 def load_p12(team_id: str) -> tuple[Path, str] | None:
+    """The local identity - None if it is missing or unusable (then it is
+    rebuilt from Apple's certificate for our key, see ensure_certificate)."""
     p, pw = p12_path(team_id), pass_path(team_id)
-    if p.exists() and pw.exists():
-        return p, read_secret(pw).decode()
-    return None
+    if not (p.exists() and pw.exists()):
+        return None
+    password = read_secret(pw).decode().strip()
+    ok = _load_healed(p, lambda data: pkcs12.load_key_and_certificates(
+        data, password.encode()))
+    return (p, password) if ok is not None else None
 
 
 def certificate_expiry(team_id: str):
     p = cert_path(team_id)
     if not p.exists():
         return None
-    raw = read_secret(p)
-    try:
-        cert = x509.load_der_x509_certificate(raw)
-    except ValueError:
-        cert = x509.load_pem_x509_certificate(raw)
-    return cert.not_valid_after_utc
+    cert = _load_healed(p, _certificate)
+    # Unreadable: then the identity is rebuilt instead of crashing
+    # (ensure_certificate, step 2).
+    return cert.not_valid_after_utc if cert is not None else None

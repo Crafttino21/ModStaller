@@ -102,16 +102,32 @@ def ensure_dirs() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
 
+#: Without it, os.open on Windows opens in *text* mode and writes every
+#: b"\n" as b"\r\n" - which broke every binary secret there (profiles,
+#: identity.p12, cert.der; up to 1.3.0-rc.1). Zero on POSIX.
+O_BINARY = getattr(os, "O_BINARY", 0)
+
+
 def write_secret(path: Path, data: bytes) -> None:
     """Writes a file that is 0600 from the start - never briefly open."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.parent.chmod(0o700)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | O_BINARY, 0o600)
     try:
         os.write(fd, data)
     finally:
         os.close(fd)
     path.chmod(0o600)
+
+
+def undo_text_mode(data: bytes) -> bytes:
+    """Reverses what a text-mode write on Windows did to binary data.
+
+    Such a write turns every b"\n" into b"\r\n" - an original b"\r\n"
+    became b"\r\r\n". Replacing b"\r\n" with b"\n" therefore restores
+    the original exactly. Only apply it to data that no longer parses.
+    """
+    return data.replace(b"\r\n", b"\n")
 
 
 def read_secret(path: Path) -> bytes:
