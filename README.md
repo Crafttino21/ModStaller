@@ -13,7 +13,7 @@ with TXM.
 | **Android** | 🛠️ planned - Android phone as the host, iPhone via USB-C/OTG |
 | macOS | ➖ not planned - use Xcode or AltStore there |
 
-Tested on: iPhone 16 Pro Max (iPhone17,2), iOS 27.0, CachyOS/Arch and
+Tested on: iPhone 16 Pro Max (iPhone17,2), iPhone 17 pro max, iOS 27.0/27.0.1, CachyOS/Arch and
 Windows. See [Supported devices](#supported-devices) for the full list.
 
 **Contents:**
