@@ -13,8 +13,9 @@
     "dev": "node scripts/dev.mjs",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "node --test electron/notes.test.cjs electron/channel.test.cjs",
+    "test": "node --test electron/notes.test.cjs electron/channel.test.cjs electron/langseed.test.cjs electron/linux-install.test.cjs electron/setup-update.test.cjs",
     "dist": "vite build && electron-builder --linux AppImage --publish never",
+    "dist:setup": "electron-builder --linux AppImage --publish never -c.extraMetadata.modstallerVariant=setup -c.directories.output=../dist/setup-build '-c.linux.artifactName=ModStaller-Setup-${version}-${arch}.${ext}'",
     "dist:win": "vite build && electron-builder --win nsis --publish never"
   },
   "devDependencies": {

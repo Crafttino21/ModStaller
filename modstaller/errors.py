@@ -29,6 +29,14 @@ class NotPaired(DeviceError):
     pass
 
 
+class UsbServiceUnavailable(DeviceError):
+    """Windows: the Apple device service (usbmuxd replacement) is missing.
+
+    Windows itself still shows the iPhone in Explorer through its own photo
+    import driver - that is exactly why this has to be named, not reported as
+    "no iPhone connected"."""
+
+
 class DeveloperModeDisabled(DeviceError):
     pass
 

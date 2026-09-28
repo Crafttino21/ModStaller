@@ -137,6 +137,12 @@ class Server:
         self.device_cache: dict[str, dict] = {}
         #: Serial -> what the log last said about it (see _log_device_changes).
         self.seen_devices: dict[str, dict] = {}
+        #: Whether the log last said the Apple device service is missing
+        #: (Windows). None: nothing said yet.
+        self.usb_service_missing: bool | None = None
+        #: (monotonic time, winsetup.ServiceState) - asking Windows takes a
+        #: PowerShell start, too slow for every status poll.
+        self.usb_service_probe: tuple[float, object] | None = None
         #: Accounts whose first name for the greeting was already looked up.
         self.name_lookups: set[str] = set()
         #: New log entries go to the interface as they happen.
@@ -389,11 +395,47 @@ _ACTIONS: dict[str, _Action] = {
         logbook.ACCOUNT, None,
         lambda p, r: (SUCCESS, _("App ID deleted.")),
         lambda e: _("Deleting the App ID failed: {error}", error=e)),
+    "usb.setup": _Action(
+        logbook.DEVICE,
+        lambda p: _("Setting up the Apple device service"),
+        lambda p, r: (SUCCESS, _usb_setup_message(r["method"])),
+        lambda e: _("Setting up the Apple device service failed: {error}",
+                    error=e)),
     "device.fix": _Action(
         logbook.DEVICE, None,
         lambda p, r: (SUCCESS, r["message"]),
         lambda e: _("Fix failed: {error}", error=e)),
 }
+
+
+#: How long a PowerShell answer about the service stays valid.
+USB_PROBE_TTL = 20.0
+
+
+async def _usb_service_stopped(server) -> bool:
+    """Installed but not running? (Otherwise: not installed at all.)"""
+    from . import winsetup
+    probe = server.usb_service_probe
+    if probe is None or time.monotonic() - probe[0] > USB_PROBE_TTL:
+        state = await asyncio.to_thread(winsetup.service_state)
+        server.usb_service_probe = probe = (time.monotonic(), state)
+    return probe[1].state == winsetup.STOPPED
+
+
+def _log_usb_service(server, missing: bool) -> None:
+    """The Apple device service going away or coming back - once per change."""
+    before = server.usb_service_missing
+    if before == missing:
+        return
+    server.usb_service_missing = missing
+    if missing:
+        from .device.connection import usb_service_hint
+        logbook.log(logbook.DEVICE, _(
+            "Apple device service not reachable - no iPhone can be detected. "
+            "{hint}", hint=usb_service_hint()), logging.WARNING)
+    elif before:
+        logbook.log(logbook.DEVICE, _("Apple device service is reachable again."),
+                    SUCCESS)
 
 
 def _log_device_changes(server, serials: list[str], device: dict | None,
@@ -493,6 +535,7 @@ async def _status(server: Server, job: Job, params: dict):
     from .apple.session import active_adsid, list_accounts
     from .device.connection import list_devices
     from .device.models import form_factor, marketing_name
+    from .errors import UsbServiceUnavailable
     from .state import store
     from .status import URGENT_DAYS, Status, device_status
 
@@ -503,7 +546,19 @@ async def _status(server: Server, job: Job, params: dict):
         if not account.first_name:
             _look_up_first_name(server, account.adsid)
     st = Status(apps=store.all_installs(), logged_in=session is not None)
-    serials = await list_devices()
+    try:
+        serials = await list_devices()
+        usb_service = "ok"
+    except UsbServiceUnavailable as exc:
+        # Windows without Apple Devices/iTunes: Explorer shows the iPhone,
+        # we never will - say so instead of "not connected".
+        serials, usb_service = [], "missing"
+        st.error = str(exc)
+        if await _usb_service_stopped(server):
+            usb_service = "stopped"
+            st.error = _("The Apple device service is installed but not "
+                         "running.")
+    _log_usb_service(server, usb_service == "missing")
     cache = server.device_cache
     for gone in set(cache) - set(serials):
         del cache[gone]
@@ -544,6 +599,7 @@ async def _status(server: Server, job: Job, params: dict):
         "urgent": [a.bundle_id for a in st.urgent],
         "urgentDays": URGENT_DAYS,
         "error": st.error,
+        "usbService": usb_service,
     }
 
 
@@ -966,6 +1022,27 @@ async def _device_fix(server: Server, job: Job, params: dict):
     # Developer Mode & co. live in the status cache - it is now outdated.
     server.device_cache.clear()
     return asdict(result)
+
+
+def _usb_setup_message(how: str) -> str:
+    return {
+        "already": _("The Apple device service is already running."),
+        "started": _("The Apple device service was started."),
+        "apple-devices": _("“Apple Devices” is installed - the Apple device "
+                           "service runs."),
+        "driver": _("Apple's USB driver is installed - the Apple device "
+                    "service runs."),
+    }.get(how, how)
+
+
+@method("usb.setup")
+async def _usb_setup(server: Server, job: Job, params: dict):
+    """Windows: installs or starts the Apple device service (winsetup)."""
+    from . import winsetup
+    how = await asyncio.to_thread(
+        winsetup.setup, on_step=job.log, on_progress=job.progress)
+    server.usb_service_probe = None
+    return {"method": how, "message": _usb_setup_message(how)}
 
 
 @method("log.history")

@@ -8,7 +8,7 @@ with TXM.
 
 | Platform | Status |
 |---|---|
-| **Linux** | ✅ officially supported (AppImage, CLI) |
+| **Linux** | ✅ officially supported (Setup AppImage, portable AppImage, CLI) |
 | **Windows** | ✅ officially supported (installer, CLI) |
 | **Android** | 🛠️ planned - Android phone as the host, iPhone via USB-C/OTG |
 | macOS | ➖ not planned - use Xcode or AltStore there |
@@ -43,7 +43,8 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 - **iPhone check**: pairing, Developer Mode, Developer Disk Image, app
   slots and free storage, with one-click fixes where Apple allows them.
 - **Account management**: team, quotas, App IDs, certificates.
-- **Auto-updates** for the AppImage and the Windows installer.
+- **Auto-updates** for the AppImage, the Linux installation and the Windows
+  installer.
 - **Seven languages**: English, German, French, Spanish, Italian, Portuguese
   (Brazil) and Dutch.
 - **GUI and CLI** on the same backend - everything the window can do, a
@@ -158,7 +159,8 @@ Prebuilt binaries are available under
 
 | File | For |
 |---|---|
-| `ModStaller-X.Y.Z-x86_64.AppImage` | Linux, GUI - updates itself |
+| `ModStaller-Setup-X.Y.Z-x86_64.AppImage` | Linux, GUI - **installs** ModStaller for your user (start menu entry, `modstaller` command in the terminal), no root needed, updates itself |
+| `ModStaller-X.Y.Z-x86_64.AppImage` | Linux, GUI - **portable**: runs from wherever you put it, nothing is installed, updates itself |
 | `ModStaller-Setup-X.Y.Z.exe` | Windows, GUI - installer without admin rights, updates itself |
 | `ModStaller-CLI-X.Y.Z-windows-x64.zip` | Windows, command line: `modstaller.exe` + `zsign.exe` |
 
@@ -174,8 +176,29 @@ sudo apt install usbmuxd libfuse2         # Debian/Ubuntu
 sudo dnf install usbmuxd fuse-libs        # Fedora
 ```
 
-**Windows:** install the **"Apple Devices"** app from the Microsoft Store (or
-iTunes) - it brings the Apple device service along. On first launch
+**Linux setup:** make the Setup AppImage executable and start it
+(`chmod +x ModStaller-Setup-*.AppImage`, then double-click or run it). It
+installs to `~/.local/share/modstaller-gui/`, puts `modstaller-gui` and
+`modstaller` into `~/.local/bin` and adds a start menu entry. Running the
+Setup AppImage again offers repair and **uninstall**; alternatively run
+`~/.local/share/modstaller-gui/uninstall.sh` (add `--purge` to also delete
+sign-ins and settings). The portable AppImage keeps working side by side.
+
+**Windows:** ModStaller needs Apple's device service (and the USB driver
+that comes with it). Windows Explorer shows an iPhone even without it
+(through its own photo import driver), but ModStaller cannot reach it that
+way. The setup checks for the service and, if it is missing or stopped,
+sets it up on request - so does the **Set up automatically** button in the
+GUI and `modstaller usb-setup` on the command line:
+
+1. the **"Apple Devices"** app from the Microsoft Store via `winget`;
+2. if that is not possible, only **Apple's USB driver** (Apple Mobile Device
+   Support), taken from the iTunes installer downloaded from apple.com -
+   iTunes itself is not installed, and nothing runs unless Apple's signature
+   checks out.
+
+Windows asks for confirmation once. Installing "Apple Devices" or iTunes by
+hand works just as well. On first launch
 SmartScreen warns because the .exe is not signed with a paid certificate:
 "More info" › "Run anyway". If the GUI ever reports that the backend is
 unreachable, the full log is in `%APPDATA%\ModStaller\logs\main.log`.
@@ -203,8 +226,10 @@ storage. Anything that can be fixed automatically gets a button:
 "Trust developer" (Settings › General › VPN & Device Management) remains a
 manual step - there is no interface for it.
 
-**Language:** the interface starts in English; **Settings › Language**
-switches it, including system checks and error messages from the backend.
+**Language:** the setup asks for it (the Windows installer's language dialog,
+the language list in the Linux setup) and ModStaller starts in that language.
+**Settings › Language** switches it at any time, including system checks and
+error messages from the backend.
 
 The command line offers the same:
 
@@ -364,7 +389,7 @@ The GUI is a client just like the command line: it starts
 
 | Command | Builds |
 |---|---|
-| `./buildscripts/build-appimage.sh` | the AppImage - only needs Docker; `--run` launches it afterwards |
+| `./buildscripts/build-appimage.sh` | both AppImages (portable and Setup) - only needs Docker; `--run` launches the portable one afterwards |
 | `buildscripts\build-windows.bat` | the Windows installer - needs Python 3.12+, Node 22+ and Visual Studio 2022 with C++ for `zsign.exe`; `--dir` skips the installer, `--run` launches it afterwards |
 
 Both run the same steps as `.github/workflows/release.yml`.
@@ -379,8 +404,10 @@ release.bat 1.3.0             # Windows
 ./release.sh 1.3.0-beta.1     # pre-release
 ```
 
-The AppImage and the Windows installer check for updates at startup and
-every four hours. Downloading and restarting only happen when you click the
+The AppImage, the Linux installation and the Windows installer check for
+updates at startup and every four hours. The Linux installation updates by
+downloading the new Setup AppImage (checked against the SHA-512 in
+`latest-linux-setup.yml`) and running it in update mode. Downloading and restarting only happen when you click the
 button - never during an installation or a JIT session. Pre-releases are
 only offered to users already running one.
 

@@ -87,3 +87,37 @@ async def test_list_devices_is_empty_without_usbmuxd():
     That must not raise, but simply yield an empty list."""
     from modstaller.device.connection import list_devices
     assert isinstance(await list_devices(), list)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("posix", [True, False])
+async def test_a_missing_usb_service_is_named_on_windows_only(monkeypatch, posix):
+    """Windows shows the iPhone in Explorer even without the Apple device
+    service - "no iPhone" would be a lie there. On Linux a missing usbmuxd
+    socket just means nothing is plugged in."""
+    from pymobiledevice3.exceptions import ConnectionFailedToUsbmuxdError
+
+    from modstaller.device.connection import list_devices
+    from modstaller.errors import UsbServiceUnavailable
+
+    async def refused():
+        raise ConnectionFailedToUsbmuxdError()
+    monkeypatch.setattr("pymobiledevice3.usbmux.list_devices", refused)
+
+    if posix:
+        assert await list_devices(posix=True) == []
+    else:
+        with pytest.raises(UsbServiceUnavailable, match="Apple Devices"):
+            await list_devices(posix=False)
+
+
+@pytest.mark.asyncio
+async def test_unexpected_listing_errors_are_logged_not_swallowed(monkeypatch, caplog):
+    from modstaller.device.connection import list_devices
+
+    async def broken():
+        raise RuntimeError("boom")
+    monkeypatch.setattr("pymobiledevice3.usbmux.list_devices", broken)
+
+    assert await list_devices(posix=False) == []
+    assert "boom" in caplog.text

@@ -12,6 +12,7 @@ const path = require("node:path");
 // Eigene Datei, damit die Umwandlung ohne Electron pruefbar ist.
 const { plainNotes } = require("./notes.cjs");
 const channel = require("./channel.cjs");
+const langseed = require("./langseed.cjs");
 
 /** Wie viel stderr wir fuer die Fehleranzeige aufheben. */
 const STDERR_KEEP = 60;
@@ -37,6 +38,33 @@ let logFile = null;
 let backendState = { state: "starting" };
 
 const WINDOWS = process.platform === "win32";
+
+/**
+ * Wie diese Kopie laeuft:
+ *
+ *   "app"        normal - Windows, portable AppImage, Entwicklung
+ *   "setup"      Linux-Setup-AppImage: zeigt den Installations-Assistenten
+ *   "installed"  die vom Setup installierte Kopie (~/.local/share/modstaller-gui)
+ *
+ * Setup und installierte Kopie sind derselbe Build (modstallerVariant =
+ * "setup" in package.json, siehe "dist:setup"); die installierte laeuft nur
+ * nicht mehr aus einer AppImage. MODSTALLER_MODE=setup erzwingt den
+ * Assistenten zum Ausprobieren (mit MODSTALLER_SETUP_APPDIR als Quelle).
+ */
+function runMode() {
+  if (process.platform !== "linux") return "app";
+  if (process.env.MODSTALLER_MODE === "setup") return "setup";
+  let variant = "";
+  try {
+    variant = require("../package.json").modstallerVariant ?? "";
+  } catch {
+    // ohne package.json: normal
+  }
+  if (!app.isPackaged || variant !== "setup") return "app";
+  return process.env.APPIMAGE ? "setup" : "installed";
+}
+
+const MODE = runMode();
 
 /** Eine Zeile ins Protokoll. Unter Windows hat die gepackte App keine Konsole,
  *  process.stderr geht also ins Leere - die Datei ist dort die einzige Spur. */
@@ -64,7 +92,7 @@ function setupLog() {
   } catch {
     logFile = null;   // kein Protokollverzeichnis - dann eben nur stderr.
   }
-  log(`ModStaller ${app.getVersion()} auf ${process.platform}, gepackt: ${app.isPackaged}`);
+  log(`ModStaller ${app.getVersion()} auf ${process.platform}, gepackt: ${app.isPackaged}, Modus: ${MODE}`);
 }
 
 /** Umgebung mit `dir` vorne im Suchpfad.
@@ -177,13 +205,17 @@ function stopBackend() {
   setTimeout(() => child.exitCode === null && child.kill("SIGTERM"), 3000).unref();
 }
 
-function createWindow() {
+function createWindow({ language = null, setup = null } = {}) {
+  // Beides kommt als Argument ins Fenster: preload.cjs liest es synchron,
+  // bevor die Oberflaeche ihre Sprache festlegt.
+  const extra = [];
+  if (language) extra.push(`${langseed.ARG}${language}`);
+  if (setup) extra.push("--ms-mode=setup", ...(setup.update ? ["--ms-setup-update"] : []));
   win = new BrowserWindow({
-    width: 1180,
-    height: 780,
-    minWidth: 880,
-    minHeight: 600,
-    title: "ModStaller",
+    ...(setup
+      ? { width: 760, height: 600, minWidth: 640, minHeight: 520, resizable: true }
+      : { width: 1180, height: 780, minWidth: 880, minHeight: 600 }),
+    title: setup ? "ModStaller Setup" : "ModStaller",
     backgroundColor: "#0e0f14",
     autoHideMenuBar: true,
     icon: path.join(__dirname, "..", "build", "icon.png"),
@@ -192,6 +224,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: extra,
     },
   });
 
@@ -203,8 +236,11 @@ function createWindow() {
   win.webContents.on("will-navigate", (e) => e.preventDefault());
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devUrl) win.loadURL(devUrl);
-  else win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+  if (devUrl) win.loadURL(setup ? `${devUrl}?setup=1` : devUrl);
+  else {
+    win.loadFile(path.join(__dirname, "..", "dist", "index.html"),
+      setup ? { query: { setup: "1" } } : {});
+  }
 
   win.on("closed", () => { win = null; });
 }
@@ -244,12 +280,22 @@ function applyChannel(autoUpdater) {
 function canSelfUpdate() {
   if (!app.isPackaged) return false;           // Entwicklung
   if (WINDOWS) return true;                    // NSIS-Installation
+  if (MODE === "installed") {                  // ueber eine neue Setup-AppImage
+    return linuxInstall().isInstalledCopy(process.execPath);
+  }
   return Boolean(process.env.APPIMAGE);        // nur die AppImage, nicht entpackt
 }
 
 function setupUpdates() {
   if (!canSelfUpdate()) {
     setUpdateState({ state: "unsupported" });
+    return;
+  }
+  if (MODE === "installed") {
+    updater = installedUpdater();
+    const check = () => updater.checkForUpdates().catch(() => {});
+    check();
+    setInterval(check, UPDATE_INTERVAL_MS).unref();
     return;
   }
   const { autoUpdater } = require("electron-updater");
@@ -279,6 +325,88 @@ function setupUpdates() {
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   check();
   setInterval(check, UPDATE_INTERVAL_MS).unref();
+}
+
+// -- Updates der installierten Linux-Variante ----------------------------------
+//
+// Dieselbe Schnittstelle wie electron-updaters autoUpdater (checkForUpdates,
+// downloadUpdate, quitAndInstall), damit die IPC-Handler und die Oberflaeche
+// nichts davon merken. Eingespielt wird mit der neuen Setup-AppImage.
+
+function linuxInstall() {
+  return require("./linux-install.cjs");
+}
+
+function updateCacheDir() {
+  const cache = process.env.XDG_CACHE_HOME || path.join(app.getPath("home"), ".cache");
+  return path.join(cache, "ModStaller", "updates");
+}
+
+/** Startet eine Setup-AppImage losgeloest von diesem Prozess. */
+function spawnSetup(file, args) {
+  const env = { ...process.env };
+  // Nichts von unserem eigenen AppRun an das neue Setup vererben.
+  for (const key of ["APPDIR", "APPIMAGE", "ARGV0", "OWD", "LD_LIBRARY_PATH"]) delete env[key];
+  const child = spawn(file, args, { detached: true, stdio: "ignore", env });
+  child.unref();
+}
+
+function installedUpdater() {
+  const setupUpdate = require("./setup-update.cjs");
+  let found = null;
+  let downloaded = null;
+  const self = {
+    autoInstallOnAppQuit: true,
+    async checkForUpdates() {
+      setUpdateState({ state: "checking" });
+      try {
+        found = await setupUpdate.check({ current: app.getVersion(), beta: betaChannel() });
+      } catch (err) {
+        setUpdateState({ state: "error", message: String(err?.message ?? err).split("\n")[0] });
+        return;
+      }
+      if (!found) {
+        setUpdateState({ state: "none" });
+        return;
+      }
+      if (downloaded?.version === found.version) {
+        setUpdateState({ state: "ready", version: found.version });
+        return;
+      }
+      setUpdateState({ state: "available", version: found.version, notes: plainNotes(found.notes) });
+    },
+    async downloadUpdate() {
+      if (!found) return;
+      const version = found.version;
+      try {
+        setUpdateState({ state: "downloading", version, percent: 0 });
+        const file = await setupUpdate.download(found, {
+          dir: updateCacheDir(),
+          onProgress: (percent) => setUpdateState({ state: "downloading", version, percent }),
+        });
+        downloaded = { version, file };
+        self.autoInstallOnAppQuit = true;
+        setUpdateState({ state: "ready", version });
+      } catch (err) {
+        setUpdateState({ state: "error", version, message: String(err?.message ?? err).split("\n")[0] });
+      }
+    },
+    quitAndInstall() {
+      if (!downloaded) return;
+      log(`Update: starte ${downloaded.file} --update`);
+      spawnSetup(downloaded.file, ["--update"]);
+      downloaded = null;   // nicht beim Beenden ein zweites Mal
+      app.quit();
+    },
+    /** Wer die App mit fertig geladenem Update schliesst, bekommt es auch so. */
+    installOnQuit() {
+      if (!downloaded || !self.autoInstallOnAppQuit) return;
+      log(`Update beim Beenden: ${downloaded.file} --update --no-launch`);
+      spawnSetup(downloaded.file, ["--update", "--no-launch"]);
+      downloaded = null;
+    },
+  };
+  return self;
 }
 
 ipcMain.handle("update:get", () => updateState);
@@ -338,13 +466,92 @@ ipcMain.handle("dialog:pickIpa", async () => {
   return res.canceled ? null : res.filePaths[0];
 });
 
+// -- Linux-Setup (Setup-AppImage) --------------------------------------------
+
+/** Was installiert wird: das AppDir, aus dem diese Setup-AppImage laeuft. */
+function setupSource() {
+  return process.env.MODSTALLER_SETUP_APPDIR
+    || process.env.APPDIR
+    || path.dirname(process.execPath);
+}
+
+function setupWindowOptions() {
+  return {
+    update: process.argv.includes("--update"),
+    launch: !process.argv.includes("--no-launch"),
+  };
+}
+
+/** Zum Anzeigen: das Heimatverzeichnis als ~. */
+function tilde(p) {
+  const home = app.getPath("home");
+  return p === home || p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p;
+}
+
+function registerSetupIpc() {
+  const inst = linuxInstall();
+  const opts = setupWindowOptions();
+
+  ipcMain.handle("setup:info", () => {
+    const p = inst.paths();
+    return {
+      version: app.getVersion(),
+      installed: inst.installedVersion(p),
+      update: opts.update,
+      launchAfter: opts.launch,
+      paths: { app: tilde(p.app), launcher: tilde(p.launcher), cli: tilde(p.cli), desktop: tilde(p.desktop) },
+      binOnPath: inst.binOnPath(p),
+    };
+  });
+
+  ipcMain.handle("setup:install", async (_e, choice) => {
+    const { language, desktopShortcut } = choice ?? {};
+    if (language) {
+      langseed.writeSeed(path.join(app.getPath("userData"), langseed.SEED_FILE), language);
+    }
+    const res = await inst.install({
+      appDir: setupSource(),
+      version: app.getVersion(),
+      comment: "Sign iOS apps with your own Apple account and install them over USB.",
+      desktopShortcut: typeof desktopShortcut === "boolean" ? desktopShortcut : undefined,
+      onProgress: (e) => win?.webContents.send("setup:progress", e),
+    });
+    log(`Setup: ${res.version} installiert (${res.files.length} Dateien).`);
+    return res;
+  });
+
+  ipcMain.handle("setup:uninstall", (_e, choice) => {
+    inst.uninstall({ purge: Boolean(choice?.purge) });
+    log(`Setup: deinstalliert${choice?.purge ? " (mit Daten)" : ""}.`);
+  });
+
+  ipcMain.handle("setup:launch", () => {
+    const { launcher } = inst.paths();
+    spawnSetup(launcher, []);
+    app.quit();
+  });
+
+  ipcMain.handle("setup:quit", () => app.quit());
+}
+
 app.whenReady().then(() => {
   setupLog();
   Menu.setApplicationMenu(null);
+  // Die im Setup gewaehlte Sprache - genau einmal (siehe langseed.cjs).
+  const language = langseed.takeSeed(path.join(app.getPath("userData"), langseed.SEED_FILE));
+  if (language) log(`Startsprache aus dem Setup: ${language}`);
+  if (MODE === "setup") {
+    registerSetupIpc();
+    createWindow({ language, setup: setupWindowOptions() });
+    return;
+  }
   startBackend();
-  createWindow();
+  createWindow({ language });
   setupUpdates();
 });
 
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", stopBackend);
+app.on("before-quit", () => {
+  stopBackend();
+  updater?.installOnQuit?.();
+});

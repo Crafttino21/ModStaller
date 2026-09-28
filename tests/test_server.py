@@ -257,3 +257,33 @@ async def test_the_device_identity_stays_while_other_accounts_need_it():
     w.call(2, "logout", account="a")
     assert (await w.reply_to(2))["result"] is True
     assert [s.adsid for s in session_mod.list_accounts()] == ["b"]
+
+
+async def test_status_names_a_missing_usb_service_and_logs_it_once(monkeypatch):
+    """Without Apple Devices/iTunes on Windows no iPhone is ever listed. The
+    status says why, and the logbook says it once - not every poll."""
+    from modstaller.errors import UsbServiceUnavailable
+
+    missing = True
+
+    async def devices():
+        if missing:
+            raise UsbServiceUnavailable("service missing")
+        return []
+    monkeypatch.setattr("modstaller.device.connection.list_devices", devices)
+    logged = []
+    monkeypatch.setattr(srv.logbook, "log",
+                        lambda source, message, *a, **k: logged.append(message))
+
+    w = Wire()
+    first = await srv._status(w.server, None, {})
+    await srv._status(w.server, None, {})
+    assert first["usbService"] == "missing"
+    assert first["deviceAttached"] is False
+    assert first["error"] == "service missing"
+    assert len(logged) == 1
+
+    missing = False
+    back = await srv._status(w.server, None, {})
+    assert back["usbService"] == "ok" and not back["error"]
+    assert len(logged) == 2

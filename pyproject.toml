@@ -10,7 +10,7 @@ license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
-    "pymobiledevice3>=11.17",
+    "pymobiledevice3>=11.17,<12",
     "anisette>=1.2.4",
     "cryptography>=43",
     "requests>=2.31",

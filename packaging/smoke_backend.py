@@ -7,7 +7,7 @@ Starts ``<program> serve`` and sends each method as a JSON-RPC request.
 stdin stays open meanwhile: on EOF the server aborts running work, so an
 ``echo ... | backend serve`` would never answer slower methods.
 
-Defaults are ``info`` and ``doctor``. ``doctor`` is the only method that
+Defaults are ``info``, ``doctor`` and ``status``. ``doctor`` is the only method that
 actually touches pymobiledevice3, anisette, unicorn and cryptography - and up
 to 1.1.0-beta.3 it killed the Windows program natively (0xC0000409, see
 :func:`build_backend.clear_cfg`) without the pipeline noticing.
@@ -18,11 +18,15 @@ Exit 1 if a reply is missing, an error comes back or the process dies.
 from __future__ import annotations
 
 import json
+import socket
 import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_METHODS = ("info", "doctor")
+DEFAULT_METHODS = ("info", "doctor", "status")
+
+#: Where the Apple device service listens on Windows (see doctor.py).
+APPLE_MOBILE_DEVICE = ("127.0.0.1", 27015)
 
 #: A doctor check that only fails when the build left something out - the
 #: JIT engine is imported lazily, so nothing else would notice (the label
@@ -74,6 +78,8 @@ def smoke(exe: Path, methods: list[str]) -> int:
             _show(method, msg["result"])
             if method == "doctor" and not _bundled(msg["result"]):
                 bad.append(f"{method} ({MUST_PASS})")
+            if method == "status" and not _usb_path_ok(msg["result"]):
+                bad.append(f"{method} (USB device listing)")
     finally:
         if proc.poll() is None:
             proc.stdin.close()
@@ -92,6 +98,26 @@ def _bundled(result: object) -> bool:
     """Whether the ``MUST_PASS`` check is there and green."""
     return isinstance(result, list) and any(
         c.get("label") == MUST_PASS and c.get("ok") for c in result)
+
+
+def _usb_path_ok(result: object, windows: bool = sys.platform == "win32") -> bool:
+    """Whether the device listing really reached pymobiledevice3.
+
+    On a runner without Apple's service the backend must say so
+    (``usbService: "missing"``). If it says "ok" although nothing listens
+    on the port, the listing broke before connecting - a module left out of
+    the build (1.2.1-beta.4 showed "no iPhone" on Windows without a word).
+    """
+    if not isinstance(result, dict) or "usbService" not in result:
+        return False
+    if not windows:
+        return True
+    try:
+        socket.create_connection(APPLE_MOBILE_DEVICE, timeout=1).close()
+        service_up = True
+    except OSError:
+        service_up = False
+    return result["usbService"] == ("ok" if service_up else "missing")
 
 
 def _show(method: str, result: object) -> None:

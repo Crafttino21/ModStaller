@@ -78,6 +78,13 @@ export interface Status {
   urgent: string[];
   urgentDays: number;
   error: string;
+  /** Windows: Apple-Geraetedienst fehlt ("missing") oder ist gestoppt. */
+  usbService?: "ok" | "missing" | "stopped";
+}
+
+export interface UsbSetupResult {
+  method: "already" | "started" | "apple-devices" | "driver";
+  message: string;
 }
 
 export interface FoundIpa {
@@ -224,8 +231,40 @@ export interface UpdateState {
   prerelease?: boolean;
 }
 
+/** Linux-Setup: was schon installiert ist und wohin. */
+export interface SetupInfo {
+  version: string;
+  installed: string | null;
+  update: boolean;
+  launchAfter: boolean;
+  paths: { app: string; launcher: string; cli: string; desktop: string };
+  binOnPath: boolean;
+}
+
+export interface SetupResult {
+  version: string;
+  cli: boolean;
+  binOnPath: boolean;
+  files: string[];
+}
+
+export interface SetupProgress {
+  step: "copy" | "activate" | "done";
+  percent: number;
+}
+
 declare global {
   interface Window {
+    /** Nur im Linux-Setup vorhanden (preload.cjs). */
+    setup?: {
+      autoUpdate: boolean;
+      info(): Promise<SetupInfo>;
+      install(choice: { language?: string; desktopShortcut?: boolean }): Promise<SetupResult>;
+      uninstall(choice: { purge: boolean }): Promise<void>;
+      launch(): Promise<void>;
+      quit(): Promise<void>;
+      onProgress(cb: (p: SetupProgress) => void): () => void;
+    };
     updates: {
       get(): Promise<UpdateState>;
       onState(cb: (s: UpdateState) => void): () => void;
@@ -237,6 +276,8 @@ declare global {
     };
     backend: {
       platform: string;
+      /** Startsprache aus dem Setup - nur beim ersten Start danach. */
+      initialLanguage: string | null;
       send(msg: unknown): void;
       onMessage(cb: (msg: any) => void): () => void;
       onExit(cb: (info: BackendExit) => void): () => void;

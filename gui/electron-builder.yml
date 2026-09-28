@@ -42,6 +42,11 @@ nsis:
   createDesktopShortcut: true
   shortcutName: ModStaller
   artifactName: ModStaller-Setup-${version}.${ext}
+  # Sprachdialog beim Start: das Setup laeuft in der gewaehlten Sprache, und
+  # build/installer.nsh macht sie zur Startsprache der App (language.json).
+  multiLanguageInstaller: true
+  displayLanguageSelector: true
+  installerLanguages: [en_US, de_DE, fr_FR, es_ES, it_IT, pt_BR, nl_NL]
 # Woher die App ihre Updates holt (electron-updater) - und wohin die Pipeline
 # veroeffentlicht. Lokal wird nie hochgeladen: "npm run dist" baut mit
 # --publish never, die Release legt .github/workflows/release.yml an.

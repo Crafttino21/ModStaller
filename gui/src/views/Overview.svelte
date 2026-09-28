@@ -8,6 +8,7 @@
   import PhoneMockup from "../components/PhoneMockup.svelte";
   import BatteryLevel from "../components/BatteryLevel.svelte";
   import RecentActivity from "../components/RecentActivity.svelte";
+  import UsbServiceBanner from "../components/UsbServiceBanner.svelte";
   import { busy, go, ui } from "../lib/state.svelte";
   import { date, days } from "../lib/format";
   import { t } from "../lib/i18n.svelte";
@@ -18,6 +19,8 @@
 </script>
 
 <PageHeader title={t("Overview")} subtitle={t("iPhone, sign-in and what expires soon – at a glance.")} />
+
+<UsbServiceBanner />
 
 {#if urgent.length}
   <div class="banner warn urgent">
@@ -59,6 +62,10 @@
       {:else if st?.deviceAttached}
         <div class="value">{t("Connected but not ready")}</div>
         <div class="hint"><Lock size={13} /> {st.error || t("Unlock the iPhone and confirm “Trust”.")}</div>
+      {:else if st?.usbService === "missing" || st?.usbService === "stopped"}
+        <div class="value dim">{st.usbService === "missing"
+          ? t("Apple device service missing") : t("Apple device service is not running")}</div>
+        <div class="hint">{t("One click fixes it – see above.")}</div>
       {:else}
         <div class="value dim">{t("Not connected")}</div>
         <div class="hint">{t("Plug it in via USB and unlock it.")}</div>

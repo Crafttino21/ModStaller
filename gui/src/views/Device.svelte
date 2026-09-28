@@ -2,6 +2,7 @@
   import { Smartphone, TriangleAlert, Search, LoaderCircle, RefreshCw } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import DeviceChecks from "../components/DeviceChecks.svelte";
+  import UsbServiceBanner from "../components/UsbServiceBanner.svelte";
   import { errorText, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import type { DeviceApp, DeviceInfo } from "../lib/types";
@@ -54,10 +55,11 @@
 {/if}
 
 {#if !connected}
+  <UsbServiceBanner stuckHint />
   <div class="card empty">
     <Smartphone size={30} />
     <p>{ui.status?.deviceAttached ? t("Connected but not ready – unlock the iPhone and confirm “Trust”.") : t("No iPhone connected. Plug it in via USB and unlock it.")}</p>
-    {#if ui.status?.error}<p class="faint small selectable">{ui.status.error}</p>{/if}
+    {#if ui.status?.error && (ui.status.usbService ?? "ok") === "ok"}<p class="faint small selectable">{ui.status.error}</p>{/if}
   </div>
 {:else}
   {#if error}

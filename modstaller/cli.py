@@ -84,6 +84,39 @@ async def _doctor(args) -> int:
     return 1 if bad else 0
 
 
+def _usb_setup(args) -> int:
+    """Windows: sets up the Apple device service. The Windows setup calls
+    this too (gui/build/installer.nsh) - one implementation for both."""
+    from . import winsetup
+
+    if os.name != "nt":
+        print("Only needed on Windows - on Linux, usbmuxd does this job "
+              "(see \"modstaller doctor\").")
+        return 0
+    if args.check:
+        # For the installer: 0 running, 2 installed but stopped, 3 missing.
+        state = winsetup.service_state()
+        print(state.state)
+        return {winsetup.RUNNING: 0, winsetup.STOPPED: 2}.get(state.state, 3)
+
+    print("ModStaller - Apple device service\n")
+    last = -1
+
+    def progress(pct: int) -> None:
+        nonlocal last
+        if pct // 10 != last // 10:
+            print(f"  {pct} %")
+        last = pct
+
+    how = winsetup.setup(on_step=lambda s: print(f"  {s}"), on_progress=progress)
+    print()
+    print({"already": "Already running.", "started": "Service started.",
+           "apple-devices": "\"Apple Devices\" installed - service running.",
+           "driver": "Apple's USB driver installed - service running."}[how])
+    print("Unplug the iPhone and plug it in again.")
+    return 0
+
+
 # -- Sign-in ---------------------------------------------------------------
 
 
@@ -422,6 +455,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("doctor", help="Check that everything needed is there"
                    ).set_defaults(afunc=_doctor)
+
+    usb = sub.add_parser("usb-setup", help="Windows: install or start the "
+                                           "Apple device service")
+    usb.add_argument("--check", action="store_true",
+                     help="only report: exit 0 running, 2 stopped, 3 missing")
+    usb.set_defaults(func=_usb_setup)
 
     log = sub.add_parser("login", help="Sign in to Apple")
     log.add_argument("apple_id", nargs="?", help="Apple ID (prompted otherwise)")

@@ -73,3 +73,35 @@ def test_something_that_is_not_a_program_is_refused(tmp_path):
     exe.write_bytes(make_pe(0xC160).replace(b"PE" + bytes(2), b"XX" + bytes(2), 1))
     with pytest.raises(SystemExit):
         build_backend.clear_cfg(exe)
+
+
+_smoke_spec = importlib.util.spec_from_file_location(
+    "smoke_backend", ROOT / "packaging" / "smoke_backend.py")
+smoke_backend = importlib.util.module_from_spec(_smoke_spec)
+_smoke_spec.loader.exec_module(smoke_backend)
+
+
+@pytest.mark.parametrize("service_up, reported, ok", [
+    (False, "missing", True),   # CI runner without Apple Devices
+    (False, "ok", False),       # listing broke before it connected
+    (True, "ok", True),
+    (True, "missing", False),
+])
+def test_smoke_catches_a_broken_windows_device_listing(monkeypatch, service_up,
+                                                       reported, ok):
+    class Sock:
+        def close(self):
+            pass
+
+    def connect(addr, timeout):
+        if not service_up:
+            raise ConnectionRefusedError
+        return Sock()
+    monkeypatch.setattr(smoke_backend.socket, "create_connection", connect)
+    assert smoke_backend._usb_path_ok({"usbService": reported},
+                                      windows=True) is ok
+
+
+def test_smoke_needs_the_usb_field_everywhere():
+    assert not smoke_backend._usb_path_ok({}, windows=False)
+    assert smoke_backend._usb_path_ok({"usbService": "ok"}, windows=False)

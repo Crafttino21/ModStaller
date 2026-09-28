@@ -59,6 +59,16 @@ COMMON = [
     "--recursive-copy-metadata", "modstaller",
 ]
 
+#: Windows only: pymobiledevice3 reaches the Apple device service through
+#: ``osu.win_util``, which imports these lazily on the first device listing.
+#: Left out, every listing fails - and looks exactly like "no iPhone"
+#: (1.2.1-beta.4). The smoke test checks the path (``status``).
+WINDOWS_HIDDEN = [
+    "--hidden-import", "pymobiledevice3.osu.win_util",
+    "--hidden-import", "win32security",
+    "--hidden-import", "ifaddr",
+]
+
 ENTRY = """\
 import sys
 from modstaller.cli import main
@@ -111,7 +121,8 @@ def build(out: Path, *, cli: bool) -> None:
 
     def run(name: str, mode: str) -> Path:
         dist = work / f"dist-{name}"
-        pyinstaller.run([*COMMON, mode, "--console", "--name", name,
+        extra = WINDOWS_HIDDEN if sys.platform == "win32" else []
+        pyinstaller.run([*COMMON, *extra, mode, "--console", "--name", name,
                          "--distpath", str(dist),
                          "--workpath", str(work / f"build-{name}"),
                          "--specpath", str(work), str(entry)])

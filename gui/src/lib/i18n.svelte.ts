@@ -56,8 +56,22 @@ export function resolve(wanted: string): string {
  *  Bewusst nicht die Systemsprache. Wer ModStaller zum ersten Mal startet,
  *  soll dieselbe Oberflaeche sehen wie in jeder Anleitung und jedem
  *  Fehlerbericht; die eigene Sprache ist zwei Klicks entfernt und bleibt
- *  dann gespeichert. */
+ *  dann gespeichert.
+ *
+ *  Ausnahme: die Sprache, die im Setup gewaehlt wurde. Die reicht der
+ *  Hauptprozess genau einmal herein (electron/langseed.cjs) - sie gilt ab
+ *  dann als eigene Wahl. */
 function initial(): string {
+  const seeded = typeof window !== "undefined" ? window.backend?.initialLanguage : null;
+  if (seeded) {
+    const code = resolve(seeded);
+    try {
+      localStorage.setItem(STORAGE_KEY, code);
+    } catch {
+      // Nicht speicherbar: gilt dann nur fuer diese Sitzung.
+    }
+    return code;
+  }
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return resolve(saved);

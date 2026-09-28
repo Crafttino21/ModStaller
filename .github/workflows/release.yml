@@ -97,6 +97,7 @@ jobs:
           path: |
             dist/*.AppImage
             dist/latest-linux.yml
+            dist/latest-linux-setup.yml
 
   build-windows:
     name: Windows (Setup + CLI)
@@ -263,7 +264,7 @@ jobs:
       - name: Update-Metadaten pruefen
         run: |
           ls -la dist/
-          for f in latest-linux.yml latest.yml; do
+          for f in latest-linux.yml latest-linux-setup.yml latest.yml; do
             grep -q "^version: ${GITHUB_REF_NAME#v}$" "dist/$f" || { echo "$f passt nicht zum Tag"; exit 1; }
           done
 
@@ -278,6 +279,7 @@ jobs:
           files: |
             dist/*.AppImage
             dist/latest-linux.yml
+            dist/latest-linux-setup.yml
             dist/*.exe
             dist/*.exe.blockmap
             dist/latest.yml

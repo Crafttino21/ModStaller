@@ -15,10 +15,14 @@ tunnel - it needs no root because it keeps the TCP stack inside the process.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 
-from ..errors import DeviceNotFound, DeviceError, NotPaired
+from .. import config
+from ..errors import DeviceNotFound, DeviceError, NotPaired, UsbServiceUnavailable
 from ..i18n import _
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -36,12 +40,37 @@ class DeviceInfo:
                 f"[{self.build}] - Developer Mode {dm}\n  UDID {self.udid}")
 
 
-async def list_devices() -> list[str]:
+def usb_service_hint() -> str:
+    """What to do when the Apple device service is missing (Windows)."""
+    return _("ModStaller can set it up by itself (“modstaller usb-setup” or "
+             "the button on the overview) - or install the “Apple Devices” "
+             "app from the Microsoft Store.")
+
+
+async def list_devices(*, posix: bool | None = None) -> list[str]:
+    """Serials of the connected iPhones.
+
+    Raises :class:`UsbServiceUnavailable` on Windows when the Apple device
+    service does not answer - without it no iPhone is ever visible, even
+    though Explorer shows one.
+    """
+    from pymobiledevice3.exceptions import ConnectionFailedToUsbmuxdError
     from pymobiledevice3.usbmux import list_devices as _ls
+
+    if posix is None:
+        posix = config.POSIX
     try:
         return [d.serial for d in await _ls()]
-    except Exception:
+    except ConnectionFailedToUsbmuxdError as exc:
+        if not posix:
+            raise UsbServiceUnavailable(
+                _("The Apple device service is not reachable.") + " "
+                + usb_service_hint()) from exc
         # usbmuxd is socket-activated: without a device it isn't running.
+        return []
+    except Exception:
+        # Not expected - and invisible unless we write it down.
+        log.warning("Listing USB devices failed", exc_info=True)
         return []
 
 

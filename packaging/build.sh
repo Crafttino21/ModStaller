@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Baut die AppImage: dist/ModStaller-<version>-x86_64.AppImage
+# Baut die AppImages:
+#   dist/ModStaller-<version>-x86_64.AppImage         portabel, aktualisiert sich selbst
+#   dist/ModStaller-Setup-<version>-x86_64.AppImage   installiert nach ~/.local
 #
 # Braucht nur Docker. Backend und zsign entstehen in einem Debian-11-
 # Container (alte glibc = laeuft auf moeglichst vielen Distros), die
@@ -33,7 +35,10 @@ docker run --rm -v "$ROOT:/src:ro" -v "$OUT:/out" "$IMAGE" \
 echo "==> Oberflaeche + AppImage"
 # install.js holt die Electron-Binary nach, die npm ci hier nicht mitbringt -
 # sonst ginge danach "npm run dev" nicht mehr.
-BUILD_GUI='npm ci --no-audit --no-fund && node node_modules/electron/install.js && npm run dist'
+# Danach dieselbe App noch einmal als Setup (modstallerVariant=setup) - in
+# einen eigenen Ordner, damit ihre latest-linux.yml nicht die der portablen
+# AppImage ueberschreibt.
+BUILD_GUI='npm ci --no-audit --no-fund && node node_modules/electron/install.js && npm run dist && npm run dist:setup'
 if command -v npm >/dev/null; then
   (cd "$ROOT/gui" && ELECTRON_BUILDER_CACHE="$OUT/cache" bash -c "$BUILD_GUI")
 else
@@ -42,6 +47,13 @@ else
     -e ELECTRON_CACHE=/src/packaging/out/cache \
     node:22 bash -c "$BUILD_GUI"
 fi
+
+# Setup-AppImage und ihre Update-Metadaten neben die portable legen. Die
+# installierte Variante findet ihre Updates ueber latest-linux-setup.yml.
+SETUP_OUT="$ROOT/dist/setup-build"
+rm -f "$ROOT"/dist/ModStaller-Setup-*.AppImage
+cp "$SETUP_OUT"/ModStaller-Setup-*.AppImage "$ROOT/dist/"
+cp "$SETUP_OUT/latest-linux.yml" "$ROOT/dist/latest-linux-setup.yml"
 
 echo
 ls -lh "$ROOT"/dist/*.AppImage

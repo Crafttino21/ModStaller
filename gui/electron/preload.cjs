@@ -3,8 +3,18 @@
 // auswaehlen - sonst nichts.
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
+// Vom Hauptprozess mitgegeben (additionalArguments): die Startsprache aus dem
+// Setup und ob dieses Fenster der Linux-Installationsassistent ist.
+// Kein require von langseed.cjs - im Sandbox-Preload geht nur "electron".
+function arg(prefix) {
+  const hit = process.argv.find((a) => a.startsWith(prefix));
+  return hit ? hit.slice(prefix.length) : null;
+}
+const isSetup = process.argv.includes("--ms-mode=setup");
+
 contextBridge.exposeInMainWorld("backend", {
   platform: process.platform,
+  initialLanguage: arg("--ms-lang="),
   send: (msg) => ipcRenderer.send("rpc:send", msg),
   onMessage: (cb) => {
     const listener = (_e, msg) => cb(msg);
@@ -41,3 +51,20 @@ contextBridge.exposeInMainWorld("updates", {
   getBeta: () => ipcRenderer.invoke("update:getBeta"),
   setBeta: (on) => ipcRenderer.invoke("update:setBeta", on),
 });
+
+// Nur im Linux-Setup: installieren, deinstallieren, danach starten.
+if (isSetup) {
+  contextBridge.exposeInMainWorld("setup", {
+    autoUpdate: process.argv.includes("--ms-setup-update"),
+    info: () => ipcRenderer.invoke("setup:info"),
+    install: (choice) => ipcRenderer.invoke("setup:install", choice),
+    uninstall: (choice) => ipcRenderer.invoke("setup:uninstall", choice),
+    launch: () => ipcRenderer.invoke("setup:launch"),
+    quit: () => ipcRenderer.invoke("setup:quit"),
+    onProgress: (cb) => {
+      const listener = (_e, p) => cb(p);
+      ipcRenderer.on("setup:progress", listener);
+      return () => ipcRenderer.off("setup:progress", listener);
+    },
+  });
+}

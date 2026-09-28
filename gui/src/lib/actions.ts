@@ -3,7 +3,9 @@
 import { ask, runTask, toast } from "./state.svelte";
 import { call } from "./rpc";
 import { t } from "./i18n.svelte";
-import type { Account, App, DeviceCheck, FixResult, InstallOutcome, JitResult } from "./types";
+import type {
+  Account, App, DeviceCheck, FixResult, InstallOutcome, JitResult, UsbSetupResult,
+} from "./types";
 
 /** Mehr braucht es nicht, um eine App anzusprechen - so gehen auch die
  *  Eintraege fremder Werkzeuge durch dieselben Vorgaenge. */
@@ -85,6 +87,16 @@ export async function logout(account: Account, last: boolean) {
   await call("logout", { account: account.adsid, forgetDevice: last && option });
   toast(t("Signed out."));
   return true;
+}
+
+/** Windows: Apple-Geraetedienst installieren (Apple Devices per winget, sonst
+ *  nur Apples Treiber) oder den gestoppten Dienst starten - modstaller/winsetup.py. */
+export function setupUsbService() {
+  runTask<UsbSetupResult>("fix", t("Set up the Apple device service"), "usb.setup", {},
+    (r) => ({
+      message: r.message,
+      notes: r.method === "already" ? [] : [t("Unplug the iPhone and plug it in again.")],
+    }));
 }
 
 export function fixCheck(check: DeviceCheck) {

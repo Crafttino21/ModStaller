@@ -6,11 +6,12 @@ Returns data only. How it looks is up to the CLI and the interface.
 from __future__ import annotations
 
 import shutil
-import socket
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import config
+from .device.connection import usb_service_hint
+from .errors import UsbServiceUnavailable
 from .i18n import _
 
 #: A problem prevents operation. An open step is not a fault of the system
@@ -28,23 +29,24 @@ class Check:
     kind: str = PROBLEM
 
 
-#: Where the Apple device service listens on Windows (usbmuxd protocol).
-APPLE_MOBILE_DEVICE = ("127.0.0.1", 27015)
-
-
 def _usb_service_check(posix: bool = config.POSIX) -> Check:
     """The service through which the iPhone is reachable over USB."""
     if not posix:
         # On Windows pymobiledevice3 talks to the Apple device service over
         # TCP. It runs permanently once installed.
-        try:
-            socket.create_connection(APPLE_MOBILE_DEVICE, timeout=1).close()
+        from . import winsetup
+        state = winsetup.service_state()
+        if state.state == winsetup.RUNNING:
             return Check(_("Apple device service"), True, _("running"))
-        except OSError:
+        if state.state == winsetup.STOPPED:
             return Check(
-                _("Apple device service"), False, _("not reachable"),
-                hint=_("Install the “Apple Devices” app from the Microsoft "
-                       "Store (or iTunes) - it brings the service along."))
+                _("Apple device service"), False,
+                _("installed, but not running"),
+                hint=_("Start it with “modstaller usb-setup” or the button "
+                       "on the overview."))
+        return Check(
+            _("Apple device service"), False, _("not installed"),
+            hint=usb_service_hint())
 
     # usbmuxd only starts when a device is plugged in (udev or socket
     # activation). Without an iPhone the socket is rightly missing - then
@@ -153,7 +155,11 @@ async def run_checks() -> list[Check]:
         hint="modstaller login", kind=TODO))
 
     from .device.connection import list_devices
-    serials = await list_devices()
+    try:
+        serials = await list_devices()
+    except UsbServiceUnavailable:
+        # Already reported above as a problem of its own.
+        serials = []
     checks.append(Check(
         _("iPhone detected"), bool(serials),
         ", ".join(serials) if serials else _("none connected"),

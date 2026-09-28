@@ -56,7 +56,8 @@ if ! "$ROOT/packaging/build.sh" 2>&1 | tee "$LOG" | grep --line-buffered '^==>';
   exit 1
 fi
 
-APPIMAGE=$(ls -t "$ROOT"/dist/*.AppImage 2>/dev/null | head -n 1)
+APPIMAGE=$(ls -t "$ROOT"/dist/ModStaller-*.AppImage 2>/dev/null | grep -v -- '-Setup-' | head -n 1 || true)
+SETUP_APPIMAGE=$(ls -t "$ROOT"/dist/ModStaller-Setup-*.AppImage 2>/dev/null | head -n 1 || true)
 if [ -z "$APPIMAGE" ]; then
   red "Build lief durch, aber es liegt keine AppImage in dist/. Siehe $LOG"
   exit 1
@@ -64,7 +65,8 @@ fi
 
 echo
 green "Fertig in $(( $(date +%s) - START )) s:"
-echo "  $APPIMAGE ($(du -h "$APPIMAGE" | cut -f1))"
+echo "  $APPIMAGE ($(du -h "$APPIMAGE" | cut -f1)) - portabel"
+[ -n "$SETUP_APPIMAGE" ] && echo "  $SETUP_APPIMAGE ($(du -h "$SETUP_APPIMAGE" | cut -f1)) - Setup"
 
 if [ "$RUN_AFTER" = 1 ]; then
   echo
