@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "modstaller"
-version = "1.2.1-beta.3"
+version = "1.2.1-beta.4"
 description = "Multi-platform iOS sideloader: sign IPAs and install them on your iPhone"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
