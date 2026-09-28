@@ -127,7 +127,11 @@ def fat(*slices: bytes) -> bytes:
     (thin(None), False),
     (fat(thin(0, bits64=False), thin(0)), False),
     (fat(thin(0, bits64=False), thin(1)), True),
-])
+], ids=["thin64-decrypted", "thin64-encrypted", "thin32-encrypted", "no-command",
+        "fat-decrypted", "fat-one-slice-encrypted"])
+# Explicit ids: pytest would otherwise turn the binaries into test names, and
+# those end up in PYTEST_CURRENT_TEST - over Windows' 32767-character limit
+# for environment variables (the test then errors before it runs).
 def test_cryptid_decides(binary, encrypted):
     assert macho.is_encrypted(io.BytesIO(binary)) is encrypted
 
