@@ -32,6 +32,9 @@ class Session:
     identity_token: str
     created_at: float
     app_token: str = ""
+    #: For the greeting on the dashboard. Sessions from older versions don't
+    #: have it - see :func:`remember_first_name`.
+    first_name: str = ""
 
     @property
     def age(self) -> float:
@@ -84,7 +87,26 @@ class Session:
     def from_gsa(cls, result: GSAResult) -> "Session":
         return cls(adsid=result.adsid, idms_token=result.idms_token,
                    identity_token=result.identity_token,
-                   app_token=result.app_token, created_at=time.time())
+                   app_token=result.app_token, created_at=time.time(),
+                   first_name=result.first_name)
+
+
+def remember_first_name(teams) -> str:
+    """Fills in the first name for sessions that predate it.
+
+    An individual developer team is named after its holder ("Jane Doe"), so
+    its first word is the first name - without asking for a new sign-in.
+    Companies are left alone: their team name is not a person.
+    """
+    session = Session.load()
+    if session is None or session.first_name:
+        return session.first_name if session else ""
+    for team in teams:
+        if team.type.lower() in ("individual", "free") and team.name.strip():
+            session.first_name = team.name.split()[0]
+            session.save()
+            break
+    return session.first_name
 
 
 def login(apple_id: str, password: str, anisette,

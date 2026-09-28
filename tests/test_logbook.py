@@ -33,9 +33,38 @@ def _messages(book, level=None):
     return [e.message for e in book.history() if level is None or e.level == level]
 
 
-def test_multiline_messages_become_separate_entries(book):
-    logbook.log(logbook.INSTALL, "\nIPA read:\n  Name  X\n")
-    assert _messages(book) == ["IPA read:", "  Name  X"]
+def test_a_multiline_step_stays_one_entry(book):
+    """A table split into single rows - each with time, icon and area -
+    is unreadable. The step stays together, its columns intact."""
+    logbook.log(logbook.INSTALL, "\nIPA read:\n  Name     X\n  Version  1.0\n")
+    assert _messages(book) == ["IPA read:\n  Name     X\n  Version  1.0"]
+
+
+@pytest.mark.parametrize("raw, tidy", [
+    ("\n=== Renewing X (2 days left) ===", "Renewing X (2 days left)"),
+    ("  Profile valid: 7.0 days", "Profile valid: 7.0 days"),
+    ("\nSigning …", "Signing …"),
+    ("  done in 4.2s\n\n", "done in 4.2s"),
+    ("\n\n", ""),
+])
+def test_terminal_decoration_is_tidied(raw, tidy):
+    assert logbook.tidy(raw) == tidy
+
+
+def test_blank_messages_are_dropped(book):
+    logbook.log(logbook.SYSTEM, "\n  \n")
+    assert book.history() == []
+
+
+def test_the_file_indents_continuation_lines(tmp_path):
+    import logging.handlers
+    record = logging.makeLogRecord({
+        "msg": "IPA read:\n  Name  X", "levelno": logging.INFO,
+        "levelname": "INFO", "source": "install"})
+    line = logbook._FileFormatter("%(levelname)s [%(source)s] %(message)s").format(record)
+    first, second = line.split("\n")
+    assert first == "INFO [install] IPA read:"
+    assert second == " " * len("INFO [install] ") + "  Name  X"
 
 
 def test_levels_and_sources(book):

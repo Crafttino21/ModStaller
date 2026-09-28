@@ -45,7 +45,7 @@
           {:else if e.level === "warn"}<TriangleAlert size={16} />
           {:else}<Info size={16} />{/if}
         </span>
-        <span class="msg">{e.message}</span>
+        <span class="msg" title={e.message}>{e.message.split("\n")[0]}</span>
         <span class="when">{ago(e.ts)}</span>
       </div>
     {/each}

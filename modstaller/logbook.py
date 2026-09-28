@@ -20,6 +20,8 @@ from __future__ import annotations
 import itertools
 import logging
 import logging.handlers
+import re
+import textwrap
 import threading
 import time
 from collections import deque
@@ -73,6 +75,19 @@ def _source_of(record: logging.LogRecord) -> str:
         if name == prefix or name.startswith(prefix + "."):
             return src
     return SYSTEM
+
+
+class _FileFormatter(logging.Formatter):
+    """One line per entry in the file - continuation lines are indented
+    under the message, so the file stays greppable by date."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        head = super().format(record)
+        first, _, rest = head.partition("\n")
+        if not rest:
+            return head
+        pad = " " * (len(first) - len(record.getMessage().partition("\n")[0]))
+        return first + "".join(f"\n{pad}{line}" for line in rest.split("\n"))
 
 
 class _SourceFilter(logging.Filter):
@@ -132,12 +147,37 @@ BOOK = Logbook()
 _log = logging.getLogger("modstaller.events")
 
 
+#: "=== Renewing X ===" - a heading for the terminal, noise in the log.
+_BANNER = re.compile(r"^=+\s*(.*?)\s*=+$")
+
+
+def tidy(message: str) -> str:
+    """Terminal output made fit for the log.
+
+    The pipeline writes for a terminal: blank lines as separators, indented
+    detail lines, ``===`` banners. In the log every step is one entry, so
+    that goes: blank lines out, the block dedented as a whole (a table
+    keeps its columns), banners reduced to their text.
+    """
+    lines = [line.rstrip() for line in str(message).splitlines()]
+    lines = [line for line in lines if line.strip()]
+    if not lines:
+        return ""
+    text = textwrap.dedent("\n".join(lines))
+    first, _, rest = text.partition("\n")
+    banner = _BANNER.match(first.strip())
+    if banner:
+        first = banner.group(1)
+    return f"{first}\n{rest}" if rest else first
+
+
 def log(source: str, message: str, level: int = logging.INFO,
         job: object = None) -> None:
-    """An event for the log - one entry per line if it spans several."""
-    for line in str(message).splitlines():
-        if line.strip():
-            _log.log(level, line.rstrip(), extra={"source": source, "job": job})
+    """An event for the log. A step that spans several lines (a table, a
+    heading with details) stays one entry."""
+    text = tidy(message)
+    if text:
+        _log.log(level, text, extra={"source": source, "job": job})
 
 
 def mask_apple_id(apple_id: str) -> str:
@@ -180,7 +220,7 @@ def setup(*, file=None, book: Logbook | None = BOOK,
             handler = None  # not writable: the live log still works
         if handler is not None:
             handler.addFilter(_SourceFilter())
-            handler.setFormatter(logging.Formatter(LOG_FORMAT))
+            handler.setFormatter(_FileFormatter(LOG_FORMAT))
             root.addHandler(handler)
     if echo:
         stderr = logging.StreamHandler()

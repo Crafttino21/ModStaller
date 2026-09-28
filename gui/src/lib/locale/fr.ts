@@ -62,6 +62,10 @@ const dict: Dict = {
     "Bundle ID {id} · transport : {transport}",
   "Cancel":
     "Annuler",
+  "Cancelled":
+    "Annulé",
+  "Cancelled.":
+    "Annulé.",
   "Certificate revoked.":
     "Certificat révoqué.",
   "Charging … {level} %":
@@ -112,6 +116,8 @@ const dict: Dict = {
     "Appareil",
   "Different IPA":
     "Autre IPA",
+  "Done":
+    "Terminé",
   "Drag an IPA here":
     "Glissez un IPA ici",
   "Drag an IPA into the window or pick one from your Downloads.":
@@ -126,6 +132,8 @@ const dict: Dict = {
     "Tout est prêt pour le sideloading.",
   "Everything ready.":
     "Tout est prêt.",
+  "Failed":
+    "Échec",
   "Filter":
     "Filtrer",
   "Fix":
@@ -142,8 +150,12 @@ const dict: Dict = {
     "Journal complet :",
   "Go to device":
     "Aller à l’appareil",
+  "Hello, {name}!":
+    "Bonjour, {name} !",
   "How ModStaller behaves on this computer.":
     "Comment ModStaller se comporte sur cet ordinateur.",
+  "In the background":
+    "En arrière-plan",
   "Install":
     "Installer",
   "Install app":

@@ -81,6 +81,9 @@ class GSAResult:
     app_token: str
     #: Basis for X-Apple-GS-Token: base64("<adsid>:<app_token>").
     identity_token: str
+    #: The account holder's first name (``fn`` in the spd) - for a greeting,
+    #: nothing else. Empty if Apple leaves it out.
+    first_name: str = ""
 
     @property
     def auth_headers(self) -> dict[str, str]:
@@ -267,6 +270,7 @@ class GSAClient:
             idms_token=token,
             app_token=app_token,
             identity_token=b64encode(f"{adsid}:{app_token}".encode()).decode(),
+            first_name=str(spd.get("fn") or "").strip(),
         )
 
     def _fetch_app_token(self, spd: dict, adsid: str, idms_token: str) -> str:

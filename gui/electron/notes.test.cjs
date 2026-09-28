@@ -59,3 +59,10 @@ test("die Formen von electron-updater kommen alle an", () => {
                "eins\n\nzwei");
   assert.equal(plainNotes(["<p>eins</p>", "<p>zwei</p>"]), "eins\n\nzwei");
 });
+
+test("was die Schleife nicht als Tag erkennt, kann auch keins werden", () => {
+  // Ein unvollstaendiges Tag ohne ">" bleibt Text - aber ohne das "<".
+  assert.equal(stripTags("<script src=x"), "script src=x");
+  assert.equal(stripTags("<!-- offen"), "!-- offen");
+  assert.equal(stripTags("x </b"), "x /b");
+});

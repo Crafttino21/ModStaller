@@ -57,14 +57,22 @@ function decodeEntities(text) {
  *
  * Nach `<` muss ein Buchstabe folgen (oder `/` und ein Buchstabe). Sonst
  * frisst die Funktion Prosa: "a < b und c > d" saehe sonst wie ein Tag aus.
+ *
+ * Zum Schluss faellt jedes `<`, das noch etwas eroeffnen koennte (Buchstabe,
+ * `/`, `!`, `?` dahinter) - ein Zeichen, kein Muster aus mehreren. Das ist
+ * die Absicherung, die CodeQL fuer "incomplete multi-character
+ * sanitization" verlangt: was die Schleife nicht als Tag erkannt hat, kann
+ * danach auch keins mehr werden. Nur `<` und `>` pauschal zu streichen (der
+ * Autofix aus PR #1) liess dagegen Tag-Namen als Text stehen ("pschlicht")
+ * und frass die Prosa.
  */
 function stripTags(text) {
   let before;
   do {
     before = text;
-    text = text.replace(/<|>/g, "");
+    text = text.replace(/<!--[\s\S]*?-->/g, "").replace(/<\/?[a-z][^<>]*>/gi, "");
   } while (text !== before);
-  return text;
+  return text.replace(/<(?=[a-z/!?])/gi, "");
 }
 
 /**

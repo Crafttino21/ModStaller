@@ -56,6 +56,8 @@ export interface Status {
   device: Device | null;
   deviceAttached: boolean;
   loggedIn: boolean;
+  /** Vorname des Apple-Accounts fuer die Begruessung - leer, wenn unbekannt. */
+  firstName: string;
   apps: App[];
   urgent: string[];
   urgentDays: number;

@@ -45,9 +45,18 @@ async def install(
     settings: Settings | None = None,
     strip_extensions: bool | None = None,
     revoke_conflicting_cert: bool = False,
+    bundle_id: str | None = None,
+    renewing: "store.InstallRecord | None" = None,
     progress: Callable[[int], None] | None = None,
     on_step: Callable[[str], None] = _say,
 ) -> InstallOutcome:
+    """Signs and installs ``ipa_path``.
+
+    ``bundle_id`` pins the identifier on the device instead of deriving it
+    from the IPA - a renewal must hit exactly the app that is installed,
+    even if it once got a recycled App ID or the IPA's own ID has changed
+    since. ``renewing`` is that app's record; its history is kept.
+    """
     settings = settings or Settings.load()
 
     # 1. Check the IPA first - that is cheap and catches most errors
@@ -112,10 +121,13 @@ async def install(
         except Exception:
             pass
 
-        wanted = derive_bundle_id(info.bundle_id, team.team_id)
+        wanted = bundle_id or derive_bundle_id(info.bundle_id, team.team_id)
         on_step(f"\nApp ID {wanted} …")
+        # A pinned ID never falls back to a spare one: that would be a
+        # second app next to the one we are meant to renew.
         app_id = ensure_app_id(api, team, wanted, info.name,
-                               reuse_when_exhausted=True, protected=protected)
+                               reuse_when_exhausted=bundle_id is None,
+                               protected=protected)
         new_id = app_id.identifier
         if new_id != wanted:
             on_step(_(
@@ -157,6 +169,9 @@ async def install(
             profile_path=str(profile_path),
             expires_at=(prof.expires_at.timestamp() if prof.expires_at
                         else time.time() + caps.profile_days * 86400),
+            installed_at=(renewing.installed_at if renewing
+                          else time.time()),
+            last_refresh_at=time.time() if renewing else 0.0,
             strip_extensions=strip,
         ))
 
@@ -177,9 +192,11 @@ async def refresh(
 ) -> list[InstallOutcome]:
     """Renews apps whose profile expires soon.
 
-    Uses the original IPA remembered at install time so the bundle ID stays
-    stable - otherwise iOS would treat it as a different app and the stored
-    data would be gone.
+    Uses the original IPA remembered at install time and signs it under the
+    bundle ID the app has *on the device* - not one derived from the IPA.
+    Those can differ (a recycled App ID, a newer IPA with a new ID), and a
+    different ID is a second app to iOS: installed next to the old one, with
+    none of its data.
     """
     settings = settings or Settings.load()
     threshold = (settings.renew_threshold_days if threshold_days is None
@@ -209,6 +226,7 @@ async def refresh(
         results.append(await install(
             source, udid=udid or rec.udid, team_id=rec.team_id,
             settings=settings, strip_extensions=rec.strip_extensions,
+            bundle_id=rec.bundle_id, renewing=rec,
             progress=progress, on_step=on_step,
         ))
     return results

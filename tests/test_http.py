@@ -169,3 +169,46 @@ def test_describe_never_leaks_secrets():
     assert "trustedDeviceSecondaryAuth" in out, "diagnostics must stay useful"
     assert "harmless" in out
     assert "<hidden>" in out or "bytes>" in out
+
+
+# -- The first name for the greeting -----------------------------------------
+
+from modstaller.apple import session as session_mod  # noqa: E402
+from modstaller.apple.devservices import Team  # noqa: E402
+
+
+def _session(tmp_path, monkeypatch, **kw):
+    monkeypatch.setattr(session_mod, "SESSION_FILE", tmp_path / "session.json")
+    s = session_mod.Session(adsid="a", idms_token="i", identity_token="t",
+                            created_at=0.0, app_token="x", **kw)
+    s.save()
+    return s
+
+
+def test_an_old_session_without_first_name_still_loads(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(session_mod, "SESSION_FILE", tmp_path / "session.json")
+    from modstaller.config import write_secret
+    write_secret(tmp_path / "session.json", json.dumps({
+        "adsid": "a", "idms_token": "i", "identity_token": "t",
+        "created_at": 0.0, "app_token": "x"}).encode())
+    assert session_mod.Session.load().first_name == ""
+
+
+def test_first_name_is_taken_from_an_individual_team(tmp_path, monkeypatch):
+    _session(tmp_path, monkeypatch)
+    teams = [Team("T1", "Santino Fietz", "Individual", "active")]
+    assert session_mod.remember_first_name(teams) == "Santino"
+    assert session_mod.Session.load().first_name == "Santino"
+
+
+def test_a_company_team_is_not_a_person(tmp_path, monkeypatch):
+    _session(tmp_path, monkeypatch)
+    teams = [Team("T1", "Example GmbH", "Company/Organization", "active")]
+    assert session_mod.remember_first_name(teams) == ""
+
+
+def test_the_name_from_sign_in_wins(tmp_path, monkeypatch):
+    _session(tmp_path, monkeypatch, first_name="Sam")
+    teams = [Team("T1", "Santino Fietz", "Individual", "active")]
+    assert session_mod.remember_first_name(teams) == "Sam"

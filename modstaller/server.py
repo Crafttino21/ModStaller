@@ -137,6 +137,8 @@ class Server:
         self.device_cache: dict[str, dict] = {}
         #: Serial -> what the log last said about it (see _log_device_changes).
         self.seen_devices: dict[str, dict] = {}
+        #: Whether the first name for the greeting was already looked up.
+        self.name_lookup_started = False
         #: New log entries go to the interface as they happen.
         self.book = logbook.BOOK
         self._unsubscribe = self.book.subscribe(
@@ -492,7 +494,10 @@ async def _status(server: Server, job: Job, params: dict):
     from .state import store
     from .status import URGENT_DAYS, Status, device_status
 
-    st = Status(apps=store.all_installs(), logged_in=Session.load() is not None)
+    session = Session.load()
+    if session is not None and not session.first_name:
+        _look_up_first_name(server)
+    st = Status(apps=store.all_installs(), logged_in=session is not None)
     serials = await list_devices()
     cache = server.device_cache
     for gone in set(cache) - set(serials):
@@ -528,6 +533,7 @@ async def _status(server: Server, job: Job, params: dict):
         "device": device,
         "deviceAttached": bool(serials),
         "loggedIn": st.logged_in,
+        "firstName": session.first_name if session else "",
         "apps": [_app_dict(a) for a in st.apps],
         "urgent": [a.bundle_id for a in st.urgent],
         "urgentDays": URGENT_DAYS,
@@ -622,6 +628,31 @@ def _anisette():
     return anisette_mod.build(s.anisette_provider, s.anisette_server)
 
 
+def _look_up_first_name(server: Server) -> None:
+    """Fills in the greeting's first name for a session from before it
+    existed - once per server, in the background.
+
+    The status is polled every few seconds and must stay fast, so it only
+    starts this; the next poll then carries the name. A failure (no
+    network, Apple busy) is fine: the dashboard just says "Signed in", and
+    the account page tries again.
+    """
+    if server.name_lookup_started:
+        return
+    server.name_lookup_started = True
+
+    def look_up() -> None:
+        from .apple.session import remember_first_name
+        try:
+            remember_first_name(_api().list_teams())
+        except Exception:
+            pass
+
+    task = asyncio.get_running_loop().create_task(asyncio.to_thread(look_up))
+    server._tasks.add(task)
+    task.add_done_callback(server._tasks.discard)
+
+
 def _api():
     from .apple.devservices import DeveloperServices
     from .apple.session import Session
@@ -690,9 +721,12 @@ async def _account(server: Server, job: Job, params: dict):
         pass    # No iPhone plugged in - the account page stays usable.
 
     def run():
+        from .apple.session import remember_first_name
         api = _api()
+        teams = api.list_teams()
+        remember_first_name(teams)
         out = []
-        for team in api.list_teams():
+        for team in teams:
             caps = Capabilities.for_team(team)
             app_ids = api.list_app_ids(team.team_id)
             out.append({

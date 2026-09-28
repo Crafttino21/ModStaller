@@ -71,7 +71,7 @@
     <div class="grow">
       <div class="label">{t("Apple account")}</div>
       {#if st?.loggedIn}
-        <div class="value">{t("Signed in")}</div>
+        <div class="value">{st.firstName ? t("Hello, {name}!", { name: st.firstName }) : t("Signed in")}</div>
         <div class="hint">{t("View quotas and certificates")}</div>
       {:else}
         <div class="value dim">{t("Not signed in")}</div>

@@ -210,7 +210,7 @@ export function runTask<T>(
     (err) => {
       const cancelled = err instanceof RpcError && err.cancelled;
       task.state = cancelled ? "cancelled" : "error";
-      task.message = cancelled ? "Abgebrochen." : errorText(err);
+      task.message = cancelled ? t("Cancelled.") : errorText(err);
       if (!task.open) toast(`${title}: ${task.message}`, cancelled ? "warn" : "bad", 8000);
     },
   ).finally(async () => {

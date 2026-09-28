@@ -7,6 +7,14 @@
   const task = $derived(ui.task!);
   let logEl = $state<HTMLDivElement | undefined>();
 
+  // Eigener Zustand statt open={...}: sonst setzt Svelte das Attribut bei
+  // jeder neuen Zeile neu - und klappt das Protokoll wieder zu, das man
+  // gerade aufgemacht hat. Bei einem Fehler geht es einmal von selbst auf.
+  let logOpen = $state(false);
+  $effect(() => {
+    if (task.state === "error") logOpen = true;
+  });
+
   // Neuestes immer sichtbar halten.
   $effect(() => {
     task.log.length;
@@ -33,7 +41,7 @@
         {#if task.state === "running"}
           {task.log.at(-1) ?? t("Starting …")}
         {:else}
-          {task.state === "done" ? "Fertig" : task.state === "cancelled" ? "Abgebrochen" : "Fehlgeschlagen"}
+          {task.state === "done" ? t("Done") : task.state === "cancelled" ? t("Cancelled") : t("Failed")}
         {/if}
       </p>
     </div>
@@ -62,8 +70,8 @@
     <p class="note muted selectable">{note}</p>
   {/each}
 
-  <details open={task.state === "error"}>
-    <summary>Protokoll ({task.log.length})</summary>
+  <details bind:open={logOpen}>
+    <summary>{t("Log")} ({task.log.length})</summary>
     <div class="log selectable" bind:this={logEl}>
       {#each task.log as line}
         <div>{line}</div>
@@ -75,8 +83,8 @@
 
   <div class="actions">
     {#if task.state === "running"}
-      <button class="btn ghost" onclick={closeTask}><Minimize2 size={16} /> Im Hintergrund</button>
-      <button class="btn danger" onclick={() => task.call.cancel()}>Abbrechen</button>
+      <button class="btn ghost" onclick={closeTask}><Minimize2 size={16} /> {t("In the background")}</button>
+      <button class="btn danger" onclick={() => task.call.cancel()}>{t("Cancel")}</button>
     {:else}
       <button class="btn primary" onclick={closeTask}>{t("Close")}</button>
     {/if}

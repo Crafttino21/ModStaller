@@ -214,3 +214,27 @@ async def test_serve_reads_lines_until_eof():
         assert "result" in await wire.reply_to(1)
         os.close(w)                       # interface gone
         await asyncio.wait_for(serving, 5)
+
+
+async def test_first_name_is_looked_up_once_in_the_background(monkeypatch):
+    """On the first start after the update the session has no first name
+    yet. The status must not wait for Apple - it starts one lookup."""
+    import asyncio
+    looked_up = []
+
+    def fake_api():
+        class Api:
+            def list_teams(self):
+                looked_up.append(1)
+                return []
+        return Api()
+
+    monkeypatch.setattr(srv, "_api", fake_api)
+    w = Wire()
+    srv._look_up_first_name(w.server)
+    srv._look_up_first_name(w.server)       # second poll: no second lookup
+    for _ in range(50):
+        if looked_up:
+            break
+        await asyncio.sleep(0.01)
+    assert looked_up == [1]
