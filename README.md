@@ -67,7 +67,7 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 
 **Next**
 
-- [ ] **IPA editor** - change display name, bundle ID, version, icon and
+- [x] **IPA editor** - change display name, bundle ID, version, icon and
       entitlements before installing, and choose which extensions to keep
 - [ ] Automatic refresh: systemd timer (Linux) and Task Scheduler (Windows)
 - [ ] Test more devices, especially an A13/A14 iPhone without TXM and older
@@ -93,7 +93,7 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 - [ ] A small built-in IPA market: curated sources for sideloadable apps,
       installable with one click
 - [ ] Wireless refresh over Wi-Fi once the device is paired
-- [ ] Multiple Apple accounts and multiple devices
+- [x] Multiple Apple accounts and multiple devices
 
 ## Supported devices
 
