@@ -60,6 +60,10 @@ OUT_DIR = CACHE_DIR / "out"
 LOCK_FILE = STATE_DIR / "modstaller.lock"
 DB_FILE = DATA_DIR / "state.db"
 
+#: The log shared by CLI and interface (see logbook.py). Private: it names
+#: devices and apps.
+LOG_FILE = STATE_DIR / "modstaller.log"
+
 #: Apple's private CA chain for gsa.apple.com. The host is *not* signed by a
 #: public CA but by "Apple Server Authentication CA". Without this bundle
 #: every connection fails with CERTIFICATE_VERIFY_FAILED.

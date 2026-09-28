@@ -14,6 +14,10 @@ const dict: Dict = {
     "Cuenta",
   "Again":
     "Reintentar",
+  "All":
+    "Todo",
+  "All areas":
+    "Todas las áreas",
   "Also discard the device identity (Apple will then ask for a two-factor code again)":
     "Descartar también la identidad del dispositivo (Apple volverá a pedir un código de doble factor)",
   "An installed app belongs to it – from ModStaller or from another tool. After deleting, it can no longer be renewed.":
@@ -80,6 +84,10 @@ const dict: Dict = {
     "Conectado pero no listo",
   "Connected but not ready – unlock the iPhone and confirm “Trust”.":
     "Conectado pero no listo: desbloquea el iPhone y confirma «Confiar».",
+  "Copy":
+    "Copiar",
+  "Copying is not possible.":
+    "No se puede copiar.",
   "Costs {count} App ID(s) from the weekly quota (10 per week on free accounts). The app itself runs without them.":
     "Cuesta {count} ID de app de la cuota semanal (10 por semana en cuentas gratuitas). La app funciona igual sin ellas.",
   "Data in":
@@ -110,6 +118,8 @@ const dict: Dict = {
     "Arrastra un IPA a la ventana o elige uno de tus descargas.",
   "Enable JIT":
     "Activar JIT",
+  "Errors":
+    "Errores",
   "Every app signed with it will no longer start – including those of other sideloading tools.":
     "Todas las apps firmadas con él dejarán de arrancar, también las de otras herramientas de sideloading.",
   "Everything ready for sideloading.":
@@ -120,6 +130,8 @@ const dict: Dict = {
     "Filtrar",
   "Fix":
     "Arreglar",
+  "Follow live again":
+    "Volver a seguir en directo",
   "Found in your folders":
     "Encontrados en tus carpetas",
   "Free":
@@ -146,6 +158,14 @@ const dict: Dict = {
     "Conservar las extensiones",
   "Language":
     "Idioma",
+  "Live":
+    "En directo",
+  "Log":
+    "Registro",
+  "Log file":
+    "Archivo de registro",
+  "Log file not found.":
+    "No se encontró el archivo de registro.",
   "Log in":
     "Registro en",
   "Looking for updates …":
@@ -162,6 +182,8 @@ const dict: Dict = {
     "Todavía no hay ninguna app instalada",
   "No certificates in the account.":
     "No hay certificados en la cuenta.",
+  "No entries for this filter.":
+    "No hay entradas para este filtro.",
   "No iPhone":
     "Sin iPhone",
   "No iPhone connected – plug it in via USB and unlock it.":
@@ -182,6 +204,10 @@ const dict: Dict = {
     "Sin sesión iniciada en Apple.",
   "Nothing found – everything on the iPhone comes from the store or from ModStaller.":
     "No se encontró nada: todo lo que hay en el iPhone viene de la tienda o de ModStaller.",
+  "Nothing has happened yet.":
+    "Todavía no ha pasado nada.",
+  "Nothing has happened yet. As soon as you plug in an iPhone or install something, it shows up here.":
+    "Todavía no ha pasado nada. En cuanto conectes un iPhone o instales algo, aparecerá aquí.",
   "Nothing installed through ModStaller yet.":
     "Todavía no hay nada instalado con ModStaller.",
   "Nothing is due right now":
@@ -194,6 +220,10 @@ const dict: Dict = {
     "De pago",
   "Password":
     "Contraseña",
+  "Pause":
+    "Pausar",
+  "Paused":
+    "En pausa",
   "Pick an IPA – ModStaller signs it with your Apple account and puts it on the iPhone.":
     "Elige un IPA: ModStaller lo firma con tu cuenta de Apple y lo instala en el iPhone.",
   "Plug it in via USB and unlock it.":
@@ -204,6 +234,8 @@ const dict: Dict = {
     "Volver a leer",
   "Reading the IPA …":
     "Leyendo el IPA …",
+  "Recent activity":
+    "Actividad reciente",
   "Refresh":
     "Actualizar",
   "Registered devices":
@@ -238,6 +270,8 @@ const dict: Dict = {
     "¿Revocar el certificado?",
   "SRP-6a: Apple gets proof that you know the password – not the password itself.":
     "SRP-6a: Apple obtiene la prueba de que conoces la contraseña, no la contraseña en sí.",
+  "Search":
+    "Buscar",
   "Settings":
     "Ajustes",
   "Settings › Privacy & Security › Developer Mode – otherwise no sideloaded app will start.":
@@ -274,6 +308,8 @@ const dict: Dict = {
     "Iniciando …",
   "Still to do: {what}":
     "Queda por hacer: {what}",
+  "System":
+    "Sistema",
   "System check":
     "Diagnóstico",
   "System is ready – {count} step(s) still open.":
@@ -322,6 +358,10 @@ const dict: Dict = {
     "Versión {version} · desde iOS {ios}",
   "View quotas and certificates":
     "Ver cuotas y certificados",
+  "Warnings":
+    "Advertencias",
+  "What ModStaller does – live. The complete history is in the log file.":
+    "Lo que hace ModStaller, en directo. El historial completo está en el archivo de registro.",
   "What ModStaller has installed. Free accounts: at most 3 apps, valid for 7 days each.":
     "Lo que ModStaller ha instalado. Cuentas gratuitas: 3 apps como máximo, válidas 7 días cada una.",
   "What's new?":
@@ -372,6 +412,8 @@ const dict: Dict = {
     "hace {count} días",
   "{count} days left":
     "quedan {count} días",
+  "{count} entries copied.":
+    "{count} entradas copiadas.",
   "{count} free":
     "{count} libre(s)",
   "{count} h ago":
@@ -380,10 +422,14 @@ const dict: Dict = {
     "queda {count} hora",
   "{count} hours left":
     "quedan {count} horas",
+  "{count} new":
+    "{count} nuevas",
   "{count} point(s) prevent sideloading.":
     "{count} punto(s) impiden el sideloading.",
   "{count} point(s) to clear up.":
     "{count} punto(s) por aclarar.",
+  "{minutes} min ago":
+    "hace {minutes} min",
   "{name} is installed and runs for {days} days.":
     "{name} está instalada y funciona {days} días.",
   "{name} was removed from the iPhone.":

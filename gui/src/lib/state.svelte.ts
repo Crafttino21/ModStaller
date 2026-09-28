@@ -7,11 +7,11 @@
 // wechselt, und es laeuft immer hoechstens eine, weil sich zwei Vorgaenge am
 // selben iPhone ohnehin in die Quere kaemen.
 
-import { call, failAll, handle, onReady, RpcError, start, type Call } from "./rpc";
+import { call, failAll, handle, on, onReady, RpcError, start, type Call } from "./rpc";
 import { locale, t } from "./i18n.svelte";
-import type { BackendExit, DeviceCheck, Status, UpdateState } from "./types";
+import type { BackendExit, DeviceCheck, LogEntry, Status, UpdateState } from "./types";
 
-export type View = "overview" | "install" | "apps" | "account" | "device" | "system" | "settings";
+export type View = "overview" | "install" | "apps" | "account" | "device" | "log" | "system" | "settings";
 export type TaskKind = "install" | "refresh" | "jit" | "uninstall" | "fix";
 export type TaskState = "running" | "done" | "error" | "cancelled";
 
@@ -47,6 +47,9 @@ export interface Toast {
 
 const POLL_MS = 3000;
 
+/** So viele Protokolleintraege haelt die Oberflaeche - wie das Backend. */
+const LOG_KEEP = 1000;
+
 export const ui = $state({
   view: "overview" as View,
   backend: "starting" as "starting" | "ready" | "down",
@@ -68,6 +71,8 @@ export const ui = $state({
     loading: false,
     error: "",
   },
+  /** Das Protokoll: Verlauf beim Verbinden, danach live vom Backend. */
+  log: { entries: [] as LogEntry[] },
 });
 
 export function go(view: View) {
@@ -261,6 +266,31 @@ function markReady() {
   ui.exit = null;
   applyLanguage();
   refreshStatus(true);
+  loadLog();
+}
+
+// -- Protokoll -----------------------------------------------------------------
+
+function keepLog() {
+  const extra = ui.log.entries.length - LOG_KEEP;
+  if (extra > 0) ui.log.entries.splice(0, extra);
+}
+
+on("log.entry", (entry: LogEntry) => {
+  ui.log.entries.push(entry);
+  keepLog();
+});
+
+/** Holt, was vor dem Verbinden geschah. Ein neu gestartetes Backend zaehlt
+ *  wieder ab 1 - deshalb ersetzt der Verlauf alles; nur was live schon
+ *  nachkam, bleibt dahinter stehen. */
+function loadLog() {
+  call<LogEntry[]>("log.history").then((history) => {
+    const last = history.length ? history[history.length - 1].id : 0;
+    const live = ui.log.entries.filter((e) => e.id > last);
+    ui.log.entries = [...history, ...live];
+    keepLog();
+  }, () => {});
 }
 
 /** Sagt dem Backend, in welcher Sprache es antworten soll, und holt alles

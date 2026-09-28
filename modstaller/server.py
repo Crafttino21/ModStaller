@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import logging
 import os
 import sys
 import threading
@@ -32,9 +33,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from . import config
+from . import config, logbook
 from .errors import describe
-from .i18n import _, available, language, set_language
+from .i18n import _, _n, available, language, set_language
+from .logbook import SUCCESS
 
 #: JSON-RPC error codes. Our own ones live in the reserved range below.
 PARSE_ERROR = -32700
@@ -79,9 +81,13 @@ class Job:
         self.id = req_id
         self._cancel: Callable[[], None] | None = None
         self.cancelled = False
+        #: Area in the log - set for actions, None for polling.
+        self.source: str | None = None
 
     def log(self, text: str) -> None:
         self.server.notify("log", {"job": self.id, "text": text})
+        if self.source:
+            logbook.log(self.source, text, job=self.id)
 
     def progress(self, pct: int) -> None:
         self.server.notify("progress", {"job": self.id, "pct": pct})
@@ -129,6 +135,12 @@ class Server:
         #: Serial -> status fields. The status is polled every few seconds;
         #: rebuilding lockdown for it every time would be expensive.
         self.device_cache: dict[str, dict] = {}
+        #: Serial -> what the log last said about it (see _log_device_changes).
+        self.seen_devices: dict[str, dict] = {}
+        #: New log entries go to the interface as they happen.
+        self.book = logbook.BOOK
+        self._unsubscribe = self.book.subscribe(
+            lambda entry: self.notify("log.entry", entry.as_dict()))
 
     # -- Sending -----------------------------------------------------------
 
@@ -201,6 +213,10 @@ class Server:
         job = Job(self, req_id)
         if req_id is not None:
             self._jobs[req_id] = job
+        action = _ACTIONS.get(name) if isinstance(params, dict) else None
+        if action is not None:
+            job.source = action.source
+            _log_safely(action.source, action.start, params, job=req_id)
         try:
             fn = METHODS.get(name)
             if fn is None:
@@ -210,11 +226,19 @@ class Server:
                 raise RpcError(INVALID_PARAMS, _("params must be an object"))
             result = await fn(self, job, params)
             reply = {"result": result}
+            if action is not None:
+                _log_safely(action.source, action.done, params, result,
+                            job=req_id)
         except RpcError as exc:
             reply = {"error": {"code": exc.code, "message": str(exc)}}
+            if action is not None:
+                action.log_failure(str(exc), req_id)
         except (_Cancelled, asyncio.CancelledError):
             reply = {"error": {"code": CANCELLED,
                                "message": _("Cancelled.")}}
+            if action is not None:
+                logbook.log(action.source, _("Cancelled."), logging.WARNING,
+                            job=req_id)
         except Exception as exc:
             text = describe(exc)
             if text is None:
@@ -225,6 +249,8 @@ class Server:
             else:
                 code = USER_ERROR
             reply = {"error": {"code": code, "message": text}}
+            if action is not None:
+                action.log_failure(text, req_id)
         finally:
             self._jobs.pop(req_id, None)
         if req_id is not None:
@@ -260,6 +286,158 @@ class Server:
             job.cancel()
         for task in list(self._tasks):
             task.cancel()
+
+
+# -- The log -------------------------------------------------------------------
+
+
+class _Action:
+    """How a method that changes something appears in the log.
+
+    ``start`` and ``done`` build the message from the parameters (and the
+    result); ``done`` returns ``(level, text)``. Polling - status, version,
+    lists - stays out of the log, or it would drown everything else.
+    Parameters go in only through these functions, so a password never
+    does.
+    """
+
+    def __init__(self, source: str, start, done, failed: Callable[[str], str]):
+        self.source = source
+        self.start = start
+        self.done = done
+        self.failed = failed
+
+    def log_failure(self, error: str, job) -> None:
+        logbook.log(self.source, self.failed(error), logging.ERROR, job=job)
+
+
+def _log_safely(source: str, build, *args, job=None) -> None:
+    """Logs what ``build`` returns - a message that cannot be built (a
+    result of an unexpected shape) must not fail the request."""
+    if build is None:
+        return
+    try:
+        out = build(*args)
+    except Exception:
+        return
+    level, text = out if isinstance(out, tuple) else (logging.INFO, out)
+    logbook.log(source, text, level, job=job)
+
+
+def _file_name(params: dict) -> str:
+    return Path(str(params.get("path") or "")).name
+
+
+def _jit_done(params: dict, r: dict):
+    ok = r.get("preparedRegions") or r.get("txm") is False
+    return (SUCCESS if ok else logging.WARNING), r["summary"]
+
+
+def _refresh_done(params: dict, r: list):
+    if not r:
+        return logging.INFO, _("Nothing was due.")
+    return SUCCESS, _n("Renewed {count} app.", "Renewed {count} apps.",
+                       len(r))
+
+
+_ACTIONS: dict[str, _Action] = {
+    "install": _Action(
+        logbook.INSTALL,
+        lambda p: _("Installing {file}", file=_file_name(p)),
+        lambda p, r: (SUCCESS, _(
+            "{name} installed as {bundle_id} - valid for {days} days",
+            name=r["name"], bundle_id=r["bundleId"],
+            days=round(r["daysValid"]))),
+        lambda e: _("Installation failed: {error}", error=e)),
+    "refresh": _Action(
+        logbook.REFRESH,
+        lambda p: (_("Renewing {bundle_id}", bundle_id=p["bundleId"])
+                   if p.get("bundleId") else _("Renewing apps that are due")),
+        _refresh_done,
+        lambda e: _("Renewal failed: {error}", error=e)),
+    "uninstall": _Action(
+        logbook.APPS,
+        lambda p: _("Removing {bundle_id}", bundle_id=p.get("bundleId", "")),
+        lambda p, r: (SUCCESS, _("{bundle_id} removed",
+                                 bundle_id=p.get("bundleId", ""))),
+        lambda e: _("Removal failed: {error}", error=e)),
+    "jit": _Action(
+        logbook.JIT,
+        lambda p: _("Enabling JIT for {bundle_id}",
+                    bundle_id=p.get("bundleId", "")),
+        _jit_done,
+        lambda e: _("JIT failed: {error}", error=e)),
+    "login": _Action(
+        logbook.ACCOUNT,
+        lambda p: _("Signing in as {apple_id}",
+                    apple_id=logbook.mask_apple_id(str(p.get("appleId", "")))),
+        lambda p, r: (SUCCESS, _(
+            "Signed in as {apple_id}",
+            apple_id=logbook.mask_apple_id(str(p.get("appleId", ""))))),
+        lambda e: _("Sign-in failed: {error}", error=e)),
+    "logout": _Action(
+        logbook.ACCOUNT, None,
+        lambda p, r: (SUCCESS, _("Signed out.")),
+        lambda e: _("Sign-out failed: {error}", error=e)),
+    "certs.revoke": _Action(
+        logbook.ACCOUNT, None,
+        lambda p, r: (SUCCESS, _("Certificate revoked.")),
+        lambda e: _("Revoking the certificate failed: {error}", error=e)),
+    "appids.delete": _Action(
+        logbook.ACCOUNT, None,
+        lambda p, r: (SUCCESS, _("App ID deleted.")),
+        lambda e: _("Deleting the App ID failed: {error}", error=e)),
+    "device.fix": _Action(
+        logbook.DEVICE, None,
+        lambda p, r: (SUCCESS, r["message"]),
+        lambda e: _("Fix failed: {error}", error=e)),
+}
+
+
+def _log_device_changes(server, serials: list[str], device: dict | None,
+                        error: str) -> None:
+    """Plugging in, unplugging and Developer Mode - once per change.
+
+    Called on every status poll, so it only speaks when something is
+    different from what it said last time.
+    """
+    seen = server.seen_devices
+    for gone in set(seen) - set(serials):
+        name = seen.pop(gone).get("name") or "iPhone"
+        logbook.log(logbook.DEVICE, _("{name} disconnected", name=name))
+    if not serials:
+        return
+
+    serial = serials[0]
+    before = seen.get(serial)
+    if device is None:
+        if error and (before is None or before.get("error") != error):
+            logbook.log(logbook.DEVICE,
+                        _("iPhone plugged in but not ready: {error}",
+                          error=error), logging.WARNING)
+            seen[serial] = {**(before or {}), "error": error}
+        return
+
+    now = {"name": device.get("name") or "iPhone",
+           "devMode": device.get("developerMode"), "error": ""}
+    if before is None or not before.get("name"):
+        logbook.log(logbook.DEVICE, _(
+            "iPhone connected: {name} · {model} · iOS {version}",
+            name=now["name"], model=device.get("model", ""),
+            version=device.get("iosVersion", "")))
+        if now["devMode"] is False:
+            logbook.log(logbook.DEVICE, _(
+                "Developer Mode is off - sideloaded apps will not start."),
+                logging.WARNING)
+    elif before.get("devMode") != now["devMode"]:
+        if now["devMode"]:
+            logbook.log(logbook.DEVICE, _("Developer Mode is now on."),
+                        SUCCESS)
+        else:
+            logbook.log(logbook.DEVICE, _(
+                "Developer Mode is off - sideloaded apps will not start."),
+                logging.WARNING)
+    seen[serial] = now
 
 
 def _jsonable(obj):
@@ -345,6 +523,7 @@ async def _status(server: Server, job: Job, params: dict):
             device = {k: v for k, v in cache[serials[0]].items()
                       if not k.startswith("_")}
 
+    _log_device_changes(server, serials, device, st.error or "")
     return {
         "device": device,
         "deviceAttached": bool(serials),
@@ -704,6 +883,19 @@ async def _device_fix(server: Server, job: Job, params: dict):
     return asdict(result)
 
 
+@method("log.history")
+async def _log_history(server: Server, job: Job, params: dict):
+    """What happened before the interface connected (newest last)."""
+    limit = params.get("limit")
+    return [e.as_dict() for e in server.book.history(
+        limit if isinstance(limit, int) and limit > 0 else None)]
+
+
+@method("log.path")
+async def _log_path(server: Server, job: Job, params: dict):
+    return str(config.LOG_FILE)
+
+
 @method("cancel")
 async def _cancel(server: Server, job: Job, params: dict):
     return server.cancel(params.get("id"))
@@ -762,6 +954,7 @@ def take_stdout() -> int:
 
 async def _run() -> int:
     out = take_stdout()
+    logbook.setup(file=config.LOG_FILE)
     server = Server(out)
     server.notify("ready", {})
     await server.serve(sys.stdin.buffer)

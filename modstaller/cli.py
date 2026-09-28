@@ -444,6 +444,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd is None:
         parser.print_help()
         return 0
+    if args.cmd != "serve":
+        # "serve" sets up its own log - with the live view for the interface.
+        from . import logbook
+        logbook.setup(file=config.LOG_FILE, book=None, echo=True)
 
     try:
         if hasattr(args, "afunc"):

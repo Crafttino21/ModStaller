@@ -14,6 +14,10 @@ const dict: Dict = {
     "Account",
   "Again":
     "Opnieuw",
+  "All":
+    "Alles",
+  "All areas":
+    "Alle onderdelen",
   "Also discard the device identity (Apple will then ask for a two-factor code again)":
     "Ook de apparaatidentiteit wissen (Apple vraagt dan weer om een tweefactorcode)",
   "An installed app belongs to it – from ModStaller or from another tool. After deleting, it can no longer be renewed.":
@@ -80,6 +84,10 @@ const dict: Dict = {
     "Verbonden maar niet klaar",
   "Connected but not ready – unlock the iPhone and confirm “Trust”.":
     "Verbonden maar niet klaar – ontgrendel de iPhone en bevestig ‘Vertrouwen’.",
+  "Copy":
+    "Kopiëren",
+  "Copying is not possible.":
+    "Kopiëren is niet mogelijk.",
   "Costs {count} App ID(s) from the weekly quota (10 per week on free accounts). The app itself runs without them.":
     "Kost {count} App-ID(’s) van het weekquotum (10 per week bij gratis accounts). De app zelf werkt ook zonder.",
   "Data in":
@@ -110,6 +118,8 @@ const dict: Dict = {
     "Sleep een IPA in het venster of kies er een uit je downloads.",
   "Enable JIT":
     "JIT vrijgeven",
+  "Errors":
+    "Fouten",
   "Every app signed with it will no longer start – including those of other sideloading tools.":
     "Alle apps die ermee zijn ondertekend starten daarna niet meer – ook die van andere sideload-programma’s.",
   "Everything ready for sideloading.":
@@ -120,6 +130,8 @@ const dict: Dict = {
     "Filteren",
   "Fix":
     "Oplossen",
+  "Follow live again":
+    "Weer live volgen",
   "Found in your folders":
     "Gevonden in je mappen",
   "Free":
@@ -146,6 +158,14 @@ const dict: Dict = {
     "Extensies behouden",
   "Language":
     "Taal",
+  "Live":
+    "Live",
+  "Log":
+    "Logboek",
+  "Log file":
+    "Logbestand",
+  "Log file not found.":
+    "Logbestand niet gevonden.",
   "Log in":
     "Logboek in",
   "Looking for updates …":
@@ -162,6 +182,8 @@ const dict: Dict = {
     "Nog geen app geïnstalleerd",
   "No certificates in the account.":
     "Geen certificaten in het account.",
+  "No entries for this filter.":
+    "Geen regels voor dit filter.",
   "No iPhone":
     "Geen iPhone",
   "No iPhone connected – plug it in via USB and unlock it.":
@@ -182,6 +204,10 @@ const dict: Dict = {
     "Niet aangemeld bij Apple.",
   "Nothing found – everything on the iPhone comes from the store or from ModStaller.":
     "Niets gevonden – alles op de iPhone komt uit de store of van ModStaller.",
+  "Nothing has happened yet.":
+    "Er is nog niets gebeurd.",
+  "Nothing has happened yet. As soon as you plug in an iPhone or install something, it shows up here.":
+    "Er is nog niets gebeurd. Zodra je een iPhone aansluit of iets installeert, verschijnt het hier.",
   "Nothing installed through ModStaller yet.":
     "Nog niets via ModStaller geïnstalleerd.",
   "Nothing is due right now":
@@ -194,6 +220,10 @@ const dict: Dict = {
     "Betaald",
   "Password":
     "Wachtwoord",
+  "Pause":
+    "Pauzeren",
+  "Paused":
+    "Gepauzeerd",
   "Pick an IPA – ModStaller signs it with your Apple account and puts it on the iPhone.":
     "Kies een IPA – ModStaller ondertekent hem met je Apple-account en zet hem op de iPhone.",
   "Plug it in via USB and unlock it.":
@@ -204,6 +234,8 @@ const dict: Dict = {
     "Opnieuw lezen",
   "Reading the IPA …":
     "IPA wordt gelezen …",
+  "Recent activity":
+    "Recente activiteit",
   "Refresh":
     "Vernieuwen",
   "Registered devices":
@@ -238,6 +270,8 @@ const dict: Dict = {
     "Certificaat intrekken?",
   "SRP-6a: Apple gets proof that you know the password – not the password itself.":
     "SRP-6a: Apple krijgt het bewijs dat jij het wachtwoord kent – niet het wachtwoord zelf.",
+  "Search":
+    "Zoeken",
   "Settings":
     "Instellingen",
   "Settings › Privacy & Security › Developer Mode – otherwise no sideloaded app will start.":
@@ -274,6 +308,8 @@ const dict: Dict = {
     "Bezig met starten …",
   "Still to do: {what}":
     "Nog te doen: {what}",
+  "System":
+    "Systeem",
   "System check":
     "Systeemcontrole",
   "System is ready – {count} step(s) still open.":
@@ -322,6 +358,10 @@ const dict: Dict = {
     "Versie {version} · vanaf iOS {ios}",
   "View quotas and certificates":
     "Quota en certificaten bekijken",
+  "Warnings":
+    "Waarschuwingen",
+  "What ModStaller does – live. The complete history is in the log file.":
+    "Wat ModStaller doet – live. De volledige geschiedenis staat in het logbestand.",
   "What ModStaller has installed. Free accounts: at most 3 apps, valid for 7 days each.":
     "Wat ModStaller heeft geïnstalleerd. Gratis accounts: hoogstens 3 apps, elk 7 dagen geldig.",
   "What's new?":
@@ -372,6 +412,8 @@ const dict: Dict = {
     "{count} dagen geleden",
   "{count} days left":
     "nog {count} dagen",
+  "{count} entries copied.":
+    "{count} regels gekopieerd.",
   "{count} free":
     "{count} vrij",
   "{count} h ago":
@@ -380,10 +422,14 @@ const dict: Dict = {
     "nog {count} uur",
   "{count} hours left":
     "nog {count} uur",
+  "{count} new":
+    "{count} nieuw",
   "{count} point(s) prevent sideloading.":
     "{count} punt(en) verhinderen het sideloaden.",
   "{count} point(s) to clear up.":
     "{count} punt(en) op te lossen.",
+  "{minutes} min ago":
+    "{minutes} min geleden",
   "{name} is installed and runs for {days} days.":
     "{name} is geïnstalleerd en werkt {days} dagen.",
   "{name} was removed from the iPhone.":

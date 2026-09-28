@@ -149,8 +149,13 @@ def mask_apple_id(apple_id: str) -> str:
 _configured = False
 
 
-def setup(*, file=None, book: Logbook | None = BOOK) -> None:
-    """Attaches the logbook and (optionally) a file to the root logger. Idempotent."""
+def setup(*, file=None, book: Logbook | None = BOOK,
+          echo: bool = False) -> None:
+    """Attaches the logbook and (optionally) a file to the root logger. Idempotent.
+
+    ``echo`` also prints warnings and errors to stderr - for the CLI, which
+    would otherwise lose them to the file once a handler exists.
+    """
     global _configured
     if _configured:
         return
@@ -167,12 +172,21 @@ def setup(*, file=None, book: Logbook | None = BOOK) -> None:
     if book is not None:
         root.addHandler(book)
     if file is not None:
-        file.parent.mkdir(parents=True, exist_ok=True)
-        handler = logging.handlers.RotatingFileHandler(
-            file, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
-        handler.addFilter(_SourceFilter())
-        handler.setFormatter(logging.Formatter(LOG_FORMAT))
-        root.addHandler(handler)
+        try:
+            file.parent.mkdir(parents=True, exist_ok=True)
+            handler = logging.handlers.RotatingFileHandler(
+                file, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+        except OSError:
+            handler = None  # not writable: the live log still works
+        if handler is not None:
+            handler.addFilter(_SourceFilter())
+            handler.setFormatter(logging.Formatter(LOG_FORMAT))
+            root.addHandler(handler)
+    if echo:
+        stderr = logging.StreamHandler()
+        stderr.setLevel(logging.WARNING)
+        stderr.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        root.addHandler(stderr)
 
 
 def elapsed(started: float) -> str:

@@ -12,12 +12,13 @@
   import Account from "./views/Account.svelte";
   import Device from "./views/Device.svelte";
   import System from "./views/System.svelte";
+  import Log from "./views/Log.svelte";
   import Settings from "./views/Settings.svelte";
   import { go, toast, ui } from "./lib/state.svelte";
   import { t } from "./lib/i18n.svelte";
 
   const views = { overview: Overview, install: Install, apps: Apps, account: Account,
-                  device: Device, system: System, settings: Settings };
+                  device: Device, log: Log, system: System, settings: Settings };
   const View = $derived(views[ui.view]);
 
   // Eine IPA darf ueberall ins Fenster fallen, nicht nur auf die Drop-Zone.

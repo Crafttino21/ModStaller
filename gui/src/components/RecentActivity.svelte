@@ -2,6 +2,7 @@
   // Die letzten Ereignisse in der Uebersicht - der Rest steht im Protokoll.
   import { Activity, ChevronRight, CircleCheck, CircleX, TriangleAlert, Info } from "@lucide/svelte";
   import { go, ui } from "../lib/state.svelte";
+  import { locale, t } from "../lib/i18n.svelte";
 
   // Pro Vorgang genau eine Zeile: das Ergebnis - oder, solange er laeuft,
   // der aktuelle Schritt. Rueckwaerts gelesen ist das jeweils der neueste
@@ -24,16 +25,16 @@
 
   const ago = (ts: number) => {
     const s = Date.now() / 1000 - ts;
-    if (s < 60) return "gerade";
-    if (s < 3600) return `vor ${Math.floor(s / 60)} Min.`;
-    return new Date(ts * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    if (s < 60) return t("just now");
+    if (s < 3600) return t("{minutes} min ago", { minutes: Math.floor(s / 60) });
+    return new Date(ts * 1000).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   };
 </script>
 
 {#if recent.length}
   <div class="head">
-    <h2>Letzte Aktivität</h2>
-    <button class="btn sm ghost" onclick={() => go("log")}>Protokoll <ChevronRight size={15} /></button>
+    <h2>{t("Recent activity")}</h2>
+    <button class="btn sm ghost" onclick={() => go("log")}>{t("Log")} <ChevronRight size={15} /></button>
   </div>
   <div class="card list">
     {#each recent as e (e.id)}
@@ -50,8 +51,8 @@
     {/each}
   </div>
 {:else}
-  <div class="head"><h2>Letzte Aktivität</h2></div>
-  <div class="card list quiet"><Activity size={16} /> Noch nichts passiert.</div>
+  <div class="head"><h2>{t("Recent activity")}</h2></div>
+  <div class="card list quiet"><Activity size={16} /> {t("Nothing has happened yet.")}</div>
 {/if}
 
 <style>

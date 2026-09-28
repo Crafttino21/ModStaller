@@ -7,17 +7,19 @@
   import PageHeader from "../components/PageHeader.svelte";
   import { toast, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
+  import { locale, t } from "../lib/i18n.svelte";
   import type { LogEntry } from "../lib/types";
 
-  const SOURCES: Record<LogEntry["source"], string> = {
-    install: "Installieren", refresh: "Erneuern", jit: "JIT", apps: "Apps",
-    device: "Gerät", account: "Konto", system: "System",
-  };
-  const LEVELS = [
-    { id: "all", label: "Alles" },
-    { id: "warn", label: "Warnungen" },
-    { id: "error", label: "Fehler" },
-  ] as const;
+  // $derived, damit ein Sprachwechsel die Beschriftungen sofort mitnimmt.
+  const SOURCES = $derived<Record<LogEntry["source"], string>>({
+    install: t("Install"), refresh: t("Renew"), jit: "JIT", apps: t("Apps"),
+    device: t("Device"), account: t("Account"), system: t("System"),
+  });
+  const LEVELS = $derived([
+    { id: "all", label: t("All") },
+    { id: "warn", label: t("Warnings") },
+    { id: "error", label: t("Errors") },
+  ] as const);
   const RANK = { debug: 0, info: 1, success: 1, warn: 2, error: 3 };
 
   let level = $state<"all" | "warn" | "error">("all");
@@ -62,8 +64,8 @@
   }
 
   const time = (ts: number) =>
-    new Date(ts * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  const day = (ts: number) => new Date(ts * 1000).toLocaleDateString("de-DE");
+    new Date(ts * 1000).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const day = (ts: number) => new Date(ts * 1000).toLocaleDateString(locale());
 
   function asText(entries: LogEntry[]) {
     return entries
@@ -74,9 +76,9 @@
   async function copy() {
     try {
       await navigator.clipboard.writeText(asText(shown));
-      toast(`${shown.length} Einträge kopiert.`);
+      toast(t("{count} entries copied.", { count: shown.length }));
     } catch {
-      toast("Kopieren nicht möglich.", "warn");
+      toast(t("Copying is not possible."), "warn");
     }
   }
 
@@ -84,18 +86,18 @@
     try {
       await window.backend.showFile(await call<string>("log.path"));
     } catch {
-      toast("Log-Datei nicht gefunden.", "warn");
+      toast(t("Log file not found."), "warn");
     }
   }
 </script>
 
-<PageHeader title="Protokoll" subtitle="Was ModStaller tut – live. Die komplette Historie steht in der Log-Datei.">
+<PageHeader title={t("Log")} subtitle={t("What ModStaller does – live. The complete history is in the log file.")}>
   {#snippet actions()}
-    <button class="btn" onclick={() => (live ? (live = false) : jumpDown())} title={live ? "Anhalten" : "Weiter live folgen"}>
-      {#if live}<Pause size={15} /> Live{:else}<Play size={15} /> Angehalten{/if}
+    <button class="btn" onclick={() => (live ? (live = false) : jumpDown())} title={live ? t("Pause") : t("Follow live again")}>
+      {#if live}<Pause size={15} /> {t("Live")}{:else}<Play size={15} /> {t("Paused")}{/if}
     </button>
-    <button class="btn" onclick={copy} disabled={!shown.length}><Copy size={15} /> Kopieren</button>
-    <button class="btn" onclick={showFile}><FolderOpen size={15} /> Log-Datei</button>
+    <button class="btn" onclick={copy} disabled={!shown.length}><Copy size={15} /> {t("Copy")}</button>
+    <button class="btn" onclick={showFile}><FolderOpen size={15} /> {t("Log file")}</button>
   {/snippet}
 </PageHeader>
 
@@ -106,12 +108,12 @@
     {/each}
   </div>
   <div class="seg">
-    <button class:on={source === "all"} onclick={() => (source = "all")}>Alle Bereiche</button>
+    <button class:on={source === "all"} onclick={() => (source = "all")}>{t("All areas")}</button>
     {#each Object.entries(SOURCES) as [id, label]}
       <button class:on={source === id} onclick={() => (source = id as LogEntry["source"])}>{label}</button>
     {/each}
   </div>
-  <div class="search"><Search size={15} /><input type="search" placeholder="Suchen" bind:value={query} /></div>
+  <div class="search"><Search size={15} /><input type="search" placeholder={t("Search")} bind:value={query} /></div>
 </div>
 
 <div class="card log-wrap">
@@ -130,12 +132,12 @@
       </div>
     {:else}
       <div class="empty-log">
-        {ui.log.entries.length ? "Keine Einträge für diesen Filter." : "Noch nichts passiert. Sobald du ein iPhone ansteckst oder etwas installierst, erscheint es hier."}
+        {ui.log.entries.length ? t("No entries for this filter.") : t("Nothing has happened yet. As soon as you plug in an iPhone or install something, it shows up here.")}
       </div>
     {/each}
   </div>
   {#if missed > 0}
-    <button class="missed" onclick={jumpDown}><ArrowDown size={14} /> {missed} neue</button>
+    <button class="missed" onclick={jumpDown}><ArrowDown size={14} /> {t("{count} new", { count: missed })}</button>
   {/if}
 </div>
 

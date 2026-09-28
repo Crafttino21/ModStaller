@@ -1,6 +1,6 @@
 <script lang="ts">
   import {
-    LayoutGrid, Download, Package, UserRound, Smartphone, Stethoscope, SlidersHorizontal, LoaderCircle,
+    LayoutGrid, Download, Package, UserRound, Smartphone, ScrollText, Stethoscope, SlidersHorizontal, LoaderCircle,
   } from "@lucide/svelte";
   import PhoneMockup from "./PhoneMockup.svelte";
   import BatteryLevel from "./BatteryLevel.svelte";
@@ -15,6 +15,7 @@
     { view: "apps", label: t("Apps"), icon: Package },
     { view: "account", label: t("Account"), icon: UserRound },
     { view: "device", label: t("Device"), icon: Smartphone },
+    { view: "log", label: t("Log"), icon: ScrollText },
     { view: "system", label: t("System check"), icon: Stethoscope },
     { view: "settings", label: t("Settings"), icon: SlidersHorizontal },
   ]);

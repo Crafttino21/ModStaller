@@ -280,6 +280,17 @@ ipcMain.handle("backend:state", () => backendState);
 
 ipcMain.handle("app:logPath", () => logFile ?? "");
 
+// Zeigt eine Log-Datei im Dateimanager. Bewusst eng: absoluter Pfad, Endung
+// .log, muss existieren - die Seite bekommt so keinen Weg, beliebige Dateien
+// anzustossen.
+ipcMain.handle("app:showFile", (_e, p) => {
+  if (typeof p !== "string" || !path.isAbsolute(p) || path.extname(p) !== ".log"
+      || !fs.existsSync(p)) {
+    throw new Error("not a log file");
+  }
+  shell.showItemInFolder(p);
+});
+
 ipcMain.handle("dialog:pickIpa", async () => {
   const res = await dialog.showOpenDialog(win, {
     title: "IPA auswählen",

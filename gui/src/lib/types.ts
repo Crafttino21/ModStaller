@@ -169,6 +169,18 @@ export interface FixResult {
   manual: string;
 }
 
+/** Ein Eintrag im Protokoll (modstaller/logbook.py). */
+export interface LogEntry {
+  id: number;
+  /** Sekunden seit 1970, wie Pythons time.time(). */
+  ts: number;
+  level: "debug" | "info" | "success" | "warn" | "error";
+  source: "install" | "refresh" | "jit" | "apps" | "device" | "account" | "system";
+  message: string;
+  /** ID der Anfrage, zu der er gehoert - null bei Ereignissen. */
+  job: number | null;
+}
+
 export interface BackendExit {
   code: number | null;
   reason: string;
@@ -206,6 +218,7 @@ declare global {
       onExit(cb: (info: BackendExit) => void): () => void;
       getState(): Promise<BackendState>;
       logPath(): Promise<string>;
+      showFile(path: string): Promise<void>;
       restart(): void;
       pickIpa(): Promise<string | null>;
       pathForFile(file: File): string;

@@ -7,6 +7,7 @@
   import DeviceChecks from "../components/DeviceChecks.svelte";
   import PhoneMockup from "../components/PhoneMockup.svelte";
   import BatteryLevel from "../components/BatteryLevel.svelte";
+  import RecentActivity from "../components/RecentActivity.svelte";
   import { busy, go, ui } from "../lib/state.svelte";
   import { date, days } from "../lib/format";
   import { t } from "../lib/i18n.svelte";
@@ -127,6 +128,8 @@
     {/each}
   </div>
 {/if}
+
+<RecentActivity />
 
 <style>
   .urgent { margin-bottom: 18px; }

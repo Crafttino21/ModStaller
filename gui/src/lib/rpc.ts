@@ -23,11 +23,13 @@ interface Pending extends CallHooks {
 }
 
 type ServerRequestHandler = (params: any) => Promise<unknown>;
+type NotificationHandler = (params: any) => void;
 
 let nextId = 1;
 const pending = new Map<number, Pending>();
 const handlers = new Map<string, ServerRequestHandler>();
 const readyListeners = new Set<() => void>();
+const notificationHandlers = new Map<string, Set<NotificationHandler>>();
 
 window.backend.onMessage((msg) => {
   // Rueckfrage des Servers (z. B. der 2FA-Code).
@@ -51,6 +53,7 @@ window.backend.onMessage((msg) => {
     if (msg.method === "ready") readyListeners.forEach((f) => f());
     else if (msg.method === "log") pending.get(p.job)?.onLog?.(p.text);
     else if (msg.method === "progress") pending.get(p.job)?.onProgress?.(p.pct);
+    else notificationHandlers.get(msg.method)?.forEach((f) => f(p));
     return;
   }
 
@@ -82,6 +85,14 @@ export function call<T = unknown>(method: string, params: object = {}, hooks: Ca
 
 export function handle(method: string, fn: ServerRequestHandler) {
   handlers.set(method, fn);
+}
+
+/** Eine Mitteilung des Backends ohne Anfrage dazu (z. B. "log.entry"). */
+export function on(method: string, fn: NotificationHandler) {
+  let set = notificationHandlers.get(method);
+  if (!set) notificationHandlers.set(method, (set = new Set()));
+  set.add(fn);
+  return () => set.delete(fn);
 }
 
 export function onReady(fn: () => void) {
