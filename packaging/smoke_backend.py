@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Rauchtest fuer ein gebautes Backend: einmal das, was die Oberflaeche tut.
+"""Smoke test for a built backend: one pass of what the GUI does.
 
-    python packaging/smoke_backend.py <programm> [methode ...]
+    python packaging/smoke_backend.py <program> [method ...]
 
-Startet ``<programm> serve`` und stellt jede Methode als JSON-RPC-Anfrage.
-stdin bleibt dabei offen: bei EOF bricht der Server laufende Arbeit ab, ein
-``echo ... | backend serve`` beantwortete langsamere Methoden also nie.
+Starts ``<program> serve`` and sends each method as a JSON-RPC request.
+stdin stays open meanwhile: on EOF the server aborts running work, so an
+``echo ... | backend serve`` would never answer slower methods.
 
-Default sind ``info`` und ``doctor``. ``doctor`` ist die einzige Methode, die
-pymobiledevice3, anisette, unicorn und cryptography wirklich anfasst - und bis
-1.1.0-beta.3 beendete sie das Windows-Programm nativ (0xC0000409, siehe
-:func:`build_backend.clear_cfg`), ohne dass es in der Pipeline auffiel.
+Defaults are ``info`` and ``doctor``. ``doctor`` is the only method that
+actually touches pymobiledevice3, anisette, unicorn and cryptography - and up
+to 1.1.0-beta.3 it killed the Windows program natively (0xC0000409, see
+:func:`build_backend.clear_cfg`) without the pipeline noticing.
 
-Exit 1, wenn eine Antwort ausbleibt, ein Fehler kommt oder der Prozess stirbt.
+Exit 1 if a reply is missing, an error comes back or the process dies.
 """
 
 from __future__ import annotations
@@ -24,9 +24,14 @@ from pathlib import Path
 
 DEFAULT_METHODS = ("info", "doctor")
 
+#: A doctor check that only fails when the build left something out - the
+#: JIT engine is imported lazily, so nothing else would notice (the label
+#: is ``doctor.JIT_ENGINE``).
+MUST_PASS = "JIT engine (QuickJS)"
+
 
 def _reply(proc: subprocess.Popen, req_id: int) -> dict | None:
-    """Die Antwort auf ``req_id`` - None, wenn der Prozess vorher wegbricht."""
+    """The reply to ``req_id`` - None if the process dies first."""
     for line in proc.stdout:
         line = line.strip()
         if not line:
@@ -34,16 +39,16 @@ def _reply(proc: subprocess.Popen, req_id: int) -> dict | None:
         try:
             msg = json.loads(line)
         except ValueError:
-            print(f"    unlesbare Zeile: {line[:200]}")
+            print(f"    unreadable line: {line[:200]}")
             continue
         if msg.get("id") == req_id:
             return msg
-        # Notifications (ready, log, progress) gehoeren nicht hierher.
+        # Notifications (ready, log, progress) don't belong here.
     return None
 
 
 def smoke(exe: Path, methods: list[str]) -> int:
-    print(f"Rauchtest: {exe}")
+    print(f"Smoke test: {exe}")
     proc = subprocess.Popen(
         [str(exe), "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         text=True, encoding="utf-8", errors="replace")
@@ -57,16 +62,18 @@ def smoke(exe: Path, methods: list[str]) -> int:
             msg = _reply(proc, req_id)
             if msg is None:
                 proc.wait()
-                print(f"  {method}: keine Antwort, Prozess beendet "
+                print(f"  {method}: no reply, process exited "
                       f"(Exit {proc.returncode})")
                 bad.append(method)
                 break
             if "error" in msg:
-                print(f"  {method}: Fehler {msg['error']}")
+                print(f"  {method}: error {msg['error']}")
                 bad.append(method)
                 continue
             print(f"  {method}: ok")
             _show(method, msg["result"])
+            if method == "doctor" and not _bundled(msg["result"]):
+                bad.append(f"{method} ({MUST_PASS})")
     finally:
         if proc.poll() is None:
             proc.stdin.close()
@@ -76,13 +83,19 @@ def smoke(exe: Path, methods: list[str]) -> int:
                 proc.kill()
 
     if bad:
-        print(f"Fehlgeschlagen: {', '.join(bad)}")
+        print(f"Failed: {', '.join(bad)}")
         return 1
     return 0
 
 
+def _bundled(result: object) -> bool:
+    """Whether the ``MUST_PASS`` check is there and green."""
+    return isinstance(result, list) and any(
+        c.get("label") == MUST_PASS and c.get("ok") for c in result)
+
+
 def _show(method: str, result: object) -> None:
-    """Das Ergebnis so zeigen, dass ein Pipeline-Log etwas davon hat."""
+    """Show the result in a way that is useful in a pipeline log."""
     if method == "doctor" and isinstance(result, list):
         for check in result:
             mark = "+" if check.get("ok") else "-"
@@ -97,7 +110,7 @@ def main() -> int:
         return 2
     exe = Path(sys.argv[1])
     if not exe.is_file():
-        print(f"Nicht gefunden: {exe}", file=sys.stderr)
+        print(f"Not found: {exe}", file=sys.stderr)
         return 2
     return smoke(exe, list(sys.argv[2:]) or list(DEFAULT_METHODS))
 

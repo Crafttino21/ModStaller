@@ -1,8 +1,8 @@
-"""Schluesselpaar und Certificate Signing Request.
+"""Key pair and certificate signing request.
 
-Der private Schluessel entsteht hier und verlaesst den Rechner nie - Apple
-bekommt nur den CSR und gibt das Zertifikat zurueck. Beides zusammen wird
-spaeter als PKCS#12 an zsign gereicht.
+The private key is created here and never leaves the computer - Apple only
+gets the CSR and returns the certificate. Both together are later handed to
+zsign as PKCS#12.
 """
 
 from __future__ import annotations
@@ -90,10 +90,10 @@ def save_keypair(team_id: str, kp: KeyPair) -> None:
 
 
 def build_p12(team_id: str, kp: KeyPair, cert_der: bytes) -> tuple[Path, str]:
-    """Baut die PKCS#12-Identitaet, die zsign erwartet.
+    """Builds the PKCS#12 identity that zsign expects.
 
     Returns:
-        Pfad zur .p12 und ihr Passwort.
+        Path to the .p12 and its password.
     """
     try:
         cert = x509.load_der_x509_certificate(cert_der)

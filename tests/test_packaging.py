@@ -1,8 +1,8 @@
-"""Der Windows-Nachbearbeitungsschritt: Control Flow Guard aus dem Programm.
+"""The Windows post-processing step: Control Flow Guard out of the program.
 
-Warum das sein muss, steht in ``packaging/build_backend.py``. Hier steht nur,
-dass es zuverlaessig passiert - und dass sonst kein Byte angefasst wird: die
-Datei traegt hinter dem Header das ganze PyInstaller-Archiv.
+Why it is needed is explained in ``packaging/build_backend.py``. This only
+checks that it happens reliably - and that no other byte is touched: behind
+the header the file carries the entire PyInstaller archive.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ PE_OFF = 0x80
 DLLCHARS = PE_OFF + 24 + 70
 
 
-def make_pe(dllchars: int, trailer: bytes = b"PYI-ARCHIV") -> bytes:
-    """Gerade so viel PE, wie clear_cfg liest - plus etwas dahinter."""
+def make_pe(dllchars: int, trailer: bytes = b"PYI-ARCHIVE") -> bytes:
+    """Just as much PE as clear_cfg reads - plus something behind it."""
     data = bytearray(DLLCHARS + 2)
     data[0:2] = b"MZ"
     struct.pack_into("<I", data, 0x3C, PE_OFF)
@@ -45,7 +45,7 @@ def test_the_guard_flag_is_removed(tmp_path):
 
 
 def test_nothing_else_in_the_file_changes(tmp_path):
-    """Das PyInstaller-Archiv haengt hinter dem Header - es muss heil bleiben."""
+    """The PyInstaller archive sits behind the header - it must stay intact."""
     exe = tmp_path / "x.exe"
     before = make_pe(0xC160)
     exe.write_bytes(before)
@@ -55,7 +55,7 @@ def test_nothing_else_in_the_file_changes(tmp_path):
     after = exe.read_bytes()
     assert len(after) == len(before)
     differing = [i for i, (a, b) in enumerate(zip(before, after)) if a != b]
-    assert differing == [DLLCHARS + 1]      # nur das obere Byte des Flags
+    assert differing == [DLLCHARS + 1]      # only the flag's upper byte
 
 
 def test_a_file_without_the_flag_is_left_alone(tmp_path):

@@ -1,12 +1,12 @@
-"""SRP gegen zwei unabhaengige Referenzen pruefen.
+"""Check SRP against two independent references.
 
-Der Handshake ist der Punkt, an dem ein Fehler am teuersten ist: Apple sieht
-einen falschen Beweis als falsches Passwort und drosselt den Account. Deshalb
-wird hier gegen die RFC-Testvektoren *und* gegen eine etablierte
-Implementierung geprueft - inklusive der Faelle mit fuehrenden Nullbytes, die
-nur in etwa einem von 256 Logins auftreten.
+The handshake is where a bug is most expensive: Apple treats a wrong proof
+as a wrong password and throttles the account. That is why this checks
+against the RFC test vectors *and* against an established implementation -
+including the cases with leading zero bytes that occur in only about one
+login in 256.
 
-Braucht ``pip install srp`` (nur fuer Tests).
+Needs ``pip install srp`` (tests only).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from modstaller.apple.srp import (
     G_1024, G_2048, N_1024, N_2048, SRPClient, derive_password,
 )
 
-# -- RFC 5054 Anhang B -----------------------------------------------------
+# -- RFC 5054 Appendix B ---------------------------------------------------
 
 RFC_SALT = bytes.fromhex("BEB25379D1A8581EB5A727673A2441EE")
 RFC_A_PRIV = int(
@@ -63,7 +63,7 @@ def test_rfc5054_session_key():
     assert c.K == hashlib.sha1(RFC_S).digest()
 
 
-# -- Vergleich mit der Referenzbibliothek ----------------------------------
+# -- Comparison with the reference library ---------------------------------
 
 srp_lib = pytest.importorskip("srp._pysrp", reason="pip install srp")
 
@@ -99,17 +99,17 @@ def test_matches_reference(reference, seed):
 
 
 def test_matches_reference_with_leading_zero_bytes(reference):
-    """Der Fall, der nur in etwa einem von 256 Logins auftritt.
+    """The case that occurs in only about one login in 256.
 
-    A, B und S werden hier gezielt so gewaehlt, dass sie mit einem Nullbyte
-    beginnen - genau dort lag der Fehler, der sonst zufaellige und voellig
-    unerklaerliche Login-Fehlschlaege erzeugt haette.
+    A, B and S are deliberately chosen here so that they start with a zero
+    byte - exactly where the bug was that would otherwise have caused random
+    and completely inexplicable login failures.
     """
     found = 0
     for _ in range(4000):
         a = int.from_bytes(os.urandom(32), "big")
         b = int.from_bytes(os.urandom(256), "big") % N_2048
-        if b.bit_length() > 2040:          # B beginnt *nicht* mit Nullbyte
+        if b.bit_length() > 2040:          # B does *not* start with a zero byte
             continue
         found += 1
         ref_m1, our_m1, m2_ok = _compare(reference, os.urandom(16),
@@ -118,13 +118,13 @@ def test_matches_reference_with_leading_zero_bytes(reference):
         assert m2_ok
         if found >= 20:
             break
-    assert found, "kein Fall mit fuehrendem Nullbyte erzeugt"
+    assert found, "no case with a leading zero byte generated"
 
 
-# -- Passwortableitung -----------------------------------------------------
+# -- Password derivation --------------------------------------------------
 
 def test_derive_password_protocols_differ():
-    """s2k und s2k_fo unterscheiden sich nur minimal - und vollstaendig."""
+    """s2k and s2k_fo differ only minimally - and completely."""
     salt = b"\x01" * 16
     a = derive_password("hunter2", salt, 1000, "s2k")
     b = derive_password("hunter2", salt, 1000, "s2k_fo")

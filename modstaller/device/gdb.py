@@ -1,12 +1,12 @@
-"""Ein knapper Client fuer das GDB-Remote-Protokoll.
+"""A minimal client for the GDB remote protocol.
 
-Nur so viel, wie die JIT-Freischaltung braucht: anhaengen, fortsetzen,
-Register und Speicher lesen und schreiben, loesen. Das Protokoll rahmt jedes
-Paket als ``$<Inhalt>#<Pruefsumme>`` und bestaetigt es mit ``+``.
+Only as much as enabling JIT needs: attach, continue, read and write
+registers and memory, detach. The protocol frames every packet as
+``$<payload>#<checksum>`` and acknowledges it with ``+``.
 
-Die Bestaetigungen kommen haeufig in eigenen Segmenten. Wer sie fuer die
-Antwort haelt, liest Erfolge als Fehlschlaege - deshalb wird hier immer bis
-zum vollstaendigen Paket gelesen.
+The acknowledgements often arrive in separate segments. Mistaking them for
+the reply turns successes into failures - so we always read up to the
+complete packet here.
 """
 
 from __future__ import annotations
@@ -19,7 +19,10 @@ from ..i18n import _
 
 DEFAULT_TIMEOUT = 20.0
 
-#: ARM64-Registernummern, wie sie in der Stop-Antwort auftauchen.
+#: How many packets go out back to back before we read the replies.
+BATCH = 128
+
+#: ARM64 register numbers as they appear in the stop reply.
 REG_X0 = 0x00
 REG_X1 = 0x01
 REG_X16 = 0x10
@@ -38,7 +41,7 @@ def frame(payload: str) -> bytes:
 
 
 def le_hex_to_int(hex_str: str) -> int:
-    """Registerwerte stehen als Little-Endian-Hexfolge in der Antwort."""
+    """Register values appear in the reply as little-endian hex strings."""
     raw = bytes.fromhex(hex_str)
     return int.from_bytes(raw, "little")
 
@@ -48,7 +51,7 @@ def int_to_le_hex(value: int, width: int = 8) -> str:
 
 
 class StopReply:
-    """Die Antwort, mit der der Debugger einen Halt meldet."""
+    """The reply with which the debugger reports a stop."""
 
     def __init__(self, raw: str) -> None:
         self.raw = raw
@@ -74,7 +77,7 @@ class StopReply:
 
 
 class GdbClient:
-    """Spricht das Protokoll ueber eine bestehende Verbindung."""
+    """Speaks the protocol over an existing connection."""
 
     def __init__(self, conn, timeout: float = DEFAULT_TIMEOUT) -> None:
         self._conn = conn
@@ -111,7 +114,24 @@ class GdbClient:
         await self._conn.sendall(frame(payload))
         return await self._read_packet(timeout) if expect_reply else ""
 
-    # -- Die Befehle, die wir brauchen ------------------------------------
+    async def send_batch(self, payloads: list[str], *,
+                         batch: int = BATCH) -> list[str]:
+        """Sends many packets at once and collects one reply for each.
+
+        One round trip per packet is what makes large regions slow: a few
+        hundred MB are tens of thousands of pages. In no-ack mode the
+        debugger answers in order, so we send ``batch`` packets back to
+        back and only then read their replies.
+        """
+        replies: list[str] = []
+        for start in range(0, len(payloads), batch):
+            chunk = payloads[start:start + batch]
+            await self._conn.sendall(b"".join(frame(p) for p in chunk))
+            for _p in chunk:
+                replies.append(await self._read_packet())
+        return replies
+
+    # -- The commands we need ---------------------------------------------
 
     async def start_no_ack_mode(self) -> None:
         await self.send("QStartNoAckMode")
@@ -145,12 +165,12 @@ class GdbClient:
         await self.send(f"P{number:x}={int_to_le_hex(value)};thread:{thread};")
 
     async def allocate(self, size: int, permissions: str = "rx") -> int:
-        """Fordert Speicher vom Debugger an (``_M`` ist eine Apple-Erweiterung)."""
+        """Requests memory from the debugger (``_M`` is an Apple extension)."""
         reply = await self.send(f"_M{size:x},{permissions}")
         if not reply or reply.startswith("E"):
             raise DeviceError(
-                f"Konnte keinen {permissions}-Speicher anfordern "
-                f"(Antwort: {reply!r})")
+                f"Could not allocate {permissions} memory "
+                f"(reply: {reply!r})")
         return int(reply, 16)
 
     async def detach(self) -> None:

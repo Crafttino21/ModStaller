@@ -1,4 +1,4 @@
-"""Wo ModStaller seine Daten ablegt - und dass Secrets geschuetzt bleiben."""
+"""Where ModStaller stores its data - and that secrets stay protected."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def test_linux_follows_xdg():
 
 
 def test_windows_keeps_everything_in_localappdata():
-    """Nicht in %APPDATA%: dort liegt der Ordner der Oberflaeche (Electron)."""
+    """Not in %APPDATA%: that is where the interface (Electron) keeps its folder."""
     local = Path("C:/Users/u/AppData/Local")
     cfg, data, cache, state = config.base_dirs(
         {"LOCALAPPDATA": str(local), "APPDATA": "C:/Users/u/AppData/Roaming"},
@@ -35,7 +35,7 @@ def test_windows_without_localappdata_falls_back_to_the_profile():
 
 
 def test_anisette_stays_local_by_default(monkeypatch):
-    """Auf jeder Plattform: Geraete-Identifier bleiben auf dem Rechner."""
+    """On every platform: device identifiers stay on the machine."""
     for posix in (True, False):
         monkeypatch.setattr(config, "POSIX", posix)
         assert config.Settings().anisette_provider == "local"
@@ -47,7 +47,7 @@ def test_the_config_file_can_switch_to_a_server(tmp_path):
     assert config.Settings.load(f).anisette_provider == "remote"
 
 
-@pytest.mark.skipif(not config.POSIX, reason="Unix-Rechte gibt es nur auf POSIX")
+@pytest.mark.skipif(not config.POSIX, reason="Unix permissions only exist on POSIX")
 def test_open_secret_is_refused_on_posix(tmp_path):
     f = tmp_path / "secret"
     f.write_bytes(b"x")
@@ -57,7 +57,7 @@ def test_open_secret_is_refused_on_posix(tmp_path):
 
 
 def test_permission_check_is_skipped_on_windows(tmp_path, monkeypatch):
-    """Unter Windows ist st_mode immer "offen" - das darf kein Secret sperren."""
+    """On Windows st_mode is always "open" - that must not lock out a secret."""
     f = tmp_path / "secret"
     f.write_bytes(b"x")
     f.chmod(0o644)
@@ -66,7 +66,7 @@ def test_permission_check_is_skipped_on_windows(tmp_path, monkeypatch):
 
 
 def test_zsign_next_to_the_frozen_exe_is_found(tmp_path, monkeypatch):
-    """CLI-Zip unter Windows: zsign.exe liegt neben modstaller.exe, nicht im PATH."""
+    """CLI zip on Windows: zsign.exe sits next to modstaller.exe, not on PATH."""
     import sys
     name = "zsign" if config.POSIX else "zsign.exe"
     (tmp_path / name).write_bytes(b"")

@@ -1,14 +1,14 @@
-"""HTTP-Transport zu Apple, mit Guard und korrektem Trust-Anchor.
+"""HTTP transport to Apple, with a guard and the correct trust anchor.
 
-Zwei Eigenheiten von Apples Endpunkten, die hier zentral behandelt werden:
+Two quirks of Apple's endpoints that are handled centrally here:
 
-* ``gsa.apple.com`` wird **nicht** von einer oeffentlichen CA signiert, sondern
-  von Apples privater "Apple Server Authentication CA". Mit dem System-Trust-
-  Store scheitert jede Verbindung an CERTIFICATE_VERIFY_FAILED. Wir liefern die
-  Kette mit und verifizieren dagegen - statt die Pruefung abzuschalten.
-* Jeder GSA-Request muss eine unbedenkliche ``X-MMe-Client-Info`` tragen.
-  Der Guard prueft das *vor* dem Absenden, damit ein vergessener Header als
-  klare lokale Ausnahme auffaellt und nicht als Apples 503-Nebelkerze.
+* ``gsa.apple.com`` is **not** signed by a public CA but by Apple's private
+  "Apple Server Authentication CA". With the system trust store every
+  connection fails with CERTIFICATE_VERIFY_FAILED. We ship the chain and
+  verify against it - instead of switching verification off.
+* Every GSA request must carry a harmless ``X-MMe-Client-Info``. The guard
+  checks this *before* sending, so a forgotten header shows up as a clear
+  local exception rather than as Apple's 503 smoke screen.
 """
 
 from __future__ import annotations
@@ -28,19 +28,19 @@ GSA_HOST = "gsa.apple.com"
 GSA_URL = f"https://{GSA_HOST}/grandslam/GsService2"
 DEV_SERVICES = "https://developerservices2.apple.com/services"
 
-#: Apples Protokollversion in den .action-Pfaden.
+#: Apple's protocol version in the .action paths.
 PROTOCOL_VERSION = "QH65B2"
 
 USER_AGENT_AKD = "akd/1.0 CFNetwork/1494.0.7 Darwin/23.4.0"
 USER_AGENT_XCODE = "Xcode"
 
-#: Die Signatur der Edge-Ablehnung: HTTP 503 mit winziger HTML-Seite.
-#: Ein echter Ausfall sieht anders aus, deshalb duerfen wir das unterscheiden.
+#: The signature of the edge rejection: HTTP 503 with a tiny HTML page.
+#: A real outage looks different, so we may tell the two apart.
 _EDGE_REJECT_MAX_BODY = 512
 
 
 class _GuardedSession(requests.Session):
-    """Session, die vor jedem GSA-Request die Client-Info prueft."""
+    """Session that checks the client info before every GSA request."""
 
     def request(self, method, url, **kwargs):  # type: ignore[override]
         if GSA_HOST in str(url):
@@ -58,33 +58,33 @@ def _retrying_adapter(*, retry_statuses: tuple[int, ...]) -> HTTPAdapter:
     return HTTPAdapter(max_retries=retry)
 
 
-#: Beim Anmelden wird **nichts** automatisch wiederholt.
+#: During sign-in **nothing** is retried automatically.
 #:
-#: 429 nicht, weil ein Retry Apples Drosselung nur eskalieren laesst - und
-#: weil der ``complete``-Schritt ein Einmal-Cookie aus ``init`` traegt, das
-#: erneut zu senden einem Replay gleichkommt.
-#: 503 nicht, weil das bei GSA praktisch immer die Client-Info-Ablehnung ist.
+#: Not 429, because a retry only escalates Apple's throttling - and because
+#: the ``complete`` step carries a one-time cookie from ``init``, and sending
+#: it again amounts to a replay.
+#: Not 503, because with GSA that is practically always the client info
+#: rejection.
 _NO_RETRY: tuple[int, ...] = ()
 
-#: Bei der Entwickler-API sind echte Serverfehler wiederholbar - dort gibt es
-#: keinen Handshake-Zustand, der dabei kaputtgehen koennte. 429 bleibt auch
-#: hier aussen vor.
+#: With the developer API, real server errors can be retried - there is no
+#: handshake state there that could break. 429 stays excluded here too.
 _DEV_RETRY: tuple[int, ...] = (500, 502, 504)
 
 
-#: Apples Edge erlaubt pro TCP-Verbindung genau *einen* Request an
-#: GsService2. Jeder weitere auf derselben Verbindung bekommt HTTP 429 -
-#: gemessen: [404, 429, 429, 429, 429, 429] bei Wiederverwendung gegenueber
-#: [404, 404, 404, 404, 404, 429] mit ``Connection: close``.
+#: Apple's edge allows exactly *one* request to GsService2 per TCP
+#: connection. Every further one on the same connection gets HTTP 429 -
+#: measured: [404, 429, 429, 429, 429, 429] with reuse versus
+#: [404, 404, 404, 404, 404, 429] with ``Connection: close``.
 #:
-#: Genau daran scheitert ein Login sonst reproduzierbar: ``init`` ist der
-#: erste Request und geht durch, ``complete`` der zweite und wird abgewiesen.
-#: Das sieht nach Drosselung des Accounts aus, ist aber keine.
+#: Otherwise this is exactly what reproducibly breaks a login: ``init`` is
+#: the first request and goes through, ``complete`` the second and gets
+#: rejected. That looks like the account being throttled, but it isn't.
 _FORCE_CLOSE = {"Connection": "close"}
 
-#: Der Rest-429 ist ein rollendes Budget pro IP-Adresse und klart von selbst
-#: auf. Weil die Edge *vor* dem Auth-Dienst abweist, wird das SRP-Cookie dabei
-#: nicht verbraucht - ein erneuter Versuch ist deshalb unbedenklich.
+#: The remaining 429 is a rolling budget per IP address and clears up on its
+#: own. Because the edge rejects *before* the auth service, the SRP cookie is
+#: not consumed - so another attempt is harmless.
 GSA_MAX_ATTEMPTS = 4
 GSA_RETRY_DELAY = 2.0
 
@@ -106,18 +106,18 @@ def gsa_session() -> requests.Session:
 def gsa_request(session: requests.Session, method: str, url: str,
                 *, client_info: str, headers: dict[str, str] | None = None,
                 timeout: float = 30.0, **kwargs) -> requests.Response:
-    """Ein GSA-Request auf frischer Verbindung, mit begrenzter Wiederholung.
+    """A GSA request on a fresh connection, with limited retries.
 
-    Wiederholt wird ausschliesslich bei HTTP 429 der Edge - und bewusst hier
-    von Hand statt ueber urllib3, damit die Wiederholung immer eine neue
-    Verbindung bekommt und die Anzahl klar begrenzt bleibt.
+    Retries happen only on the edge's HTTP 429 - and deliberately by hand
+    here rather than via urllib3, so every retry gets a new connection and
+    the count stays clearly bounded.
     """
     merged = {**(headers or {}), **_FORCE_CLOSE}
     last: requests.Response | None = None
 
     for attempt in range(1, GSA_MAX_ATTEMPTS + 1):
-        # Verbindungspool leeren: die naechste Anfrage soll eine eigene
-        # TCP-Verbindung bekommen, sonst antwortet die Edge wieder mit 429.
+        # Empty the connection pool: the next request must get its own TCP
+        # connection, otherwise the edge answers with 429 again.
         session.close()
         response = session.request(method, url, headers=merged,
                                    timeout=timeout, **kwargs)
@@ -129,14 +129,14 @@ def gsa_request(session: requests.Session, method: str, url: str,
             time.sleep(GSA_RETRY_DELAY * attempt)
 
     assert last is not None
-    check_rate_limit(last, what="Apples Anmeldedienst",
+    check_rate_limit(last, what="Apple's sign-in service",
                      attempts=GSA_MAX_ATTEMPTS)
     return last
 
 
 def dev_session() -> requests.Session:
-    """Fuer developerservices2 - oeffentliche CA, und hier ist der
-    Xcode-User-Agent voellig in Ordnung. Nur GSA ist waehlerisch."""
+    """For developerservices2 - public CA, and the Xcode user agent is
+    perfectly fine here. Only GSA is picky."""
     s = requests.Session()
     s.headers.update({
         "Content-Type": "text/x-xml-plist",
@@ -149,11 +149,11 @@ def dev_session() -> requests.Session:
 
 
 def check_edge_rejection(response: requests.Response, client_info: str) -> None:
-    """Uebersetzt Apples 503-Nebelkerze in eine Diagnose.
+    """Translates Apple's 503 smoke screen into a diagnosis.
 
-    Aufzurufen nach jedem GSA-Request. Ein 503 mit winzigem Body bedeutet
-    praktisch immer: der Client-Info-String wurde an der Edge abgewiesen -
-    nicht, dass Apple ausgefallen ist.
+    To be called after every GSA request. A 503 with a tiny body practically
+    always means the client info string was rejected at the edge - not that
+    Apple is down.
     """
     if response.status_code != 503:
         return
@@ -169,11 +169,11 @@ def check_edge_rejection(response: requests.Response, client_info: str) -> None:
 
 def check_rate_limit(response: requests.Response, *, what: str = "Apple",
                      attempts: int = 1) -> None:
-    """Uebersetzt HTTP 429 in eine Ansage mit Wartezeit.
+    """Translates HTTP 429 into a message with a waiting time.
 
-    Erst relevant, wenn auch frische Verbindungen abgewiesen werden - dann
-    ist das Budget der IP-Adresse aufgebraucht, das sich alle Anmeldungen im
-    selben Netz teilen.
+    Only relevant once fresh connections are rejected too - then the IP
+    address's budget, shared by all sign-ins on the same network, is used
+    up.
     """
     if response.status_code != 429:
         return
@@ -185,8 +185,8 @@ def check_rate_limit(response: requests.Response, *, what: str = "Apple",
                 if secs >= 60
                 else " " + _("Apple says {seconds} seconds.", seconds=secs))
 
-    # Apple legt gelegentlich einen Grund bei. Mitnehmen - beim naechsten
-    # Versuch ist das der einzige Anhaltspunkt, den wir haben.
+    # Apple occasionally includes a reason. Keep it - on the next attempt
+    # it is the only clue we have.
     detail = ""
     body = (response.content or b"")[:400].decode("utf-8", "replace").strip()
     if body:

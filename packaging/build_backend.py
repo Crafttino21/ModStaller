@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Baut das Python-Backend als eigenstaendiges Programm (PyInstaller).
+"""Builds the Python backend as a standalone program (PyInstaller).
 
-    python packaging/build_backend.py --out packaging/out          # fuer die GUI
-    python packaging/build_backend.py --out packaging/out --cli    # zusaetzlich CLI
+    python packaging/build_backend.py --out packaging/out          # for the GUI
+    python packaging/build_backend.py --out packaging/out --cli    # plus the CLI
 
-Laeuft unter Linux (im Builder-Container, siehe build-backend.sh) und unter
-Windows (GitHub-Runner) - die PyInstaller-Parameter stehen deshalb nur hier.
-Erwartet, dass ModStaller und PyInstaller im aktuellen Python installiert sind.
+Runs on Linux (in the builder container, see build-backend.sh) and on
+Windows (GitHub runner) - which is why the PyInstaller parameters live only
+here. Expects ModStaller and PyInstaller to be installed in the current
+Python.
 
-Ergebnis:
-    <out>/backend/modstaller-backend[.exe]   onedir - startet schnell, fuer die GUI
-    <out>/cli/modstaller[.exe]               onefile - eine Datei zum Weitergeben
+Result:
+    <out>/backend/modstaller-backend[.exe]   onedir - starts fast, for the GUI
+    <out>/cli/modstaller[.exe]               onefile - a single file to share
 
-Unter Windows kommt ein Nachbearbeitungsschritt dazu: :func:`clear_cfg` nimmt
-Control Flow Guard aus den fertigen Programmen heraus. Ohne das stuerzt die
-Anisette-Emulation ab - der Grund steht dort.
+On Windows a post-processing step is added: :func:`clear_cfg` strips Control
+Flow Guard from the finished programs. Without it the Anisette emulation
+crashes - the reason is explained there.
 """
 
 from __future__ import annotations
@@ -26,22 +27,26 @@ import sys
 import tempfile
 from pathlib import Path
 
-#: Was PyInstaller nicht von selbst findet: dynamisch geladene Module,
-#: Datendateien (Apples CA-Kette, pymobiledevice3-Ressourcen), die native
-#: Unicorn-Bibliothek der Anisette-Emulation - und die Paket-Metadaten, aus
-#: denen Systemcheck und "version" ihre Nummern lesen.
+#: What PyInstaller doesn't find by itself: dynamically loaded modules, data
+#: files (Apple's CA chain, pymobiledevice3 resources), the native Unicorn
+#: library of the Anisette emulation - and the package metadata from which
+#: the system check and "version" read their numbers.
 #:
-#: Die Metadaten rekursiv, nicht Paket fuer Paket: mehrere Abhaengigkeiten
-#: lesen beim *Import* ihre eigene Versionsnummer (pyimg4 etwa, ueber
-#: ipsw_parser aus pymobiledevice3). Fehlt so ein dist-info, fliegt eine
-#: PackageNotFoundError - gefunden beim ersten Geraetecheck an einem echten
-#: iPhone. "modstaller" als Wurzel deckt den ganzen Baum ab.
+#: The metadata recursively, not package by package: several dependencies
+#: read their own version number at *import* time (pyimg4, for instance, via
+#: ipsw_parser from pymobiledevice3). If such a dist-info is missing, a
+#: PackageNotFoundError is raised - found during the first device check on a
+#: real iPhone. "modstaller" as the root covers the whole tree.
 #:
-#: ``pytun_pmd3`` ist ein eigenes Paket, kein Unterpaket von pymobiledevice3 -
-#: es faellt deshalb nicht mit dessen ``--collect-all`` ab. Darin steckt
-#: ``wintun.dll``, ohne die unter Windows *jeder* Zugriff scheitert, der den
-#: RSD-Tunnel braucht: Apps auflisten, installieren, JIT. Ab iOS 17 ist das
-#: alles. Der Fehler kam als PyInstallerImportError beim ersten echten Geraet.
+#: ``pytun_pmd3`` is a separate package, not a subpackage of pymobiledevice3 -
+#: so it is not picked up by the latter's ``--collect-all``. It contains
+#: ``wintun.dll``, without which on Windows *every* operation that needs the
+#: RSD tunnel fails: listing apps, installing, JIT. From iOS 17 on, that is
+#: everything. The error surfaced as PyInstallerImportError on the first real
+#: device.
+#:
+#: ``quickjs`` (from quickjs-ng) is only imported when JIT starts, so it is
+#: collected explicitly; ``jit_host.js`` comes along with ``--collect-data``.
 COMMON = [
     "--noconfirm", "--clean",
     "--collect-submodules", "modstaller",
@@ -50,6 +55,7 @@ COMMON = [
     "--collect-all", "pytun_pmd3",
     "--collect-all", "anisette",
     "--collect-all", "unicorn",
+    "--collect-all", "quickjs",
     "--recursive-copy-metadata", "modstaller",
 ]
 
@@ -60,40 +66,40 @@ sys.exit(main())
 """
 
 
-#: IMAGE_DLLCHARACTERISTICS_GUARD_CF im Optional Header. Der Schalter steht in
-#: der Haupt-EXE und gilt fuer den *ganzen* Prozess.
+#: IMAGE_DLLCHARACTERISTICS_GUARD_CF in the optional header. The flag lives
+#: in the main EXE and applies to the *whole* process.
 GUARD_CF = 0x4000
 
 
 def clear_cfg(exe: Path) -> None:
-    """Nimmt Control Flow Guard aus einem fertig gebauten Programm heraus.
+    """Strips Control Flow Guard from a finished program.
 
-    PyInstallers Bootloader ist mit ``/guard:cf`` gebaut. Ist CFG aktiv, prueft
-    MSVCs ``longjmp`` jedes Sprungziel gegen die CFG-Tabelle - und Unicorn
-    springt aus JIT-erzeugtem Code heraus, fuer den es dort keinen Eintrag gibt.
-    Ergebnis: ``__fastfail`` (0xC0000409) mitten in der Anisette-Emulation. Kein
-    Python-Fehler, nichts zum Abfangen: der Prozess ist weg und mit ihm das
-    Backend der Oberflaeche.
+    PyInstaller's bootloader is built with ``/guard:cf``. With CFG active,
+    MSVC's ``longjmp`` checks every jump target against the CFG table - and
+    Unicorn jumps out of JIT-generated code that has no entry there.
+    Result: ``__fastfail`` (0xC0000409) in the middle of the Anisette
+    emulation. No Python error, nothing to catch: the process is gone, and
+    with it the GUI's backend.
 
-    ``python.exe`` setzt den Schalter selbst nicht - deshalb lief dieselbe
-    Emulation in der Entwicklung immer und im gepackten Build nie. Ohne ihn
-    verhaelt sich das Programm wie eine gewoehnliche Installation.
+    ``python.exe`` doesn't set the flag itself - which is why the same
+    emulation always worked in development and never in the packaged build.
+    Without the flag the program behaves like a regular installation.
     """
     data = bytearray(exe.read_bytes())
     pe = struct.unpack_from("<I", data, 0x3C)[0]
     if bytes(data[pe:pe + 4]) != b"PE" + bytes(2):
-        raise SystemExit(f"{exe}: kein PE-Programm")
-    off = pe + 24 + 70          # DllCharacteristics im Optional Header
+        raise SystemExit(f"{exe}: not a PE program")
+    off = pe + 24 + 70          # DllCharacteristics in the optional header
     flags, = struct.unpack_from("<H", data, off)
     if not flags & GUARD_CF:
-        print(f"CFG war nicht gesetzt: {exe}")
+        print(f"CFG was not set: {exe}")
         return
     struct.pack_into("<H", data, off, flags & ~GUARD_CF)
     exe.write_bytes(bytes(data))
     check, = struct.unpack_from("<H", exe.read_bytes(), off)
     if check & GUARD_CF:
-        raise SystemExit(f"{exe}: CFG liess sich nicht entfernen")
-    print(f"CFG entfernt: {exe} (0x{flags:04x} -> 0x{check:04x})")
+        raise SystemExit(f"{exe}: CFG could not be removed")
+    print(f"CFG removed: {exe} (0x{flags:04x} -> 0x{check:04x})")
 
 
 def build(out: Path, *, cli: bool) -> None:
@@ -140,7 +146,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--cli", action="store_true",
-                   help="zusaetzlich die CLI als einzelne Datei bauen")
+                   help="also build the CLI as a single file")
     args = p.parse_args()
     build(args.out.resolve(), cli=args.cli)
     return 0

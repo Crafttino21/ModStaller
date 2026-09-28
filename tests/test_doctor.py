@@ -1,4 +1,4 @@
-"""Der Systemcheck liefert Daten - drucken ist Sache von CLI und Oberflaeche."""
+"""The system check returns data - printing is up to the CLI and interface."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from modstaller.doctor import PROBLEM, TODO, Check
 
 
 class FakeAnisette:
-    """Weder Netz noch Emulation - beides gehoert nicht in einen Unittest."""
+    """Neither network nor emulation - neither belongs in a unit test."""
 
     name = "fake"
 
@@ -44,14 +44,14 @@ async def test_checks_are_data_and_print_nothing(capsys, no_anisette, no_devices
 
 def test_open_steps_are_not_problems():
     checks = [Check("zsign", False, kind=PROBLEM),
-              Check("Apple-Anmeldung", False, kind=TODO),
+              Check("Apple sign-in", False, kind=TODO),
               Check("CA", True)]
     assert [c.label for c in doctor.problems(checks)] == ["zsign"]
-    assert [c.label for c in doctor.todos(checks)] == ["Apple-Anmeldung"]
+    assert [c.label for c in doctor.todos(checks)] == ["Apple sign-in"]
 
 
 def test_windows_checks_the_apple_device_service(monkeypatch):
-    """Unter Windows gibt es kein usbmuxd - der Apple-Geraetedienst ersetzt ihn."""
+    """Windows has no usbmuxd - the Apple device service replaces it."""
     import socket
 
     class Conn:
@@ -65,7 +65,7 @@ def test_windows_checks_the_apple_device_service(monkeypatch):
 
 async def test_the_anisette_check_names_the_configured_source(
         monkeypatch, no_anisette, no_devices):
-    """Welche Quelle gilt, entscheiden die Einstellungen - nicht der Check."""
+    """The settings decide which source applies - not the check."""
     monkeypatch.setattr(config.Settings, "load", classmethod(
         lambda cls, path=None: cls(anisette_provider="remote",
                                    anisette_server="https://ani.example")))
@@ -78,7 +78,7 @@ async def test_the_anisette_check_names_the_configured_source(
 
 async def test_a_broken_anisette_source_is_a_check_and_not_an_exception(
         monkeypatch, no_devices):
-    """Unter Windows wirft LocalProvider - das muss eine Zeile bleiben."""
+    """On Windows LocalProvider raises - that must stay a single line."""
     def boom(provider, server=""):
         raise RuntimeError("emulation does not run here")
     monkeypatch.setattr("modstaller.apple.anisette.build", boom)

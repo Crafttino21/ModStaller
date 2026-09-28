@@ -1,22 +1,22 @@
-"""GrandSlam-Authentifizierung gegen Apple.
+"""GrandSlam authentication against Apple.
 
-Ablauf:
+Flow:
 
-1. ``init``     - wir schicken ``A``, Apple antwortet mit Salt, Iterationen,
-                  ``B`` und dem gewaehlten s2k-Verfahren.
-2. ``complete`` - wir schicken den SRP-Beweis ``M1``, Apple antwortet mit
-                  ``M2`` und ``spd``: ein mit dem Session-Key verschluesseltes
-                  Plist mit ``adsid`` und ``GsIdmsToken``.
-3. Ggf. 2FA     - Apple schickt einen Code auf die vertrauten Geraete, wir
-                  validieren ihn und wiederholen Schritt 1-2.
-4. ``apptokens``- das Login-Token allein reicht developerservices2 nicht
-                  ("Your session has expired"). Es muss gegen ein
-                  app-spezifisches Token fuer ``com.apple.gs.xcode.auth``
-                  getauscht werden. Der Tausch wird mit dem Session-Key aus
-                  dem entschluesselten Login beglaubigt.
+1. ``init``     - we send ``A``, Apple responds with salt, iterations,
+                  ``B`` and the chosen s2k scheme.
+2. ``complete`` - we send the SRP proof ``M1``, Apple responds with
+                  ``M2`` and ``spd``: a plist encrypted with the session key,
+                  containing ``adsid`` and ``GsIdmsToken``.
+3. 2FA, if any  - Apple sends a code to the trusted devices, we validate it
+                  and repeat steps 1-2.
+4. ``apptokens``- the login token alone is not enough for
+                  developerservices2 ("Your session has expired"). It has to
+                  be exchanged for an app-specific token for
+                  ``com.apple.gs.xcode.auth``. The exchange is authenticated
+                  with the session key from the decrypted login.
 
-Das Passwort verlaesst den Rechner nie: SRP beweist seine Kenntnis, ohne es
-zu uebertragen.
+The password never leaves the machine: SRP proves knowledge of it without
+transmitting it.
 """
 
 from __future__ import annotations
@@ -33,26 +33,25 @@ from ..i18n import _
 from . import clientinfo, http
 from .srp import SRPClient, derive_password
 
-#: Das Token, mit dem developerservices2 angesprochen wird.
+#: The token used to talk to developerservices2.
 XCODE_APP = "com.apple.gs.xcode.auth"
 
-#: Apple liefert das spd-Plist ohne XML-Header aus.
+#: Apple delivers the spd plist without an XML header.
 _PLIST_HEADER = (
     b'<?xml version="1.0" encoding="UTF-8"?>'
     b'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
     b'"http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
 )
 
-#: Status-Codes, die Apple in ``Status.ec`` zurueckgibt.
+#: Status codes Apple returns in ``Status.ec``.
 ERR_INVALID_CREDENTIALS = -20101
 ERR_INVALID_CODE = -21669
-#: Apple meldet diese beiden waehrend des Token-Tauschs, wenn die Sitzung
-#: nicht vollstaendig bestaetigt ist. Der Wortlaut ("falsches Passwort")
-#: fuehrt dabei zuverlaessig in die Irre.
+#: Apple reports these two during the token exchange when the session is not
+#: fully confirmed. The wording ("wrong password") is reliably misleading.
 ERR_NOT_FULLY_AUTHENTICATED = -22406
 ERR_TEMPORARILY_BLOCKED = -22411
 
-#: Uebersetzt wird erst beim Nachschlagen, nicht beim Import.
+#: Translated on lookup, not at import time.
 _MESSAGES = {
     ERR_INVALID_CREDENTIALS: "Apple ID or password is wrong.",
     ERR_INVALID_CODE: "The two-factor code was not accepted.",
@@ -77,10 +76,10 @@ _HINTS = {
 class GSAResult:
     adsid: str
     idms_token: str
-    #: Das app-spezifische Token fuer developerservices2. *Nicht* das
-    #: Login-Token - damit weist Apple jede Anfrage als abgelaufen zurueck.
+    #: The app-specific token for developerservices2. *Not* the login
+    #: token - with that, Apple rejects every request as expired.
     app_token: str
-    #: Basis fuer X-Apple-GS-Token: base64("<adsid>:<app_token>").
+    #: Basis for X-Apple-GS-Token: base64("<adsid>:<app_token>").
     identity_token: str
 
     @property
@@ -96,29 +95,29 @@ def _session_key(srp_key: bytes, name: str) -> bytes:
 
 
 def _decrypt_spd(srp_key: bytes, blob: bytes) -> dict:
-    """Entschluesselt Apples ``spd`` (AES-256-CBC, Schluessel aus dem SRP-Key)."""
+    """Decrypts Apple's ``spd`` (AES-256-CBC, key derived from the SRP key)."""
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
     key = _session_key(srp_key, "extra data key:")
     iv = _session_key(srp_key, "extra data iv:")[:16]
     dec = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
     plain = dec.update(blob) + dec.finalize()
-    if plain:  # PKCS#7 abziehen
+    if plain:  # strip PKCS#7
         pad = plain[-1]
         if 0 < pad <= 16:
             plain = plain[:-pad]
     return plistlib.loads(_PLIST_HEADER + plain)
 
 
-#: Apple stellt dem verschluesselten Token eine Versionskennung voran und
-#: nimmt sie zugleich als zusaetzliche authentifizierte Daten.
+#: Apple prefixes the encrypted token with a version tag and also uses it as
+#: additional authenticated data.
 _TOKEN_VERSION = b"XYZ"
 
 
 def _decrypt_app_token(session_key: bytes, blob: bytes) -> dict:
-    """Entschluesselt die ``et``-Antwort (AES-GCM).
+    """Decrypts the ``et`` response (AES-GCM).
 
-    Aufbau: 3 Byte Version, 16 Byte IV, Geheimtext, 16 Byte Pruefsumme.
+    Layout: 3-byte version, 16-byte IV, ciphertext, 16-byte tag.
     """
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -136,8 +135,8 @@ def _decrypt_app_token(session_key: bytes, blob: bytes) -> dict:
     return plistlib.loads(_PLIST_HEADER + plain)
 
 
-#: Felder, die niemals ausgegeben werden duerfen - auch nicht im
-#: Diagnosemodus. Schluesselmaterial, Beweise und Tokens.
+#: Fields that must never be printed - not even in diagnostic mode. Key
+#: material, proofs and tokens.
 _NEVER_PRINT = frozenset({
     "sk", "spd", "M1", "M2", "B", "A2k", "c", "et", "checksum", "s",
     "GsIdmsToken", "token", "pet", "adsid", "DsPrsId", "acname", "altDSID",
@@ -145,20 +144,20 @@ _NEVER_PRINT = frozenset({
 
 
 def _describe(data: dict, label: str) -> str:
-    """Beschreibt eine Antwort, ohne ihren Inhalt preiszugeben.
+    """Describes a response without revealing its content.
 
-    Bei der Fehlersuche ist fast immer entscheidend, *welche* Felder Apple
-    schickt - nicht, was drinsteht. Werte werden deshalb nur fuer
-    unverfaengliche Felder gezeigt.
+    When debugging, what almost always matters is *which* fields Apple
+    sends - not what they contain. Values are therefore shown only for
+    harmless fields.
     """
-    lines = [f"  [{label}] Felder: {', '.join(sorted(data))}"]
+    lines = [f"  [{label}] Fields: {', '.join(sorted(data))}"]
     for key in sorted(data):
         if key in _NEVER_PRINT:
-            value = f"<{len(data[key])} Byte>" if isinstance(
-                data[key], (bytes, bytearray)) else "<verborgen>"
+            value = f"<{len(data[key])} bytes>" if isinstance(
+                data[key], (bytes, bytearray)) else "<hidden>"
         elif isinstance(data[key], dict):
             value = "{" + ", ".join(
-                f"{k}={v!r}" if k not in _NEVER_PRINT else f"{k}=<verborgen>"
+                f"{k}={v!r}" if k not in _NEVER_PRINT else f"{k}=<hidden>"
                 for k, v in sorted(data[key].items())) + "}"
         else:
             value = repr(data[key])
@@ -167,13 +166,13 @@ def _describe(data: dict, label: str) -> str:
 
 
 class GSAClient:
-    """Fuehrt den GrandSlam-Handshake durch.
+    """Performs the GrandSlam handshake.
 
     Args:
-        anisette: Provider der Attestation-Header.
-        code_prompt: Wird fuer den 2FA-Code aufgerufen. ``None`` bedeutet
-            nicht-interaktiv - dann fliegt :class:`InteractionRequired`, statt
-            dass ein Daemon auf stdin blockiert.
+        anisette: Provider of the attestation headers.
+        code_prompt: Called for the 2FA code. ``None`` means
+            non-interactive - then :class:`InteractionRequired` is raised
+            instead of a daemon blocking on stdin.
     """
 
     def __init__(self, anisette, code_prompt: Callable[[], str] | None = None,
@@ -206,9 +205,9 @@ class GSAClient:
 
         body = {"Header": {"Version": "1.0.1"},
                 "Request": {"cpd": self._cpd(), **params}}
-        # gsa_request sorgt fuer eine frische Verbindung: Apples Edge laesst
-        # pro TCP-Verbindung nur einen Request an GsService2 durch, und
-        # "complete" waere sonst der zweite.
+        # gsa_request ensures a fresh connection: Apple's edge lets only one
+        # request to GsService2 through per TCP connection, and "complete"
+        # would otherwise be the second.
         resp = http.gsa_request(
             self._session, "POST", http.GSA_URL, client_info=ci,
             headers={"X-MMe-Client-Info": ci}, data=plistlib.dumps(body),
@@ -220,7 +219,7 @@ class GSAClient:
             return parsed
         except Exception as exc:
             raise AppleError(
-                f"Unerwartete GSA-Antwort (HTTP {resp.status_code}): "
+                f"Unexpected GSA response (HTTP {resp.status_code}): "
                 f"{resp.content[:200]!r}"
             ) from exc
 
@@ -238,18 +237,18 @@ class GSAClient:
                              + (f"\n\n{hint}" if hint else ""))
         return resp
 
-    # -- Ablauf ------------------------------------------------------------
+    # -- Flow --------------------------------------------------------------
 
     def authenticate(self, apple_id: str, password: str) -> GSAResult:
         spd, srp_key, complete = self._handshake(apple_id, password)
-        self._trace(spd, "spd (entschluesselt)")
+        self._trace(spd, "spd (decrypted)")
 
         if self._needs_2fa(complete, spd):
             if self._debug:
                 print("  -> Apple requires a second confirmation.", flush=True)
             self._do_two_factor(spd)
-            # Nach bestandener 2FA gilt der Handshake neu - Apple haengt die
-            # Vertrauensstellung an die ADI-Identitaet, nicht an die Session.
+            # After passing 2FA the handshake starts over - Apple ties the
+            # trust to the ADI identity, not to the session.
             spd, srp_key, complete = self._handshake(apple_id, password)
             if self._needs_2fa(complete, spd):
                 raise AppleError(_(
@@ -271,7 +270,7 @@ class GSAClient:
         )
 
     def _fetch_app_token(self, spd: dict, adsid: str, idms_token: str) -> str:
-        """Tauscht das Login-Token gegen eines fuer die Entwickler-API."""
+        """Exchanges the login token for one for the developer API."""
         session_key = spd.get("sk")
         cookie = spd.get("c")
         if not session_key or cookie is None:
@@ -279,8 +278,8 @@ class GSAClient:
                 "GSA returned no session key - without it no token for the "
                 "developer API can be requested."))
 
-        # Beglaubigt die Anfrage: nur wer den Session-Key kennt, kann sie
-        # stellen. Reihenfolge ist Teil des Protokolls.
+        # Authenticates the request: only someone who knows the session key
+        # can make it. The order is part of the protocol.
         mac = hmac.new(bytes(session_key), digestmod=hashlib.sha256)
         mac.update(b"apptokens")
         mac.update(adsid.encode())
@@ -311,11 +310,11 @@ class GSAClient:
 
     def _handshake(self, apple_id: str,
                    password: str) -> tuple[dict, bytes, dict]:
-        """Returns: entschluesseltes ``spd``, SRP-Key, rohe ``complete``-Antwort.
+        """Returns: decrypted ``spd``, SRP key, raw ``complete`` response.
 
-        Die rohe Antwort wird gebraucht, weil Apple den Hinweis auf eine
-        noetige Zwei-Faktor-Bestaetigung in ``Status.au`` unterbringt - also
-        *neben* dem verschluesselten spd, nicht darin.
+        The raw response is needed because Apple puts the hint about a
+        required two-factor confirmation in ``Status.au`` - i.e. *next to*
+        the encrypted spd, not inside it.
         """
         srp = SRPClient(apple_id)
         init = self._check(self._request({
@@ -343,21 +342,21 @@ class GSAClient:
         assert srp.K is not None
         return _decrypt_spd(srp.K, complete["spd"]), srp.K, complete
 
-    # -- Zwei-Faktor -------------------------------------------------------
+    # -- Two-factor -------------------------------------------------------
 
-    #: Werte, mit denen Apple eine Zweit-Bestaetigung anfordert.
+    #: Values with which Apple requests a second confirmation.
     _SECOND_FACTOR = ("trustedDeviceSecondaryAuth", "secondaryAuth",
                       "smsSecondaryAuth")
 
     @classmethod
     def _needs_2fa(cls, complete: dict, spd: dict) -> bool:
-        """Sucht den 2FA-Hinweis an allen Stellen, an denen Apple ihn ablegt.
+        """Looks for the 2FA hint everywhere Apple puts it.
 
-        Primaer ``Status.au`` in der ``complete``-Antwort. Wird das
-        uebersehen, laeuft der Login scheinbar durch, liefert aber eine nur
-        halb gueltige Sitzung - und Apple beantwortet den anschliessenden
-        Token-Tausch mit "Enter the correct password", was in die voellig
-        falsche Richtung zeigt.
+        Primarily ``Status.au`` in the ``complete`` response. If that is
+        missed, the login appears to succeed but yields an only half-valid
+        session - and Apple answers the subsequent token exchange with
+        "Enter the correct password", which points in completely the wrong
+        direction.
         """
         candidates = (
             (complete.get("Status") or {}).get("au"),
@@ -388,7 +387,7 @@ class GSAClient:
                 "non-interactively. Run ‘modstaller login’ once."))
         headers = self._two_factor_headers(spd)
 
-        # Code an die vertrauten Geraete schicken.
+        # Send the code to the trusted devices.
         http.gsa_request(self._session, "GET",
                          "https://gsa.apple.com/auth/verify/trusteddevice",
                          client_info=headers["X-MMe-Client-Info"],
@@ -408,5 +407,5 @@ class GSAClient:
         except plistlib.InvalidFileException:
             if resp.status_code >= 400:
                 raise AppleError(
-                    f"2FA-Validierung fehlgeschlagen (HTTP {resp.status_code})."
+                    f"2FA validation failed (HTTP {resp.status_code})."
                 ) from None

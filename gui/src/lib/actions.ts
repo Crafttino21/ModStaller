@@ -41,7 +41,7 @@ export function refreshApps(app?: App) {
 
 export function enableJit(app: NamedApp) {
   runTask<JitResult>("jit", t("JIT for {name}", { name: app.name }), "jit", { bundleId: app.bundleId },
-    (r) => r.preparedRegions
+    (r) => r.preparedRegions || r.txm === false
       ? { message: r.summary, notes: [...r.notes, t("Applies to this launch only – unlock again after quitting the app.")] }
       : {
           message: r.summary,

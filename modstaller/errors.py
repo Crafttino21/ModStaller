@@ -1,4 +1,4 @@
-"""Ausnahme-Hierarchie und Uebersetzung von Apple-Fehlercodes in klare Meldungen."""
+"""Exception hierarchy and translation of Apple error codes into clear messages."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from .i18n import _
 
 
 class ModStallerError(Exception):
-    """Basis fuer alles, was ModStaller selbst als Fehler erkennt."""
+    """Base for everything ModStaller itself recognizes as an error."""
 
     exit_code = 1
 
@@ -16,7 +16,7 @@ class ConfigError(ModStallerError):
 
 
 class DeviceError(ModStallerError):
-    """Geraet fehlt, ist nicht gepairt oder ein Dienst antwortet nicht."""
+    """Device is missing, not paired, or a service does not respond."""
 
     exit_code = 4
 
@@ -38,33 +38,33 @@ class SigningError(ModStallerError):
 
 
 class InteractionRequired(ModStallerError):
-    """Ein Prompt waere noetig, aber wir laufen nicht-interaktiv (Daemon)."""
+    """A prompt would be needed, but we run non-interactively (daemon)."""
 
     exit_code = 6
 
 
 class AppleError(ModStallerError):
-    """Alles, was von Apples Servern als Fehler zurueckkommt."""
+    """Anything that comes back from Apple's servers as an error."""
 
     exit_code = 3
 
 
 class ClientInfoPolicyViolation(AppleError):
-    """Lokal ausgeloest, bevor ein Request rausgeht.
+    """Raised locally, before a request goes out.
 
-    Apple weist seit August/September 2026 jeden GSA-Request an der Edge mit
-    HTTP 503 ab, dessen X-MMe-Client-Info ``com.apple.dt.Xcode`` nennt. Das ist
-    von einem echten Ausfall nicht zu unterscheiden, deshalb pruefen wir vorher
-    selbst und melden die Ursache im Klartext statt in Retries zu verhungern.
+    Since August/September 2026 Apple rejects every GSA request at the edge
+    with HTTP 503 if its X-MMe-Client-Info names ``com.apple.dt.Xcode``. That
+    is indistinguishable from a real outage, so we check beforehand ourselves
+    and report the cause in plain words instead of starving in retries.
     """
 
 
 class AnisetteClientInfoRejected(AppleError):
-    """Apple hat den Client-Info-String an der Edge abgelehnt (HTTP 503)."""
+    """Apple rejected the client info string at the edge (HTTP 503)."""
 
 
 class AppleAPIError(AppleError):
-    """Ein ``resultCode != 0`` von developerservices2."""
+    """A ``resultCode != 0`` from developerservices2."""
 
     def __init__(self, code: int, result_string: str = "", user_string: str = ""):
         self.code = code
@@ -74,20 +74,20 @@ class AppleAPIError(AppleError):
                          or _("Apple error {code}", code=code))
 
 
-# --- Fehlercodes, auf die wir gezielt reagieren -----------------------------
-# Die Zahlen sind Apples, die Konsequenzen unsere.
+# --- Error codes we handle specifically -------------------------------------
+# The numbers are Apple's, the consequences ours.
 
-DEVICE_ALREADY_REGISTERED = 35      # kein Fehler: Geraet war schon drin
+DEVICE_ALREADY_REGISTERED = 35      # not an error: device was already registered
 INVALID_CSR = 3250
-APP_ID_QUOTA_EXCEEDED = 9120        # Free: 10 App-IDs pro Woche aufgebraucht
-APP_ID_UNAVAILABLE = 9401           # Identifier gehoert einem anderen Account
-CERTIFICATE_NOT_FOUND = 7252        # DELETE auf ein bereits geloeschtes Zertifikat
+APP_ID_QUOTA_EXCEEDED = 9120        # Free: 10 App IDs per week used up
+APP_ID_UNAVAILABLE = 9401           # identifier belongs to another account
+CERTIFICATE_NOT_FOUND = 7252        # DELETE on an already deleted certificate
 
-#: Codes, die wir als Erfolg durchwinken statt als Fehler zu werfen.
+#: Codes we wave through as success instead of raising an error.
 BENIGN_CODES = frozenset({DEVICE_ALREADY_REGISTERED, CERTIFICATE_NOT_FOUND})
 
-#: Klartext-Hinweise, die dem Nutzer sagen, was er *tun* kann. Uebersetzt
-#: wird erst in remedy_for(): beim Import steht die Sprache noch nicht fest.
+#: Plain-language hints telling the user what they can *do*. Translation
+#: happens only in remedy_for(): at import time the language isn't set yet.
 REMEDIES: dict[int, str] = {
     APP_ID_QUOTA_EXCEEDED: (
         "Apple allows ten *newly created* App IDs per week. Deleting existing "
@@ -113,17 +113,16 @@ def remedy_for(code: int) -> str:
 
 
 class AppleRateLimited(AppleError):
-    """Apple hat gedrosselt (HTTP 429). Weitere Versuche verschlimmern es."""
+    """Apple throttled us (HTTP 429). Further attempts make it worse."""
 
     exit_code = 7
 
 
 def describe(exc: BaseException) -> str | None:
-    """Klartext fuer Fehler, die der Nutzer verstehen soll.
+    """Plain text for errors the user is meant to understand.
 
-    ``None`` heisst: unerwartet - der Aufrufer entscheidet, ob er einen
-    Stacktrace zeigt. Netz- und Bibliotheksfehler sollen nicht als Traceback
-    erscheinen.
+    ``None`` means: unexpected - the caller decides whether to show a stack
+    trace. Network and library errors should not show up as a traceback.
     """
     if isinstance(exc, ModStallerError):
         return str(exc)

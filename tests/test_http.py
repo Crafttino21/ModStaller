@@ -1,7 +1,7 @@
-"""Transport-Regeln gegen Apples Edge.
+"""Transport rules against Apple's edge.
 
-Beide hier geprueften Regeln sind teuer erkauft und sehen im Code harmlos
-aus - genau deshalb stehen sie unter Test.
+Both rules checked here were learned the hard way and look harmless in the
+code - which is exactly why they are under test.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class _FakeResponse:
 
 
 class _RecordingSession(requests.Session):
-    """Session, die Antworten abspielt und Verbindungsabbrueche mitzaehlt."""
+    """Session that replays responses and counts connection closes."""
 
     def __init__(self, statuses: list[int]):
         super().__init__()
@@ -44,11 +44,11 @@ class _RecordingSession(requests.Session):
         return _FakeResponse(self._statuses.pop(0))
 
 
-# -- Verbindung pro Request ------------------------------------------------
+# -- One connection per request -------------------------------------------
 
 
 def test_gsa_session_forces_connection_close():
-    """Apples Edge laesst pro TCP-Verbindung nur einen Request durch."""
+    """Apple's edge lets only one request through per TCP connection."""
     assert http.gsa_session().headers["Connection"] == "close"
 
 
@@ -61,10 +61,10 @@ def test_gsa_request_closes_connection_before_each_attempt():
 
 
 def test_gsa_request_retries_429_on_fresh_connections():
-    """Der Rest-429 ist ein IP-Budget und klart auf - also einmal nachfassen.
+    """The remaining 429 is an IP budget and clears up - so try again.
 
-    Unbedenklich, weil die Edge vor dem Auth-Dienst abweist und das
-    SRP-Cookie dabei nicht verbraucht wird.
+    Harmless, because the edge rejects before the auth service and the SRP
+    cookie is not consumed.
     """
     session = _RecordingSession([429, 429, 200])
     http.GSA_RETRY_DELAY, original = 0.0, http.GSA_RETRY_DELAY
@@ -74,7 +74,7 @@ def test_gsa_request_retries_429_on_fresh_connections():
     finally:
         http.GSA_RETRY_DELAY = original
     assert resp.status_code == 200
-    assert session.closes == 3, "jeder Versuch braucht eine eigene Verbindung"
+    assert session.closes == 3, "every attempt needs its own connection"
 
 
 def test_gsa_request_gives_up_with_clear_message():
@@ -90,12 +90,12 @@ def test_gsa_request_gives_up_with_clear_message():
 
 
 def test_dev_session_does_not_retry_429():
-    """429 gehoert nie in eine blinde Wiederholung."""
+    """429 never belongs in a blind retry."""
     assert 429 not in http._DEV_RETRY
     assert http._NO_RETRY == ()
 
 
-# -- Client-Info-Guard -----------------------------------------------------
+# -- Client info guard ----------------------------------------------------
 
 
 def test_guard_blocks_xcode_identifier_before_sending():
@@ -114,11 +114,11 @@ def test_sanitize_keeps_hardware_but_replaces_identifier():
     out = clientinfo.sanitize(XCODE_CI)
     assert "com.apple.akd" in out
     assert "com.apple.dt.Xcode" not in out
-    assert "MacBookPro13,2" in out, "Hardware-Identitaet muss erhalten bleiben"
+    assert "MacBookPro13,2" in out, "hardware identity must be preserved"
 
 
 def test_503_with_small_body_is_diagnosed_not_retried():
-    """Apples Edge-Ablehnung sieht aus wie ein Ausfall. Sie ist keiner."""
+    """Apple's edge rejection looks like an outage. It isn't one."""
     page = (b"<html><head><title>503</title></head><body>"
             b"<center>Apple</center></body></html>")
     with pytest.raises(AnisetteClientInfoRejected):
@@ -137,7 +137,7 @@ def test_rate_limit_reports_retry_after():
     assert "10 minutes" in str(exc.value)
 
 
-# -- 2FA-Erkennung ---------------------------------------------------------
+# -- 2FA detection --------------------------------------------------------
 
 from modstaller.apple.gsa import GSAClient, _describe  # noqa: E402
 
@@ -150,22 +150,22 @@ from modstaller.apple.gsa import GSAClient, _describe  # noqa: E402
     ({}, {}, False),
 ])
 def test_two_factor_detected_wherever_apple_puts_it(complete, spd, expected):
-    """Apple legt den Hinweis in Status.au ab, nicht im verschluesselten spd.
+    """Apple puts the hint in Status.au, not in the encrypted spd.
 
-    Wird das uebersehen, laeuft der Login scheinbar durch und der
-    anschliessende Token-Tausch scheitert mit "Enter the correct password" -
-    ein Wortlaut, der in die voellig falsche Richtung zeigt.
+    If that is missed, the login appears to succeed and the subsequent token
+    exchange fails with "Enter the correct password" - wording that points
+    in completely the wrong direction.
     """
     assert GSAClient._needs_2fa(complete, spd) is expected
 
 
 def test_describe_never_leaks_secrets():
     out = _describe({
-        "sk": b"\x01" * 32, "spd": b"\x02" * 64, "GsIdmsToken": "geheim",
+        "sk": b"\x01" * 32, "spd": b"\x02" * 64, "GsIdmsToken": "secret",
         "Status": {"ec": 0, "au": "trustedDeviceSecondaryAuth"},
-        "ptxid": "harmlos",
+        "ptxid": "harmless",
     }, "test")
-    assert "geheim" not in out
-    assert "trustedDeviceSecondaryAuth" in out, "Diagnose muss brauchbar bleiben"
-    assert "harmlos" in out
-    assert "<verborgen>" in out or "Byte>" in out
+    assert "secret" not in out
+    assert "trustedDeviceSecondaryAuth" in out, "diagnostics must stay useful"
+    assert "harmless" in out
+    assert "<hidden>" in out or "bytes>" in out

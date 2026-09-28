@@ -1,6 +1,6 @@
-"""Systemcheck: ist alles da, was ModStaller braucht?
+"""System check: is everything there that ModStaller needs?
 
-Liefert nur Daten. Wie sie aussehen, entscheiden CLI und Oberflaeche.
+Returns data only. How it looks is up to the CLI and the interface.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from pathlib import Path
 from . import config
 from .i18n import _
 
-#: Ein Problem verhindert den Betrieb. Ein offener Schritt ist kein Fehler
-#: des Systems, muss aber sichtbar bleiben (Anmeldung, iPhone anstecken).
+#: A problem prevents operation. An open step is not a fault of the system
+#: but must stay visible (signing in, plugging in the iPhone).
 PROBLEM, TODO = "problem", "todo"
 
 
@@ -23,20 +23,20 @@ class Check:
     label: str
     ok: bool
     detail: str = ""
-    #: Was bei ``ok == False`` zu tun ist.
+    #: What to do when ``ok == False``.
     hint: str = ""
     kind: str = PROBLEM
 
 
-#: Wo der Apple-Geraetedienst unter Windows lauscht (usbmuxd-Protokoll).
+#: Where the Apple device service listens on Windows (usbmuxd protocol).
 APPLE_MOBILE_DEVICE = ("127.0.0.1", 27015)
 
 
 def _usb_service_check(posix: bool = config.POSIX) -> Check:
-    """Der Dienst, ueber den das iPhone per USB erreichbar ist."""
+    """The service through which the iPhone is reachable over USB."""
     if not posix:
-        # Unter Windows spricht pymobiledevice3 den Apple-Geraetedienst
-        # ueber TCP an. Er laeuft dauerhaft, sobald er installiert ist.
+        # On Windows pymobiledevice3 talks to the Apple device service over
+        # TCP. It runs permanently once installed.
         try:
             socket.create_connection(APPLE_MOBILE_DEVICE, timeout=1).close()
             return Check(_("Apple device service"), True, _("running"))
@@ -46,9 +46,9 @@ def _usb_service_check(posix: bool = config.POSIX) -> Check:
                 hint=_("Install the “Apple Devices” app from the Microsoft "
                        "Store (or iTunes) - it brings the service along."))
 
-    # usbmuxd startet erst, wenn ein Geraet angesteckt wird (udev bzw.
-    # Socket-Aktivierung). Ohne iPhone fehlt der Socket also zu Recht - dann
-    # zaehlt, ob das Programm ueberhaupt installiert ist.
+    # usbmuxd only starts when a device is plugged in (udev or socket
+    # activation). Without an iPhone the socket is rightly missing - then
+    # what counts is whether the program is installed at all.
     sock = Path("/var/run/usbmuxd")
     daemon = (shutil.which("usbmuxd")
               or next((p for p in ("/usr/bin/usbmuxd", "/usr/sbin/usbmuxd")
@@ -61,6 +61,31 @@ def _usb_service_check(posix: bool = config.POSIX) -> Check:
           path=daemon) if daemon else _("not installed"),
         hint="Arch: sudo pacman -S usbmuxd - Debian/Ubuntu: sudo apt "
              "install usbmuxd - Fedora: sudo dnf install usbmuxd")
+
+
+#: Label of the JIT engine check - the packaging smoke test looks for it.
+JIT_ENGINE = "JIT engine (QuickJS)"
+
+
+def _jit_engine_check() -> Check:
+    """QuickJS and our side of the JIT protocol - both have to be bundled.
+
+    Loading the script also catches a syntax error before a user sits in
+    front of a waiting app.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    from .device.jit import HOST_SCRIPT
+    try:
+        import quickjs
+        quickjs.Context().eval(HOST_SCRIPT.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return Check(JIT_ENGINE, False, str(exc).splitlines()[0])
+    try:
+        ver = version("quickjs-ng")
+    except PackageNotFoundError:
+        ver = ""
+    return Check(JIT_ENGINE, True, ver)
 
 
 async def run_checks() -> list[Check]:
@@ -83,6 +108,8 @@ async def run_checks() -> list[Check]:
             ver = getattr(m, "__version__", "")
         checks.append(Check(label, True, ver))
 
+    checks.append(_jit_engine_check())
+
     settings = config.Settings.load()
 
     zsign = config.find_zsign(settings.zsign_path)
@@ -94,9 +121,9 @@ async def run_checks() -> list[Check]:
     ca = config.GSA_CA_BUNDLE
     checks.append(Check(_("Apple CA bundle"), ca.exists(), str(ca)))
 
-    # Anisette ist das Nadeloehr fuer den Login - lieber hier merken. Welche
-    # Quelle zaehlt, steht in den Einstellungen und nicht hier; das Label nennt
-    # sie, damit der Check nicht verschweigt, wohin die Identifier gehen.
+    # Anisette is the bottleneck for login - better to notice it here. Which
+    # source applies is set in the settings, not here; the label names it so
+    # the check doesn't hide where the identifiers go.
     label = (_("Anisette (local)") if settings.anisette_provider == "local"
              else _("Anisette (server: {url})",
                     url=settings.anisette_server))

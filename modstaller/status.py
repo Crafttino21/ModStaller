@@ -1,7 +1,7 @@
-"""Der Zustand auf einen Blick: iPhone, Anmeldung, was demnaechst ablaeuft.
+"""The state at a glance: iPhone, sign-in, what expires soon.
 
-Das sind die drei Fragen, die vor jeder Aktion zaehlen. Die Oberflaeche
-beantwortet sie zuerst und bietet dann vorrangig an, was gerade dran ist.
+These are the three questions that matter before any action. The interface
+answers them first and then puts forward whatever is due right now.
 """
 
 from __future__ import annotations
@@ -11,10 +11,10 @@ from pathlib import Path
 
 from .errors import ModStallerError
 
-#: Ab hier gilt ein Profil als dringend.
+#: From here on a profile counts as urgent.
 URGENT_DAYS = 2.0
 
-#: Wo wir nach IPAs suchen, wenn keine angegeben wird.
+#: Where we look for IPAs when none is given.
 IPA_DIRS = (Path.home() / "Downloads", Path.home() / "Dokumente",
             Path.home() / "Documents", Path.home() / "Desktop",
             Path.home() / "Schreibtisch")
@@ -42,7 +42,7 @@ class Status:
 
 
 async def device_status(st: Status) -> None:
-    """Traegt ein, was das iPhone ueber sich sagt - oder dass keins da ist."""
+    """Records what the iPhone says about itself - or that there is none."""
     try:
         from .device.connection import ServiceProvider, battery, device_info
         async with ServiceProvider() as sp:
@@ -54,8 +54,8 @@ async def device_status(st: Status) -> None:
             st.developer_mode = info.developer_mode
             st.battery = await battery(sp.lockdown)
     except ModStallerError as exc:
-        # Kein Geraet ist ein Zustand, kein Fehler. Ein gesperrtes oder
-        # ungepairtes schon - das muss man sehen, um es zu beheben.
+        # No device is a state, not an error. A locked or unpaired one is -
+        # you need to see that in order to fix it.
         from .errors import DeviceNotFound
         if not isinstance(exc, DeviceNotFound):
             st.error = str(exc)
@@ -64,10 +64,10 @@ async def device_status(st: Status) -> None:
 
 
 async def gather_status() -> Status:
-    """Nur lokal und ueber USB - keine Apple-Abfrage.
+    """Only local and over USB - no Apple request.
 
-    Der Zustand soll sofort stehen. Kontingente kosten einen Netzaufruf und
-    werden deshalb erst auf Nachfrage geholt.
+    The state should be ready immediately. Quotas cost a network call and
+    are therefore only fetched on demand.
     """
     from .apple.session import Session
     from .state import store

@@ -1,10 +1,10 @@
-"""Das JIT-Protokoll: Rahmung, Registerlesen, Haltepunkt-Erkennung.
+"""The JIT protocol: framing, register reading, breakpoint detection.
 
-Auf Geraeten mit TXM/SPTM ist JIT keine einmalige Freischaltung mehr, sondern
-ein Gespraech: die App bittet per Haltepunkt um Vorbereitung eines Bereichs,
-der Debugger schreibt in jede Seite und antwortet mit der Adresse. Faellt ein
-Glied dieser Kette aus, bleibt die App wortlos beim Start haengen - deshalb
-steht jedes einzeln unter Test.
+On devices with TXM/SPTM, JIT is no longer a one-off unlock but a
+conversation: the app asks via breakpoint for a region to be prepared, the
+debugger writes into every page and answers with the address. If one link in
+this chain fails, the app silently hangs on launch - so each one is tested
+individually.
 """
 
 from __future__ import annotations
@@ -15,12 +15,12 @@ from modstaller.device.gdb import (
     REG_PC, REG_X0, REG_X1, REG_X16, GdbClient, StopReply, frame, int_to_le_hex,
     le_hex_to_int,
 )
-from modstaller.device.jit import PAGE_SIZE, _brk_immediate, _is_brk, _prepare_region
+from modstaller.device.jit import PAGE_SIZE, has_txm, touch_pages
 
 
 class FakeConn:
-    """Liefert vorbereitete Segmente - auch zerstueckelt und mit getrennten
-    Empfangsbestaetigungen, so wie es ueber die Leitung ankommt."""
+    """Delivers prepared segments - fragmented too, and with separate
+    acknowledgements, just as they arrive over the wire."""
 
     def __init__(self, chunks: list[bytes]):
         self.chunks = list(chunks)
@@ -33,17 +33,17 @@ class FakeConn:
         return self.chunks.pop(0) if self.chunks else b""
 
 
-# -- Rahmung ---------------------------------------------------------------
+# -- Framing ---------------------------------------------------------------
 
 
 def test_checksum_matches_known_packet():
-    """Gegenprobe mit einem Wert, der anderswo fest verdrahtet ist."""
+    """Cross-check against a value that is hard-wired elsewhere."""
     assert frame("QStartNoAckMode") == b"$QStartNoAckMode#b0"
     assert frame("D") == b"$D#44"
 
 
 def test_checksum_is_computed_not_guessed():
-    """Bei vAttach haengt die Pruefsumme an der Prozessnummer."""
+    """With vAttach the checksum depends on the process number."""
     assert frame("vAttach;1") != frame("vAttach;2")
 
 
@@ -52,7 +52,7 @@ def test_register_encoding_roundtrip():
         assert le_hex_to_int(int_to_le_hex(value)) == value
 
 
-# -- Antworten lesen -------------------------------------------------------
+# -- Reading replies -------------------------------------------------------
 
 
 STOP = ("T11thread:1f4;00:0000000000000000;01:0040000000000000;"
@@ -99,185 +99,297 @@ async def test_silence_does_not_hang_forever():
     assert await gdb.send("c") == ""
 
 
-# -- Haltepunkte -----------------------------------------------------------
-
-
-def test_recognises_the_jit_breakpoint():
-    instruction = 0xD43E01A0            # brk #0xf00d
-    assert _is_brk(instruction)
-    assert _brk_immediate(instruction) == 0xF00D
-
-
-def test_ordinary_instruction_is_not_a_breakpoint():
-    assert not _is_brk(0xD503201F)      # nop
-
-
-# -- Speicherfreigabe ------------------------------------------------------
-
-
-class RecordingGdb:
-    def __init__(self):
-        self.reads: list[tuple[int, int]] = []
-        self.writes: list[tuple[int, bytes]] = []
-
-    async def read_memory(self, address: int, length: int) -> bytes:
-        self.reads.append((address, length))
-        return b"\x42"
-
-    async def write_memory(self, address: int, data: bytes) -> None:
-        self.writes.append((address, data))
+@pytest.mark.asyncio
+async def test_a_batch_goes_out_in_one_piece():
+    """One round trip per page is what made large regions take minutes."""
+    conn = FakeConn([b"$OK#9a$OK", b"#9a$E01#a6"])
+    gdb = GdbClient(conn)
+    assert await gdb.send_batch(["M1,1:00", "M2,1:00", "M3,1:00"]) == \
+        ["OK", "OK", "E01"]
+    assert len(conn.sent) == 1
 
 
 @pytest.mark.asyncio
-async def test_every_page_is_touched_exactly_once():
-    """Das Ausfuehrungsrecht entsteht durch den Schreibzugriff selbst -
-    eine uebersprungene Seite faellt erst zur Laufzeit auf."""
-    gdb = RecordingGdb()
-    pages = await _prepare_region(gdb, 0x100000000, 3 * PAGE_SIZE)
-    assert pages == 3
-    assert [a for a, _ in gdb.writes] == [
-        0x100000000, 0x100000000 + PAGE_SIZE, 0x100000000 + 2 * PAGE_SIZE]
+async def test_batches_are_split():
+    conn = FakeConn([b"$OK#9a"] * 5)
+    await GdbClient(conn).send_batch(["D"] * 5, batch=2)
+    assert len(conn.sent) == 3
 
 
-@pytest.mark.asyncio
-async def test_content_is_written_back_unchanged():
-    """Geschrieben wird, was gelesen wurde - der Zugriff zaehlt, nicht der
-    Inhalt. Etwas anderes hineinzuschreiben wuerde den Code zerstoeren."""
-    gdb = RecordingGdb()
-    await _prepare_region(gdb, 0x100000000, PAGE_SIZE)
-    assert gdb.writes == [(0x100000000, b"\x42")]
+# -- Which devices need the conversation -----------------------------------
 
 
-@pytest.mark.asyncio
-async def test_partial_page_still_gets_touched():
-    gdb = RecordingGdb()
-    assert await _prepare_region(gdb, 0x100000000, 100) == 1
+@pytest.mark.parametrize("product, version, expected", [
+    ("iPhone14,2", "26.0", True),       # 13 Pro, A15: first with TXM
+    ("iPhone13,4", "26.1", False),      # 12 Pro Max, A14
+    ("iPhone17,1", "18.6", False),      # TXM, but iOS 18 doesn't lock JIT
+    ("iPad14,5", "26.0", True),         # iPad Pro M2
+    ("iPad13,8", "26.0", False),        # iPad Pro M1
+    ("iPhone13,4", "27.0", True),       # iOS 27: everything
+    ("iPad8,11", "27.0", False),        # ... except these two
+    ("?", "26.0", True),                # unknown: rather talk
+    ("iPhone14,2", "?", True),
+])
+def test_txm_detection(product, version, expected):
+    assert has_txm(product, version) is expected
 
 
-# -- Die Gespraechsfuehrung ------------------------------------------------
+# -- The conversation (jit_host.js against a simulated debugserver) --------
 
-from modstaller.device.jit import (  # noqa: E402
-    BRK_JIT, BRK_LEGACY, CMD_DETACH, CMD_PREPARE_REGION,
-    CMD_SET_DETACH_AFTER_FIRST, Jit26Session, JitResult,
-)
+from modstaller.device.jit import JitResult, ScriptHost  # noqa: E402
+from modstaller.errors import DeviceError  # noqa: E402
+
+BRK_F00D = 0xD43E01A0        # brk #0xf00d
+BRK_69 = 0xD4200D20          # brk #0x69
+NOP = 0xD503201F
 
 
-class ScriptedGdb:
-    """Ein Debugger, der eine vorbereitete Folge von Halten abspielt."""
+class FakeDebugger:
+    """Plays debugserver: answers the raw packets the script sends."""
 
     ALLOCATED = 0x200000000
 
-    def __init__(self, stops: list[StopReply], instruction: int):
-        self._stops = list(stops)
-        self._instruction = instruction
+    def __init__(self, stops: list[str], code: dict[int, int],
+                 memory: dict[int, bytes] | None = None):
+        self.stops = list(stops)
+        self.code = code
+        self.memory = memory or {}
+        self.sent: list[str] = []
         self.registers: dict[int, int] = {}
-        self.prepared: list[tuple[int, int]] = []
-        self.detached = False
+        self.writes: list[tuple[int, bytes]] = []
         self.allocations: list[int] = []
+        self.batches: list[int] = []
+        self.detached = False
 
-    async def cont(self, timeout=None) -> StopReply:
-        return self._stops.pop(0) if self._stops else StopReply("")
+    async def send(self, payload: str, *, expect_reply: bool = True,
+                   timeout: float | None = None) -> str:
+        self.sent.append(payload)
+        reply = self._answer(payload)
+        return reply if expect_reply else ""
 
-    async def read_memory(self, address: int, length: int) -> bytes:
-        if length == 4:
-            return self._instruction.to_bytes(4, "little")
-        return b"\x00" * length
+    async def send_batch(self, payloads: list[str], *, batch: int = 128):
+        self.batches.append(len(payloads))
+        return [self._answer(p) for p in payloads]
 
-    async def write_memory(self, address: int, data: bytes) -> None:
-        self.prepared.append((address, len(data)))
+    def _answer(self, payload: str) -> str:
+        if payload == "c" or payload.startswith("vCont"):
+            return self.stops.pop(0) if self.stops else ""
+        if payload == "D":
+            self.detached = True
+            return "OK"
+        if payload.startswith("_M"):
+            size = int(payload[2:].split(",")[0], 16)
+            self.allocations.append(size)
+            return f"{self.ALLOCATED:x}"
+        if payload.startswith("m"):
+            address, length = (int(v, 16) for v in payload[1:].split(","))
+            if address in self.code:
+                return self.code[address].to_bytes(4, "little").hex()
+            if address in self.memory:
+                return self.memory[address][:length].hex()
+            return "42" * length
+        if payload.startswith("M"):
+            where, data = payload[1:].split(":")
+            self.writes.append((int(where.split(",")[0], 16),
+                                bytes.fromhex(data)))
+            return "OK"
+        if payload.startswith("P"):
+            number, value = payload[1:].split(";")[0].split("=")
+            self.registers[int(number, 16)] = le_hex_to_int(value)
+            return "OK"
+        return ""
 
-    async def set_register(self, number: int, value: int, thread: str) -> None:
-        self.registers[number] = value
 
-    async def allocate(self, size: int, permissions: str = "rx") -> int:
-        self.allocations.append(size)
-        return self.ALLOCATED
-
-    async def detach(self) -> None:
-        self.detached = True
+def _stop(pc: int, signal: str = "05", **regs: int) -> str:
+    numbers = {"x0": 0x00, "x1": 0x01, "x16": 0x10}
+    body = "".join(f"{numbers[k]:02x}:{int_to_le_hex(v)};"
+                   for k, v in regs.items())
+    return f"T{signal}thread:1f4;{body}20:{int_to_le_hex(pc)};"
 
 
-def _stop(regs: dict[int, int]) -> StopReply:
-    body = "".join(f"{n:02x}:{int_to_le_hex(v)};" for n, v in regs.items())
-    return StopReply(f"T11thread:1f4;{body}")
-
-
-BRK_INSTR = 0xD43E01A0        # brk #0xf00d
-BRK_69_INSTR = 0xD4200D20     # brk #0x69
+async def _talk(gdb: FakeDebugger, **kwargs) -> tuple[JitResult, list[str]]:
+    said: list[str] = []
+    result = JitResult("x", 1)
+    await ScriptHost(gdb, result, said.append, **kwargs).run()
+    return result, said
 
 
 @pytest.mark.asyncio
-async def test_legacy_breakpoint_reads_the_size_from_x0():
-    """Beim alten Aufruf steht in x0 die *Groesse*, nicht die Adresse.
+async def test_region_at_the_apps_address():
+    gdb = FakeDebugger([_stop(0x1000, x16=1, x0=0x140000000,
+                              x1=2 * PAGE_SIZE)], {0x1000: BRK_F00D})
+    result, _said = await _talk(gdb)
 
-    Wer das mit dem neueren verwechselt, fordert einen Bereich an der Adresse
-    "Groesse" an - die App bekommt Unsinn und wartet weiter auf JIT.
-    """
-    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X0: 0x400000, REG_X1: 0})],
-                      BRK_69_INSTR)
-    result = JitResult("x", 1)
-    await Jit26Session(gdb, result, lambda m: None).run()
-
-    assert gdb.allocations == [0x400000], "Groesse muss aus x0 kommen"
-    assert gdb.registers[REG_X0] == ScriptedGdb.ALLOCATED, \
-        "die zugeteilte Adresse muss zurueckgemeldet werden"
+    assert gdb.allocations == [], "nothing is allocated when an address is given"
+    assert [a for a, _d in gdb.writes] == [0x140000000,
+                                           0x140000000 + PAGE_SIZE]
+    assert gdb.registers[REG_X0] == 0x140000000, "address goes back in x0"
+    assert gdb.registers[REG_PC] == 0x1004, "the app must not stop there again"
     assert result.prepared_regions == 1
+    assert result.prepared_bytes == 2 * PAGE_SIZE
 
 
 @pytest.mark.asyncio
-async def test_new_call_reads_address_from_x0_and_size_from_x1():
-    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X16: CMD_PREPARE_REGION,
-                                REG_X0: 0x140000000, REG_X1: PAGE_SIZE})],
-                      BRK_INSTR)
-    result = JitResult("x", 1)
-    await Jit26Session(gdb, result, lambda m: None).run()
-
-    assert gdb.allocations == [], "mit gegebener Adresse wird nichts zugeteilt"
-    assert gdb.prepared == [(0x140000000, 1)]
-    assert result.prepared_bytes == PAGE_SIZE
+async def test_pages_keep_their_content():
+    """What was read is written back - the access counts, not the content.
+    Writing anything else would destroy code already in the region."""
+    gdb = FakeDebugger([_stop(0x1000, x16=1, x0=0x140000000, x1=PAGE_SIZE)],
+                       {0x1000: BRK_F00D})
+    await _talk(gdb)
+    assert gdb.writes == [(0x140000000, b"\x42")]
 
 
 @pytest.mark.asyncio
 async def test_zero_address_lets_the_debugger_choose():
-    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X16: CMD_PREPARE_REGION,
-                                REG_X0: 0, REG_X1: PAGE_SIZE})], BRK_INSTR)
-    await Jit26Session(gdb, JitResult("x", 1), lambda m: None).run()
+    gdb = FakeDebugger([_stop(0x1000, x16=1, x0=0, x1=PAGE_SIZE)],
+                       {0x1000: BRK_F00D})
+    await _talk(gdb)
     assert gdb.allocations == [PAGE_SIZE]
+    assert gdb.registers[REG_X0] == FakeDebugger.ALLOCATED
 
 
 @pytest.mark.asyncio
 async def test_detach_ends_the_conversation():
-    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X16: CMD_DETACH})],
-                      BRK_INSTR)
-    result = JitResult("x", 1)
-    await Jit26Session(gdb, result, lambda m: None).run()
+    gdb = FakeDebugger([_stop(0x1000, x16=0)], {0x1000: BRK_F00D})
+    result, said = await _talk(gdb)
     assert gdb.detached and result.detached_cleanly
+    assert result.notes == []
+    assert any("JIT is in place" in s for s in said)
+
+
+#: Modelled on what Amethyst sends: the old brk #0x69 (size in x0) mapped
+#: onto PrepareRegion, plus a command that detaches after the first region.
+EXTENSION = """
+logLevel = LOG_INFO;
+let detachAfterFirst = false;
+legacyCommands[0x69] = function (brkResponse) {
+    x1 = x0;
+    x0 = 0;
+    JIT26PrepareRegion(brkResponse);
+    if (detachAfterFirst) {
+        JIT26Detach();
+    }
+};
+commands[3] = function (brkResponse) {
+    detachAfterFirst = x0 != 0;
+};
+"""
 
 
 @pytest.mark.asyncio
-async def test_detach_after_first_request_is_honoured():
-    """Manche Apps lassen den Debugger nach der ersten Anfrage gehen."""
-    gdb = ScriptedGdb([
-        _stop({REG_PC: 0x1000, REG_X16: CMD_SET_DETACH_AFTER_FIRST,
-                 REG_X0: 1}),
-        _stop({REG_PC: 0x1000, REG_X0: 0x8000, REG_X1: 0}),
-    ], BRK_INSTR)
-    # Der zweite Halt ist ein 0x69 - dafuer braucht es die andere Instruktion.
-    gdb._instruction = BRK_INSTR
-    result = JitResult("x", 1)
-    session = Jit26Session(gdb, result, lambda m: None)
-    # Ersten Halt verarbeiten, dann auf den alten Haltepunkt umschalten.
-    await session._handle(gdb._stops.pop(0))
-    assert session._detach_after_first
-    gdb._instruction = BRK_69_INSTR
-    await session._handle(gdb._stops.pop(0))
-    assert gdb.detached, "nach der ersten Anfrage muss geloest werden"
+async def test_an_extension_from_the_app_really_runs():
+    """The reason for the port: newer apps bring their own commands. Before,
+    the script was accepted and ignored - the app then waited forever."""
+    script = EXTENSION.encode() + b"\x00"
+    gdb = FakeDebugger(
+        [_stop(0x1000, x16=2, x0=0x5000, x1=len(script)),
+         _stop(0x1000, x16=3, x0=1),
+         _stop(0x2000, x0=0x400000)],
+        {0x1000: BRK_F00D, 0x2000: BRK_69},
+        memory={0x5000: script})
+    result, said = await _talk(gdb)
+
+    assert any("extension" in s for s in said)
+    assert gdb.allocations == [0x400000], "size must come from x0"
+    assert gdb.registers[REG_X0] == FakeDebugger.ALLOCATED
+    assert result.prepared_regions == 1
+    assert gdb.detached, "command 3 asked to detach after the first region"
+    assert result.notes == []
 
 
 @pytest.mark.asyncio
-async def test_program_counter_moves_past_the_breakpoint():
-    """Ohne das haelt die App an derselben Stelle wieder an - endlos."""
-    gdb = ScriptedGdb([_stop({REG_PC: 0x1000, REG_X16: CMD_DETACH})],
-                      BRK_INSTR)
-    await Jit26Session(gdb, JitResult("x", 1), lambda m: None).run()
-    assert gdb.registers[REG_PC] == 0x1004
+async def test_old_breakpoint_without_extension_answers_the_universal_marker():
+    """Amethyst probes with brk #0x69 first and only goes on if x0 holds
+    0x690000E0 - what StikDebug's "P0=E0000069" really puts there (P takes
+    little-endian bytes). Anything else and the app refuses: "legacy
+    script, not supported"."""
+    gdb = FakeDebugger([_stop(0x2000, x0=0x400000)], {0x2000: BRK_69})
+    result, _said = await _talk(gdb)
+    assert gdb.allocations == []
+    assert gdb.registers[REG_X0] & 0xFFFFFFFF == 0x690000E0
+    assert result.prepared_regions == 0
+
+
+@pytest.mark.asyncio
+async def test_a_broken_extension_is_reported_not_fatal():
+    script = b"this is not javascript(\x00"
+    gdb = FakeDebugger([_stop(0x1000, x16=2, x0=0x5000, x1=len(script)),
+                        _stop(0x1000, x16=0)],
+                       {0x1000: BRK_F00D}, memory={0x5000: script})
+    result, _said = await _talk(gdb)
+    assert any("extension failed" in n for n in result.notes)
+    assert result.detached_cleanly
+
+
+@pytest.mark.asyncio
+async def test_ordinary_signal_is_passed_on():
+    """Otherwise the debugger swallows a crash of the app. The reply to
+    vCont is already the next stop - no extra continue."""
+    gdb = FakeDebugger([_stop(0x3000, signal="0b"), _stop(0x1000, x16=0)],
+                       {0x3000: NOP, 0x1000: BRK_F00D})
+    await _talk(gdb)
+    assert "vCont;S0b:1f4" in gdb.sent
+    assert gdb.sent.count("c") == 1
+    assert gdb.detached
+
+
+@pytest.mark.asyncio
+async def test_unknown_command_is_noted():
+    gdb = FakeDebugger([_stop(0x1000, x16=9)], {0x1000: BRK_F00D})
+    result, _said = await _talk(gdb)
+    assert "Skipped unknown command 9." in result.notes
+
+
+@pytest.mark.asyncio
+async def test_silence_and_exit_end_the_conversation():
+    result, _said = await _talk(FakeDebugger([], {}))
+    assert any("stopped reporting back" in n for n in result.notes)
+    result, _said = await _talk(FakeDebugger(["W00"], {}))
+    assert any("quit" in n for n in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_a_connection_error_surfaces_as_itself():
+    """Not as a JavaScript exception wrapping it."""
+    class Broken(FakeDebugger):
+        async def send(self, payload, **kwargs):
+            raise DeviceError("cable pulled")
+
+    with pytest.raises(DeviceError, match="cable pulled"):
+        await _talk(Broken([], {}))
+
+
+@pytest.mark.asyncio
+async def test_verbose_passes_the_trace_on():
+    gdb = FakeDebugger([_stop(0x1000, x16=0)], {0x1000: BRK_F00D})
+    _result, said = await _talk(gdb, verbose=True)
+    assert any("Breakpoint 0xf00d" in s for s in said)
+
+
+# -- Memory release --------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_every_page_is_touched_exactly_once():
+    """The right to execute comes from the write access itself - a skipped
+    page only shows up at runtime."""
+    gdb = FakeDebugger([], {})
+    assert await touch_pages(gdb, 0x100000000, 3 * PAGE_SIZE) == 3
+    assert [a for a, _d in gdb.writes] == [
+        0x100000000, 0x100000000 + PAGE_SIZE, 0x100000000 + 2 * PAGE_SIZE]
+    assert gdb.batches == [3, 3], "one batch to read, one to write back"
+
+
+@pytest.mark.asyncio
+async def test_partial_page_still_gets_touched():
+    assert await touch_pages(FakeDebugger([], {}), 0x100000000, 100) == 1
+
+
+@pytest.mark.asyncio
+async def test_unreadable_page_is_an_error():
+    class Unreadable(FakeDebugger):
+        def _answer(self, payload):
+            return "E08" if payload.startswith("m") else super()._answer(payload)
+
+    with pytest.raises(DeviceError):
+        await touch_pages(Unreadable([], {}), 0x100000000, PAGE_SIZE)

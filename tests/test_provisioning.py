@@ -1,9 +1,9 @@
-"""Kontingent-Logik.
+"""Quota logic.
 
-Apple laesst pro Woche zehn *neu angelegte* App-IDs zu. Vorhandene zu
-loeschen gibt kein Kontingent zurueck - wer es doch tut, nimmt einer fremden
-App die Moeglichkeit, je wieder erneuert zu werden. Deshalb wird
-ausgewichen, nicht geloescht, und was auf dem Geraet liegt, bleibt tabu.
+Apple allows ten *newly created* App IDs per week. Deleting existing ones
+gives no quota back - whoever does it anyway takes away a foreign app's
+ability to ever be renewed. So we fall back rather than delete, and
+whatever is on the device stays off-limits.
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ def test_installed_app_id_is_never_offered():
 
 
 def test_extension_of_installed_app_is_protected():
-    """Die Extension traegt die App-ID der App als Praefix - ohne sie laesst
-    sich die App nicht mehr vollstaendig signieren."""
+    """The extension carries the app's App ID as a prefix - without it the
+    app can no longer be signed completely."""
     existing = [_app_id("com.google.ios.youtube.PP2WVWJJYZ.OpenYouTube.Extension")]
     assert spare_app_id(existing, INSTALLED) is None
 
@@ -48,7 +48,7 @@ def test_unused_app_id_is_offered():
 
 
 def test_similar_prefix_is_not_confused_with_a_child():
-    """'…youtubeXY' faengt zwar mit '…youtube' an, gehoert aber nicht dazu."""
+    """'…youtubeXY' does start with '…youtube', but does not belong to it."""
     existing = [_app_id("com.google.ios.youtube.PP2WVWJJYZextra")]
     assert spare_app_id(existing, INSTALLED) is not None
 
@@ -62,21 +62,21 @@ def test_case_differences_still_protect():
     assert spare_app_id(existing, INSTALLED) is None
 
 
-# -- Bundle-ID und Account-Art --------------------------------------------
+# -- Bundle ID and account type -------------------------------------------
 
 
 def test_bundle_id_keeps_team_id_spelling():
-    """Gross-/Kleinschreibung entscheidet, ob eine vorhandene App-ID
-    getroffen wird - und damit, ob Kontingent verbraucht wird."""
+    """Upper/lower case decides whether an existing App ID is matched -
+    and with that, whether quota is used up."""
     assert (derive_bundle_id("com.google.ios.youtube", "PP2WVWJJYZ")
             == "com.google.ios.youtube.PP2WVWJJYZ")
 
 
 @pytest.mark.parametrize("team_type", ["Individual", "Free", "individual"])
 def test_individual_accounts_are_assumed_free(team_type):
-    """Apple meldet kostenlose wie bezahlte Einzelaccounts als 'Individual'.
-    Der Irrtum Richtung 'kostenlos' kostet eine Extension, der umgekehrte
-    das gesamte Wochenkontingent."""
+    """Apple reports free and paid individual accounts alike as 'Individual'.
+    Erring towards 'free' costs an extension, the other way round the whole
+    weekly quota."""
     caps = Capabilities.for_team(Team("T", "n", team_type, "active"))
     assert caps.is_free
 

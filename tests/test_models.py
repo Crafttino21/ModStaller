@@ -1,4 +1,4 @@
-"""Modellname und Bauform fuer das Geraetebild in der Oberflaeche."""
+"""Model name and form factor for the device picture in the UI."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from modstaller.device.models import (
 
 @pytest.mark.parametrize("product, name", [
     ("iPhone17,2", "iPhone 16 Pro Max"),
-    ("iPhone9,3", "iPhone 7"),            # "(GSM)" gehoert nicht in die Anzeige
-    ("iPhone99,1", "iPhone99,1"),         # unbekannt: lieber roh als falsch
+    ("iPhone9,3", "iPhone 7"),            # "(GSM)" isn't shown to users
+    ("iPhone99,1", "iPhone99,1"),         # unknown: better raw than wrong
 ])
 def test_marketing_name(product, name):
     assert marketing_name(product) == name
@@ -22,7 +22,7 @@ def test_marketing_name(product, name):
 @pytest.mark.parametrize("product, form", [
     ("iPhone10,4", HOME_BUTTON),   # iPhone 8
     ("iPhone10,3", NOTCH),         # iPhone X
-    ("iPhone12,8", HOME_BUTTON),   # SE 2 - neue Nummer, altes Gehaeuse
+    ("iPhone12,8", HOME_BUTTON),   # SE 2 - new number, old body
     ("iPhone14,7", NOTCH),         # iPhone 14
     ("iPhone15,2", ISLAND),        # iPhone 14 Pro
     ("iPhone17,5", NOTCH),         # iPhone 16e

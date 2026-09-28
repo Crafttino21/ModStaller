@@ -1,15 +1,15 @@
-"""IPA auf das Geraet bringen.
+"""Getting an IPA onto the device.
 
-Zwei Wege, weil iOS 17+ die Regeln geaendert hat:
+Two routes, because iOS 17+ changed the rules:
 
-* ``lockdown``  - der klassische Weg ueber usbmux.
-* ``rsd``       - ueber den CoreDevice-Tunnel, Dienstname
+* ``lockdown``  - the classic route via usbmux.
+* ``rsd``       - via the CoreDevice tunnel, service name
   ``com.apple.mobile.installation_proxy.shim.remote``.
 
-Welcher Weg traegt, haengt an der iOS-Version. Wir probieren lockdown zuerst
-(schneller, kein Tunnel-Aufbau) und wechseln bei Fehlern auf RSD. Das Ergebnis
-wird zurueckgemeldet, damit der Aufrufer es merken und beim naechsten Mal
-direkt den richtigen Weg nehmen kann.
+Which route works depends on the iOS version. We try lockdown first (faster,
+no tunnel setup) and switch to RSD on errors. The route taken is reported
+back so the caller can remember it and take the right one straight away next
+time.
 """
 
 from __future__ import annotations
@@ -24,19 +24,19 @@ import re
 from ..errors import DeviceError
 from ..i18n import _
 
-#: Wie lange wir auf ein Install warten, bevor wir es als haengend ansehen.
-#: Ein haengendes installation_proxy ist das typische Symptom dafuer, dass der
-#: Dienst ueber den falschen Transport angesprochen wurde.
+#: How long we wait for an install before considering it hung.
+#: A hanging installation_proxy is the typical symptom of the service having
+#: been addressed over the wrong transport.
 INSTALL_TIMEOUT = 300.0
 
 
-#: Apples Meldung, wenn das Geraet sein Kontingent fuer Gratis-Profile
-#: erreicht hat. Sie traegt die belegten Plaetze im Klartext mit.
+#: Apple's message when the device has reached its quota for free profiles.
+#: It lists the occupied slots in plain text.
 _APP_LIMIT = "maximum number of installed apps using a free developer profile"
 
 
 def _slot_limit_message(text: str) -> str:
-    """Macht aus Apples Rohtext eine Ansage, mit der man etwas anfangen kann."""
+    """Turns Apple's raw text into a message one can actually act on."""
     installed = re.findall(r'"[A-Z0-9]+\.([^"]+)"', text)
     listing = "\n".join(f"    {b}" for b in installed)
     return (
@@ -56,7 +56,7 @@ def _slot_limit_message(text: str) -> str:
 @dataclass
 class InstallResult:
     bundle_id: str | None
-    transport: str          # "lockdown" oder "rsd"
+    transport: str          # "lockdown" or "rsd"
     upgraded: bool
 
 
@@ -66,7 +66,7 @@ async def _installation_proxy(provider):
 
 
 async def uninstall_app(sp, bundle_id: str) -> str:
-    """Entfernt eine App und gibt den genutzten Transportweg zurueck."""
+    """Removes an app and returns the transport that was used."""
     errors: list[str] = []
     for transport, provider in await _providers(sp):
         try:
@@ -79,25 +79,25 @@ async def uninstall_app(sp, bundle_id: str) -> str:
                       + "\n  " + "\n  ".join(dict.fromkeys(errors)))
 
 
-#: Signaturen, die Apple selbst vergibt - beides ist kein Sideload.
+#: Signatures that Apple issues itself - neither is a sideload.
 APP_STORE_SIGNER = "Apple iPhone OS Application Signing"
 TESTFLIGHT_SIGNER = "TestFlight Beta Distribution"
 
 
 def app_origin(meta: dict) -> dict:
-    """Woher eine installierte App stammt - aus ihren Signatur-Feldern.
+    """Where an installed app comes from - based on its signature fields.
 
-    Am Geraet gemessen (iOS 27, 150 Apps): Store-Apps tragen Apples
-    Store-Signatur, TestFlight-Apps ``TestFlight Beta Distribution``,
-    sideloadete eine Entwickler-Identitaet *und* ``get-task-allow`` in den
-    Entitlements. Die Team-ID steht verlaesslich nur in den Entitlements -
-    der Name der Identitaet nennt den Zertifikatsinhaber, nicht das Team.
+    Measured on a device (iOS 27, 150 apps): store apps carry Apple's store
+    signature, TestFlight apps ``TestFlight Beta Distribution``, sideloaded
+    ones a developer identity *and* ``get-task-allow`` in their
+    entitlements. The team ID is only reliably found in the entitlements -
+    the identity's name names the certificate holder, not the team.
 
-    ``origin`` unterscheidet vier Faelle, weil "nicht aus dem Store" zu grob
-    waere: TestFlight sieht sonst wie ein Sideload aus. ``developer`` ist die
-    schaerfste Aussage - nur damit laeuft JIT, und nur das laeuft nach sieben
-    Tagen ab. Firmensignierte IPAs (``other``) sind ebenfalls sideloadet,
-    aber keins von beidem.
+    ``origin`` distinguishes four cases because "not from the store" would
+    be too coarse: TestFlight would otherwise look like a sideload.
+    ``developer`` is the sharpest statement - only those can run JIT, and
+    only those expire after seven days. Enterprise-signed IPAs (``other``)
+    are sideloaded too, but neither of the two.
     """
     ent = meta.get("Entitlements") or {}
     signer = str(meta.get("SignerIdentity", ""))
@@ -119,8 +119,8 @@ def app_origin(meta: dict) -> dict:
 
 
 async def list_apps(sp, *, user_only: bool = True) -> dict:
-    """Installierte Apps. Zugleich der guenstigste Test, ob
-    installation_proxy auf diesem iOS ueberhaupt antwortet."""
+    """Installed apps. Also the cheapest test of whether
+    installation_proxy answers at all on this iOS."""
     for transport, provider in await _providers(sp):
         try:
             async with await _installation_proxy(provider) as ip:
@@ -133,12 +133,12 @@ async def list_apps(sp, *, user_only: bool = True) -> dict:
 
 
 async def _providers(sp) -> list[tuple[str, object]]:
-    """lockdown zuerst, RSD als Rueckfallebene."""
+    """lockdown first, RSD as the fallback."""
     out: list[tuple[str, object]] = [("lockdown", sp.lockdown)]
     try:
         out.append(("rsd", await sp.rsd()))
     except DeviceError:
-        pass  # Ohne Tunnel bleibt lockdown der einzige Weg.
+        pass  # Without a tunnel, lockdown is the only route.
     return out
 
 
@@ -149,10 +149,10 @@ async def install_ipa(
     upgrade: bool = False,
     progress: Callable[[int], None] | None = None,
 ) -> InstallResult:
-    """Installiert eine **bereits signierte** IPA.
+    """Installs an **already signed** IPA.
 
-    ``developer=True`` setzt ``PackageType=Developer`` - ohne das lehnt iOS
-    eine mit Development-Zertifikat signierte App ab.
+    ``developer=True`` sets ``PackageType=Developer`` - without it, iOS
+    rejects an app signed with a development certificate.
     """
     ipa = Path(ipa)
     if not ipa.is_file():
@@ -186,13 +186,13 @@ async def install_ipa(
         except Exception as exc:
             errors.append(f"{transport}: {type(exc).__name__}: {exc}")
 
-    # Geraeteseitige Ablehnungen treffen jeden Transportweg gleich. Sie
-    # zweimal zu zeigen verdeckt nur, dass es gar kein Transportproblem ist.
+    # Device-side rejections hit every transport alike. Showing them twice
+    # only hides the fact that it isn't a transport problem at all.
     joined = " ".join(errors)
     if _APP_LIMIT in joined:
         raise DeviceError(_slot_limit_message(joined))
 
     unique = list(dict.fromkeys(errors))
     raise DeviceError(
-        "Installation fehlgeschlagen:\n  " + "\n  ".join(unique)
+        "Installation failed:\n  " + "\n  ".join(unique)
     )

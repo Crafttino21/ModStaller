@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Setzt die Versionsnummer ueberall, wo sie steht.
+"""Sets the version number everywhere it appears.
 
     packaging/set-version.py 0.2.0
 
-Die Oberflaeche (package.json) bestimmt, was electron-updater vergleicht; das
-Backend (pyproject.toml) zeigt dieselbe Nummer im Systemcheck. Beide muessen
-stimmen, sonst bietet die App ein Update an, das sie schon hat.
+The GUI (package.json) determines what electron-updater compares; the
+backend (pyproject.toml) shows the same number in the system check. Both
+must match, otherwise the app offers an update it already has.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ SEMVER = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$")
 
 def main() -> int:
     if len(sys.argv) != 2 or not SEMVER.match(sys.argv[1]):
-        print("Aufruf: set-version.py X.Y.Z  (optional -beta.1 o. ae.)", file=sys.stderr)
+        print("Usage: set-version.py X.Y.Z  (optionally -beta.1 or similar)", file=sys.stderr)
         return 2
     version = sys.argv[1]
 
@@ -40,11 +40,11 @@ def main() -> int:
     text, n = re.subn(r'(?m)^version = "[^"]*"$', f'version = "{version}"',
                       py.read_text(), count=1)
     if n != 1:
-        print("pyproject.toml: keine version-Zeile gefunden", file=sys.stderr)
+        print("pyproject.toml: no version line found", file=sys.stderr)
         return 1
     py.write_text(text)
 
-    print(f"Version {version} gesetzt.")
+    print(f"Version set to {version}.")
     return 0
 
 

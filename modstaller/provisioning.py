@@ -1,9 +1,9 @@
-"""Von der Anmeldung zum unterschriftsreifen Profil.
+"""From sign-in to a profile ready for signing.
 
-Buendelt die Schritte, die Apple fuer eine sideloadbare App verlangt:
-Team waehlen, Geraet registrieren, Zertifikat besorgen, App-ID anlegen,
-Provisioning-Profil herunterladen. Jeder Schritt ist idempotent - ein zweiter
-Lauf verbraucht kein Kontingent.
+Bundles the steps Apple requires for a sideloadable app: pick a team,
+register the device, obtain a certificate, create an App ID, download the
+provisioning profile. Every step is idempotent - a second run uses up no
+quota.
 """
 
 from __future__ import annotations
@@ -21,15 +21,15 @@ from .errors import (
 )
 from .signing import csr as csrmod
 
-#: Ein Bundle-Identifier darf nur diese Zeichen tragen.
+#: A bundle identifier may only contain these characters.
 _ID_SAFE = re.compile(r"[^A-Za-z0-9.\-]")
 
 
 @dataclass
 class Capabilities:
-    """Was der Account hergibt. Aus dem Team-Typ abgeleitet und spaeter
-    anhand der echten Profil-Laufzeit korrigiert - Apple aendert die Regeln
-    gelegentlich, gemessene Werte sind verlaesslicher als geratene."""
+    """What the account allows. Derived from the team type and later
+    corrected from the real profile lifetime - Apple changes the rules now
+    and then, and measured values are more reliable than guessed ones."""
 
     is_free: bool
     profile_days: float = 7.0
@@ -38,17 +38,17 @@ class Capabilities:
 
     @classmethod
     def for_team(cls, team: Team) -> "Capabilities":
-        """Erste Annahme aus dem Team-Typ - bewusst vorsichtig.
+        """First guess from the team type - deliberately cautious.
 
-        Apple meldet fuer kostenlose *und* bezahlte Einzelaccounts denselben
-        Typ ``Individual``. Aus dem Typ allein laesst sich das also nicht
-        entscheiden. Wir nehmen im Zweifel "kostenlos" an, weil der Irrtum in
-        diese Richtung billig ist (eine Extension wird entfernt), in die
-        andere aber teuer: dann ist das Wochenkontingent von zehn App-IDs
-        verbraucht, bevor die App installiert ist.
+        Apple reports the same type ``Individual`` for free *and* paid
+        individual accounts, so the type alone cannot decide it. When in
+        doubt we assume "free", because erring in that direction is cheap
+        (an extension gets removed), while erring the other way is
+        expensive: the weekly quota of ten App IDs is used up before the app
+        is even installed.
 
-        :meth:`reconcile` korrigiert die Annahme, sobald ein echtes Profil
-        vorliegt und seine Laufzeit die Frage beantwortet.
+        :meth:`reconcile` corrects the guess as soon as a real profile
+        exists and its lifetime answers the question.
         """
         if team.type.lower().startswith(("company", "organization")):
             return cls(is_free=False, profile_days=365.0,
@@ -56,7 +56,7 @@ class Capabilities:
         return cls(is_free=True)
 
     def reconcile(self, profile: Profile) -> "Capabilities":
-        """Korrigiert die Annahme anhand der tatsaechlichen Laufzeit."""
+        """Corrects the guess based on the actual lifetime."""
         days = profile.days_left
         if days != days:  # NaN
             return self
@@ -70,24 +70,23 @@ class Capabilities:
 
     def describe(self) -> str:
         if self.is_free:
-            return ("kostenloser Account - Profile laufen nach 7 Tagen ab, "
-                    "max. 3 Apps, 10 App-IDs pro Woche")
-        return "bezahlter Developer-Account - Profile 1 Jahr gueltig"
+            return ("free account - profiles expire after 7 days, "
+                    "max. 3 apps, 10 App IDs per week")
+        return "paid developer account - profiles valid for 1 year"
 
 
 def derive_bundle_id(original: str, team_id: str) -> str:
-    """Eindeutige Bundle-ID fuer dieses Team.
+    """Unique bundle ID for this team.
 
-    Die Original-ID gehoert meist einem fremden Team (Apple lehnt sie mit
-    Fehler 9401 ab), deshalb haengen wir die Team-ID an. Das Ergebnis ist
-    stabil - wichtig, weil ein Wechsel beim Refresh die App-Daten verlieren
-    wuerde.
+    The original ID usually belongs to another team (Apple rejects it with
+    error 9401), so we append the team ID. The result is stable - important,
+    because a change on refresh would lose the app's data.
     """
     base = _ID_SAFE.sub("-", original or "com.modstaller.app").strip(".")
-    # Team-ID in Originalschreibweise anhaengen. Das ist die Konvention, die
-    # auch die uebrigen Werkzeuge im Umfeld benutzen - dadurch findet
-    # ensure_app_id eine bereits vorhandene App-ID wieder, statt eine neue
-    # anzulegen und Kontingent zu verbrauchen.
+    # Append the team ID in its original spelling. That is the convention
+    # the other tools in this space use as well - so ensure_app_id finds an
+    # existing App ID again instead of creating a new one and using up
+    # quota.
     return f"{base}.{team_id}"
 
 
@@ -108,16 +107,15 @@ def pick_team(teams: list[Team], preferred: str | None = None) -> Team:
 def ensure_certificate(api: DeveloperServices, team: Team,
                        machine_name: str,
                        *, revoke_conflicting: bool = False) -> tuple[Path, str]:
-    """Liefert eine PKCS#12-Identitaet fuer zsign.
+    """Returns a PKCS#12 identity for zsign.
 
-    Die Reihenfolge ist wichtig, weil Apple pro Account nur sehr wenige
-    Development-Zertifikate zulaesst und jedes neue ein altes verdraengt:
+    The order matters, because Apple allows only very few development
+    certificates per account and each new one pushes out an old one:
 
-    1. Eine lokal fertige Identitaet wiederverwenden.
-    2. Sonst pruefen, ob bei Apple schon ein Zertifikat zu *unserem*
-       Schluessel liegt - dann nur neu zusammensetzen, ohne Kontingent
-       anzufassen.
-    3. Erst dann ein neues anfordern.
+    1. Reuse an identity that is already complete locally.
+    2. Otherwise check whether Apple already holds a certificate for *our*
+       key - then just reassemble it without touching the quota.
+    3. Only then request a new one.
     """
     existing = csrmod.load_p12(team.team_id)
     if existing:
@@ -127,13 +125,13 @@ def ensure_certificate(api: DeveloperServices, team: Team,
 
     keypair = csrmod.load_keypair(team.team_id)
 
-    # Schritt 2: Gehoert ein vorhandenes Zertifikat zu unserem Schluessel?
+    # Step 2: does an existing certificate belong to our key?
     if keypair is not None:
         content = _fetch_own_certificate(api, team, keypair)
         if content:
             return csrmod.build_p12(team.team_id, keypair, content)
 
-    # Schritt 3: neues anfordern.
+    # Step 3: request a new one.
     if keypair is None:
         keypair = csrmod.KeyPair.generate()
         csrmod.save_keypair(team.team_id, keypair)
@@ -168,8 +166,8 @@ def ensure_certificate(api: DeveloperServices, team: Team,
                 "Careful: apps signed with the revoked certificate will no "
                 "longer start.")) from exc
 
-    # Apple liefert den Inhalt nicht immer gleich mit - ausgestellt ist es
-    # trotzdem, dann steht es in der Liste.
+    # Apple does not always include the content right away - the
+    # certificate is issued anyway and then shows up in the list.
     content = cert.content or _fetch_own_certificate(api, team, keypair)
     if not content:
         raise AppleError(_(
@@ -180,12 +178,11 @@ def ensure_certificate(api: DeveloperServices, team: Team,
 
 
 def _belongs_to(cert_der: bytes, keypair) -> bool:
-    """Passt das Zertifikat zu unserem privaten Schluessel?
+    """Does the certificate match our private key?
 
-    Die Maschinenkennung allein reicht nicht: sie kann sich wiederholen, und
-    ein Zertifikat mit fremdem Schluessel erzeugt spaeter eine Signatur, die
-    das iPhone wortlos ablehnt. Der Vergleich der oeffentlichen Schluessel
-    ist eindeutig.
+    The machine ID alone is not enough: it can repeat, and a certificate
+    with a foreign key later produces a signature the iPhone silently
+    rejects. Comparing the public keys is unambiguous.
     """
     from cryptography import x509
     from cryptography.hazmat.primitives import serialization
@@ -206,7 +203,7 @@ def _belongs_to(cert_der: bytes, keypair) -> bool:
 
 def _fetch_own_certificate(api: DeveloperServices, team: Team,
                            keypair) -> bytes:
-    """Sucht bei Apple das Zertifikat, das zu unserem Schluessel gehoert."""
+    """Looks up the certificate at Apple that belongs to our key."""
     for cert in api.list_certificates(team.team_id):
         if cert.content and _belongs_to(bytes(cert.content), keypair):
             return bytes(cert.content)
@@ -215,14 +212,14 @@ def _fetch_own_certificate(api: DeveloperServices, team: Team,
 
 def _revoke_foreign_certificates(api: DeveloperServices, team: Team,
                                  keypair) -> None:
-    """Macht Platz fuer ein eigenes Zertifikat.
+    """Makes room for a certificate of our own.
 
-    Gratis-Accounts duerfen nur ein Development-Zertifikat halten, und ein
-    fremdes laesst sich nicht mitbenutzen. Wer mit zwei Werkzeugen
-    sideloadet, verdraengt zwangslaeufig das jeweils andere.
+    Free accounts may hold only one development certificate, and a foreign
+    one cannot be shared. Anyone sideloading with two tools inevitably
+    pushes out the other one.
 
-    Unser eigenes wird dabei ausgelassen - es zu widerrufen waere genau das
-    Gegenteil dessen, was der Aufruf bezweckt.
+    Our own is skipped - revoking it would be the exact opposite of what
+    the call is for.
     """
     for cert in api.list_certificates(team.team_id):
         if cert.content and _belongs_to(bytes(cert.content), keypair):
@@ -235,7 +232,7 @@ def _revoke_foreign_certificates(api: DeveloperServices, team: Team,
 
 
 def _machine_id() -> str:
-    """Stabile Kennung dieses Rechners gegenueber Apple."""
+    """Stable identifier of this machine towards Apple."""
     import uuid as _uuid
     from .apple.anisette import DEVICE_FILE
     import json
@@ -248,17 +245,16 @@ def _machine_id() -> str:
 def ensure_app_id(api: DeveloperServices, team: Team, identifier: str,
                   name: str, *, reuse_when_exhausted: bool = False,
                   protected: set[str] | None = None) -> AppID:
-    """Besorgt die App-ID. Die Rueckgabe kann einen anderen Identifier tragen.
+    """Obtains the App ID. The result may carry a different identifier.
 
-    Apple zaehlt **neu angelegte** App-IDs in einem rollierenden
-    Sieben-Tage-Fenster, nicht die vorhandenen. Eine zu loeschen gibt also
-    kein Kontingent zurueck - es waere reiner Schaden, weil damit eine fremde
-    App die Moeglichkeit verliert, erneuert zu werden.
+    Apple counts **newly created** App IDs in a rolling seven-day window,
+    not the existing ones. Deleting one therefore gives no quota back - it
+    would do nothing but harm, because a foreign app would lose the ability
+    to be renewed.
 
-    Ist das Fenster ausgeschoepft, weichen wir deshalb auf eine vorhandene,
-    ungenutzte App-ID aus. Die App laeuft dann unter deren Bundle-ID; fuer
-    iOS ist das eine eigenstaendige App, und der Name auf dem Homescreen
-    bleibt davon unberuehrt.
+    So once the window is exhausted, we fall back to an existing, unused
+    App ID. The app then runs under its bundle ID; to iOS that is an app of
+    its own, and the name on the home screen is unaffected.
     """
     existing = api.list_app_ids(team.team_id)
     for candidate in existing:
@@ -269,7 +265,7 @@ def ensure_app_id(api: DeveloperServices, team: Team, identifier: str,
         return api.add_app_id(team.team_id, identifier, name)
     except AppleAPIError as exc:
         if exc.code == APP_ID_UNAVAILABLE:
-            # Identifier gehoert einem anderen Account - Suffix variieren.
+            # Identifier belongs to another account - vary the suffix.
             return api.add_app_id(team.team_id, f"{identifier}.ms", name)
         if exc.code == APP_ID_QUOTA_EXCEEDED and reuse_when_exhausted:
             spare = spare_app_id(existing, protected or set())
@@ -279,11 +275,11 @@ def ensure_app_id(api: DeveloperServices, team: Team, identifier: str,
 
 
 def app_id_in_use(identifier: str, protected: set[str]) -> bool:
-    """Gehoert diese App-ID zu einer installierten App?
+    """Does this App ID belong to an installed app?
 
-    Geschuetzt ist auch, was darunter liegt: die App-ID einer Extension
-    traegt die der App als Praefix, und ohne sie laesst sich die App nicht
-    mehr vollstaendig signieren.
+    Whatever lies beneath it is protected too: an extension's App ID
+    carries the app's as a prefix, and without it the app can no longer be
+    signed completely.
     """
     ident = identifier.lower()
     return any(ident == p.lower() or ident.startswith(p.lower() + ".")
@@ -291,9 +287,9 @@ def app_id_in_use(identifier: str, protected: set[str]) -> bool:
 
 
 def spare_app_id(existing: list[AppID], protected: set[str]) -> AppID | None:
-    """Eine vorhandene App-ID, die zu keiner installierten App gehoert.
+    """An existing App ID that belongs to no installed app.
 
-    ``protected`` sind die Bundle-IDs auf dem Geraet.
+    ``protected`` are the bundle IDs on the device.
     """
     for candidate in existing:
         if not app_id_in_use(candidate.identifier, protected):
@@ -302,7 +298,7 @@ def spare_app_id(existing: list[AppID], protected: set[str]) -> AppID | None:
 
 
 def fetch_profile(api: DeveloperServices, team: Team, app_id: AppID) -> Path:
-    """Laedt das Profil und legt es ab. Rueckgabe: Pfad zur Datei."""
+    """Downloads the profile and stores it. Returns: path to the file."""
     profile = api.download_profile(team.team_id, app_id.app_id_id)
     target = PROFILES_DIR / team.team_id / f"{app_id.app_id_id}.mobileprovision"
     write_secret(target, profile.content)

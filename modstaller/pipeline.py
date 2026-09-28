@@ -1,4 +1,4 @@
-"""Der komplette Weg von der IPA zur laufenden App."""
+"""The complete path from the IPA to the running app."""
 
 from __future__ import annotations
 
@@ -50,16 +50,16 @@ async def install(
 ) -> InstallOutcome:
     settings = settings or Settings.load()
 
-    # 1. IPA zuerst pruefen - das ist billig und faengt die meisten Fehler,
-    #    bevor wir Apples Kontingente anfassen.
+    # 1. Check the IPA first - that is cheap and catches most errors
+    #    before we touch Apple's quotas.
     info = ipa_mod.inspect(ipa_path)
-    on_step(f"IPA gelesen:\n{info.summary()}")
+    on_step(f"IPA read:\n{info.summary()}")
     if info.encrypted:
         raise SigningError(_(
             "This IPA is App Store encrypted (FairPlay DRM) and cannot be "
             "re-signed. A decrypted IPA is required."))
 
-    # 2. Geraet - ebenfalls vor jedem Apple-Kontakt.
+    # 2. Device - likewise before any contact with Apple.
     async with ServiceProvider(udid) as sp:
         dev = await device_info(sp.lockdown)
         on_step("\n" + _("Device: {name}, iOS {version}",
@@ -69,10 +69,10 @@ async def install(
                 "Developer Mode is off. Turn it on under Settings > Privacy & "
                 "Security > Developer Mode on the iPhone."))
 
-        # 3. Anmeldung und Team.
+        # 3. Sign-in and team.
         session = Session.load()
         if session is None:
-            raise AppleError("Nicht angemeldet. Zuerst: modstaller login")
+            raise AppleError("Not signed in. First run: modstaller login")
         ani = anisette_mod.build(settings.anisette_provider,
                                  settings.anisette_server)
         api = DeveloperServices(session, ani)
@@ -82,17 +82,17 @@ async def install(
         caps = Capabilities.for_team(team)
         on_step(f"Team:   {team}")
 
-        # 4. Geraet beim Team anmelden (idempotent).
+        # 4. Register the device with the team (idempotent).
         api.register_device(team.team_id, dev.udid, dev.name)
 
-        # 5. Zertifikat.
+        # 5. Certificate.
         on_step("\n" + _("Obtaining the certificate …"))
         p12, password = ensure_certificate(
             api, team, dev.name, revoke_conflicting=revoke_conflicting_cert)
 
-        # 6. Extensions: bei Gratis-Accounts kosten sie je eine App-ID aus
-        #    einem Kontingent von zehn pro Woche. Default ist deshalb, sie zu
-        #    entfernen - die App selbst laeuft davon unbeeindruckt.
+        # 6. Extensions: on free accounts each one costs an App ID from a
+        #    quota of ten per week. The default is therefore to remove them -
+        #    the app itself runs just fine without them.
         strip = (caps.is_free and bool(info.extensions)
                  if strip_extensions is None else strip_extensions)
         if strip and info.extensions:
@@ -100,11 +100,11 @@ async def install(
                                  "App ID(s) from the weekly quota)",
                                  count=len(info.extensions)))
 
-        # 7. App-ID und Profil.
+        # 7. App ID and profile.
         #
-        # Die installierten Apps schuetzen ihre App-IDs vor dem Recycling -
-        # sonst verliert irgendwann eine fremde App die Moeglichkeit, erneuert
-        # zu werden, weil ModStaller ihre App-ID freigegeben hat.
+        # The installed apps protect their App IDs from being recycled -
+        # otherwise a foreign app would eventually lose the ability to be
+        # renewed because ModStaller gave away its App ID.
         protected: set[str] = set()
         try:
             from .device.install import list_apps
@@ -113,7 +113,7 @@ async def install(
             pass
 
         wanted = derive_bundle_id(info.bundle_id, team.team_id)
-        on_step(f"\nApp-ID {wanted} …")
+        on_step(f"\nApp ID {wanted} …")
         app_id = ensure_app_id(api, team, wanted, info.name,
                                reuse_when_exhausted=True, protected=protected)
         new_id = app_id.identifier
@@ -126,26 +126,26 @@ async def install(
         profile_path = fetch_profile(api, team, app_id)
         prof = profile_info(profile_path)
         caps = caps.reconcile(prof)
-        on_step(f"  Profil gueltig: {prof.days_left:.1f} Tage "
+        on_step(f"  Profile valid: {prof.days_left:.1f} days "
              f"({caps.describe()})")
 
-        # 8. Signieren.
+        # 8. Sign.
         out = OUT_DIR / f"{new_id}.ipa"
-        on_step("\nSignieren …")
+        on_step("\nSigning …")
         started = time.time()
         sign(SignRequest(
             ipa=info.path, output=out, p12=p12, p12_password=password,
             profile=profile_path, bundle_id=new_id,
             strip_extensions=strip,
         ), zsign=find_zsign(settings.zsign_path) or settings.zsign_path)
-        on_step(f"  fertig in {time.time() - started:.1f}s "
+        on_step(f"  done in {time.time() - started:.1f}s "
              f"({out.stat().st_size / 1e6:.0f} MB)")
 
-        # 9. Installieren.
-        on_step("\nInstallieren …")
+        # 9. Install.
+        on_step("\nInstalling …")
         result = await install_ipa(sp, out, progress=progress)
 
-        # 10. Merken, damit der Refresh spaeter weiss, was zu tun ist.
+        # 10. Remember it, so the refresh later knows what to do.
         store.record(store.InstallRecord(
             bundle_id=new_id,
             original_bundle_id=info.bundle_id,
@@ -175,11 +175,11 @@ async def refresh(
     progress: Callable[[int], None] | None = None,
     on_step: Callable[[str], None] = _say,
 ) -> list[InstallOutcome]:
-    """Erneuert Apps, deren Profil bald ablaeuft.
+    """Renews apps whose profile expires soon.
 
-    Nutzt die beim Installieren gemerkte Original-IPA, damit die Bundle-ID
-    stabil bleibt - sonst gilt die App fuer iOS als andere App und die
-    gespeicherten Daten waeren weg.
+    Uses the original IPA remembered at install time so the bundle ID stays
+    stable - otherwise iOS would treat it as a different app and the stored
+    data would be gone.
     """
     settings = settings or Settings.load()
     threshold = (settings.renew_threshold_days if threshold_days is None
@@ -189,12 +189,12 @@ async def refresh(
         due = [r for r in store.all_installs() if r.bundle_id == only
                or r.original_bundle_id == only]
         if not due:
-            raise SigningError(f"Nichts unter {only!r} installiert.")
+            raise SigningError(f"Nothing installed under {only!r}.")
     else:
         due = store.due_for_refresh(threshold)
 
     if not due:
-        on_step(f"Nichts faellig (Schwelle: {threshold:.0f} Tage).")
+        on_step(f"Nothing due (threshold: {threshold:.0f} days).")
         return []
 
     results: list[InstallOutcome] = []

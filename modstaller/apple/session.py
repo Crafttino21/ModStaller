@@ -1,8 +1,8 @@
-"""Anmeldesitzung: Token halten, wiederverwenden, erneuern.
+"""Sign-in session: keep, reuse and renew tokens.
 
-Ein normaler Lauf soll *keinen* Login ausloesen. Deshalb liegt das Ergebnis
-des GSA-Handshakes auf Platte und wird wiederverwendet, solange Apple es
-akzeptiert. Das Passwort selbst wird nie gespeichert.
+A normal run should *not* trigger a login. That is why the result of the
+GSA handshake is stored on disk and reused for as long as Apple accepts it.
+The password itself is never stored.
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ from .gsa import GSAClient, GSAResult
 
 SESSION_FILE = SECRETS_DIR / "session.json"
 
-#: Wie lange wir ein Token ohne Gegenprobe als gueltig ansehen.
-#: Apple nennt keine Lebensdauer; laeuft es doch ab, faellt das beim ersten
-#: 401 auf und wir melden uns neu an.
+#: How long we consider a token valid without double-checking.
+#: Apple states no lifetime; if it does expire, the first 401 reveals it and
+#: we sign in again.
 SESSION_MAX_AGE = 14 * 24 * 3600
 
 
@@ -43,25 +43,25 @@ class Session:
 
     @property
     def usable(self) -> bool:
-        """Ohne App-Token weist developerservices2 jede Anfrage als
-        abgelaufen zurueck. Sitzungen aus aelteren Versionen haben keins."""
+        """Without an app token, developerservices2 rejects every request as
+        expired. Sessions from older versions don't have one."""
         return bool(self.app_token)
 
     @property
     def auth_headers(self) -> dict[str, str]:
-        """Beglaubigung gegenueber developerservices2.
+        """Authentication towards developerservices2.
 
-        ``X-Apple-GS-Token`` traegt das App-Token **roh** - nicht als
-        base64("<adsid>:<token>"). Mit der kodierten Form antwortet Apple auf
-        jede Anfrage mit "Your session has expired", obwohl die Anmeldung
-        gerade erfolgreich war.
+        ``X-Apple-GS-Token`` carries the app token **raw** - not as
+        base64("<adsid>:<token>"). With the encoded form Apple answers every
+        request with "Your session has expired", even though the sign-in has
+        just succeeded.
         """
         return {
             "X-Apple-I-Identity-Id": self.adsid,
             "X-Apple-GS-Token": self.app_token,
         }
 
-    # -- Persistenz --------------------------------------------------------
+    # -- Persistence -------------------------------------------------------
 
     def save(self) -> None:
         write_secret(SESSION_FILE, json.dumps(asdict(self)).encode())
@@ -73,7 +73,7 @@ class Session:
         try:
             session = cls(**json.loads(read_secret(SESSION_FILE)))
         except Exception:
-            return None  # kaputt oder altes Format - einfach neu anmelden
+            return None  # broken or old format - just sign in again
         return session if session.usable else None
 
     @classmethod
@@ -97,7 +97,7 @@ def login(apple_id: str, password: str, anisette,
 
 
 def current(anisette, *, interactive: bool = True) -> Session:
-    """Die bestehende Sitzung, oder ein Hinweis, dass ein Login noetig ist."""
+    """The existing session, or a notice that a login is required."""
     session = Session.load()
     if session and session.probably_valid:
         return session

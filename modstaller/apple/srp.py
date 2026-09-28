@@ -1,16 +1,17 @@
-"""SRP-6a in Apples Auspraegung.
+"""SRP-6a, Apple flavour.
 
-Warum eigener Code statt einer Bibliothek: Apple weicht an drei Stellen vom
-ueblichen Verhalten ab, und die gaengigen PyPI-Pakete koennen nicht alle drei.
+Why our own code instead of a library: Apple deviates from the usual
+behaviour in three places, and the common PyPI packages can't handle all
+three.
 
-1. Der Benutzername geht **nicht** in ``x`` ein: ``x = H(s | H(":" | p))``.
-2. ``p`` ist nicht das Passwort, sondern ein daraus abgeleiteter Wert
-   (siehe :func:`derive_password`) - Apple nennt die Verfahren ``s2k`` und
+1. The username does **not** go into ``x``: ``x = H(s | H(":" | p))``.
+2. ``p`` is not the password but a value derived from it
+   (see :func:`derive_password`) - Apple calls the schemes ``s2k`` and
    ``s2k_fo``.
-3. Zahlen werden nach RFC 5054 auf die Laenge von N linksseitig genullt,
-   bevor sie gehasht werden.
+3. Per RFC 5054, numbers are left-padded with zeros to the length of N
+   before they are hashed.
 
-Die Kernmathematik ist gegen die Testvektoren aus RFC 5054 Anhang B geprueft.
+The core math is verified against the test vectors from RFC 5054 Appendix B.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import hashlib
 import hmac
 import os
 
-# RFC 5054, 2048-Bit-Gruppe - die von Apple genutzte.
+# RFC 5054, 2048-bit group - the one Apple uses.
 N_2048 = int(
     "AC6BDB41324A9A9BF166DE5E1389582FAF72B6651987EE07FC3192943DB56050A37329CBB4"
     "A099ED8193E0757767A13DD52312AB4B03310DCD7F48A9DA04FD50E8083969EDB767B0CF60"
@@ -30,7 +31,7 @@ N_2048 = int(
     "FBB694B5C803D89F7AE435DE236D525F54759B65E372FCD68EF20FA7111F9E4AFF73", 16)
 G_2048 = 2
 
-# RFC 5054, 1024-Bit-Gruppe - nur fuer die Testvektoren.
+# RFC 5054, 1024-bit group - only for the test vectors.
 N_1024 = int(
     "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C9C256576D674DF7496"
     "EA81D3383B4813D692C6E0E0D5D8E250B98BE48E495C1D6089DAD15DC7D7B46154D6B6CE8E"
@@ -40,17 +41,18 @@ G_1024 = 2
 
 
 def _pad(n: int, width: int) -> bytes:
-    """Linksseitig auf ``width`` genullt - fuer k und u (RFC 5054)."""
+    """Left-padded with zeros to ``width`` - for k and u (RFC 5054)."""
     return n.to_bytes(width, "big")
 
 
 def _minimal(n: int) -> bytes:
-    """Kuerzestmoegliche Big-Endian-Darstellung, ohne fuehrende Nullbytes.
+    """Shortest possible big-endian representation, without leading zero
+    bytes.
 
-    Fuer A, B und S: die etablierten Implementierungen hashen diese Werte
-    *ungepadded*. Der Unterschied schlaegt nur durch, wenn der Wert zufaellig
-    mit einem Nullbyte beginnt - also in etwa einem von 256 Faellen. Genau
-    solche Logins wuerden sonst unerklaerlich scheitern.
+    For A, B and S: the established implementations hash these values
+    *unpadded*. The difference only matters when the value happens to start
+    with a zero byte - roughly one case in 256. Exactly those logins would
+    otherwise fail inexplicably.
     """
     return n.to_bytes(max(1, (n.bit_length() + 7) // 8), "big")
 
@@ -64,17 +66,17 @@ def _hash_int(hash_alg, *values: bytes) -> int:
 
 def derive_password(password: str, salt: bytes, iterations: int,
                     protocol: str) -> bytes:
-    """Apples ``s2k``/``s2k_fo``: das Passwort wird vorgehasht, dann gedehnt.
+    """Apple's ``s2k``/``s2k_fo``: the password is pre-hashed, then stretched.
 
-    ``s2k`` nutzt den rohen SHA-256-Digest, ``s2k_fo`` dessen Hex-Darstellung.
-    Der Unterschied ist winzig und komplett ergebnisrelevant - Apple waehlt
-    das Verfahren in der Antwort auf den ersten Request.
+    ``s2k`` uses the raw SHA-256 digest, ``s2k_fo`` its hex representation.
+    The difference is tiny and completely decisive for the result - Apple
+    picks the scheme in its response to the first request.
     """
-    # CodeQL meldet hier "schwaches Hashen sensibler Daten" und meint: fuer
-    # Passwoerter gehoert eine langsame Ableitung her, kein schneller Hash.
-    # Stimmt - und genau das passiert zwei Zeilen weiter mit PBKDF2. Dieser
-    # Vorhash ist Apples s2k-Schritt und liegt im Protokoll fest; die
-    # Gegenseite rechnet dasselbe. Wer ihn ersetzt, kann sich nicht anmelden.
+    # CodeQL flags "weak hashing of sensitive data" here, meaning: passwords
+    # call for a slow derivation, not a fast hash. True - and that is exactly
+    # what happens two lines further down with PBKDF2. This pre-hash is
+    # Apple's s2k step and fixed by the protocol; the other side computes the
+    # same. Replace it and you can't sign in.
     digest = hashlib.sha256(password.encode("utf-8")).digest()  # codeql[py/weak-sensitive-data-hashing]
     if protocol == "s2k_fo":
         digest = digest.hex().encode("utf-8")
@@ -84,14 +86,14 @@ def derive_password(password: str, salt: bytes, iterations: int,
 
 
 class SRPClient:
-    """Client-Seite eines SRP-6a-Handshakes.
+    """Client side of an SRP-6a handshake.
 
     Args:
-        username: Geht in M1 ein, per Default aber nicht in ``x``.
-        hash_alg: ``hashlib.sha256`` fuer Apple.
-        n, g: Die Gruppe.
-        username_in_x: RFC-5054-Verhalten (True) vs. Apple (False).
-        a: Nur fuer Tests vorgebbar, sonst zufaellig.
+        username: Goes into M1, but by default not into ``x``.
+        hash_alg: ``hashlib.sha256`` for Apple.
+        n, g: The group.
+        username_in_x: RFC 5054 behaviour (True) vs. Apple (False).
+        a: Can be fixed only for tests, random otherwise.
     """
 
     def __init__(self, username: str, *, hash_alg=hashlib.sha256,
@@ -113,14 +115,14 @@ class SRPClient:
         return _minimal(self.A)
 
     def _x(self, salt: bytes, password: bytes) -> int:
-        """``x = H(s | H(I? | ":" | p))`` - die Kernformel von SRP-6a.
+        """``x = H(s | H(I? | ":" | p))`` - the core formula of SRP-6a.
 
-        Auch hier meldet CodeQL schwaches Hashen sensibler Daten. ``password``
-        ist an dieser Stelle aber nicht mehr das Passwort, sondern das bereits
-        mit PBKDF2 gedehnte Ergebnis aus :func:`derive_password`. Und welcher
-        Hash genommen wird, steht nicht uns zu: Apples Server rechnet mit
-        SHA-256 dasselbe, sonst passt der Beweis nicht. ``x`` verlaesst den
-        Rechner nie.
+        CodeQL flags weak hashing of sensitive data here too. At this point,
+        however, ``password`` is no longer the password but the result from
+        :func:`derive_password`, already stretched with PBKDF2. And which
+        hash is used is not up to us: Apple's server computes the same with
+        SHA-256, otherwise the proof doesn't match. ``x`` never leaves the
+        machine.
         """
         inner = self.H((self.I if self.username_in_x else b"") + b":" + password
                        ).digest()  # codeql[py/weak-sensitive-data-hashing]
@@ -128,13 +130,13 @@ class SRPClient:
 
     def process_challenge(self, salt: bytes, b_bytes: bytes,
                           password: bytes) -> bytes:
-        """Verarbeitet Apples ``s``/``B`` und liefert den Beweis ``M1``."""
+        """Processes Apple's ``s``/``B`` and returns the proof ``M1``."""
         B = int.from_bytes(b_bytes, "big")
         if B % self.N == 0:
             raise ValueError("server sent an invalid B (B mod N == 0)")
 
         w = self._width
-        # k und u werden nach RFC 5054 gepadded, ...
+        # k and u are padded per RFC 5054, ...
         k = _hash_int(self.H, _pad(self.N, w), _pad(self.g, w))
         u = _hash_int(self.H, _pad(self.A, w), _pad(B, w))
         if u == 0:
@@ -144,7 +146,7 @@ class SRPClient:
         # S = (B - k*g^x) ^ (a + u*x)  mod N
         S = pow((B - k * pow(self.g, x, self.N)) % self.N,
                 self.a + u * x, self.N)
-        # ... K und M1 dagegen aus der ungepaddeten Darstellung.
+        # ... whereas K and M1 use the unpadded representation.
         self.K = self.H(_minimal(S)).digest()
 
         # M1 = H( H(N) XOR H(g) | H(I) | s | A | B | K )
@@ -154,9 +156,9 @@ class SRPClient:
 
         h = self.H()
         h.update(xor)
-        # Der Benutzername, gehasht - so schreibt RFC 5054 M1 vor. CodeQL
-        # zaehlt ihn zu den sensiblen Daten; hier ist er ein Protokollfeld,
-        # das ohnehin im Klartext an Apple geht.
+        # The username, hashed - that is how RFC 5054 defines M1. CodeQL
+        # counts it as sensitive data; here it is a protocol field that goes
+        # to Apple in plain text anyway.
         h.update(self.H(self.I).digest())  # codeql[py/weak-sensitive-data-hashing]
         h.update(salt)
         h.update(self.A_bytes)
@@ -166,7 +168,7 @@ class SRPClient:
         return self.M1
 
     def verify_session(self, m2: bytes) -> bool:
-        """Prueft Apples Gegenbeweis ``M2 = H(A | M1 | K)``."""
+        """Verifies Apple's counter-proof ``M2 = H(A | M1 | K)``."""
         if self.K is None or self.M1 is None:
             raise RuntimeError("process_challenge() must run first")
         h = self.H()

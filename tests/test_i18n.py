@@ -1,9 +1,9 @@
-"""Uebersetzung: Quellsprache ist Englisch, Kataloge sind nur Ersatz.
+"""Translation: the source language is English, catalogs are only stand-ins.
 
-Die Kataloge selbst werden hier nicht auf Wortlaut geprueft - wohl aber
-darauf, dass sie technisch zusammenpassen: gleiche Platzhalter, kein Eintrag
-ohne Gegenstueck im Quelltext. Ein Katalog mit einem falschen ``{name}``
-wuerde sonst erst beim Nutzer auffallen.
+The catalogs themselves are not checked for wording here - but they are
+checked for fitting together technically: same placeholders, no entry
+without a counterpart in the source. A catalog with a wrong ``{name}``
+would otherwise only be noticed by the user.
 """
 
 from __future__ import annotations
@@ -15,13 +15,13 @@ import pytest
 
 from modstaller import i18n
 
-#: Platzhalter wie {name} oder {days:.1f} - der Doppelpunkt-Teil zaehlt nicht.
+#: Placeholders like {name} or {days:.1f} - the part after the colon doesn't count.
 PLACEHOLDER = re.compile(r"\{(\w+)[^}]*\}")
 
 
 @pytest.fixture(autouse=True)
 def source_language():
-    """Jeder Test faengt bei Englisch an und laesst es so zurueck."""
+    """Every test starts in English and leaves it that way."""
     i18n.set_language(i18n.SOURCE)
     yield
     i18n.set_language(i18n.SOURCE)
@@ -46,7 +46,7 @@ def test_a_known_language_translates():
 
 
 def test_a_region_falls_back_to_its_language():
-    """de-AT gibt es nicht - Deutsch schon."""
+    """de-AT doesn't exist - German does."""
     assert i18n.set_language("de-AT") == "de"
     assert i18n.set_language("de_CH") == "de"
 
@@ -67,7 +67,7 @@ def test_placeholders_are_filled():
 
 
 def test_a_broken_catalog_entry_does_not_break_the_message(monkeypatch):
-    """Lieber der englische Satz als eine Ausnahme mitten im Fehlerpfad."""
+    """Better the English sentence than an exception in the middle of an error path."""
     monkeypatch.setitem(i18n._catalog, "Unknown fix: {fix}", "Kaputt: {nope}")
     assert i18n._("Unknown fix: {fix}", fix="x") == "Unknown fix: x"
 
@@ -84,12 +84,12 @@ def test_every_catalog_keeps_the_placeholders_of_its_source(lang):
             continue
         assert PLACEHOLDER.findall(source) == PLACEHOLDER.findall(translated) or \
             set(PLACEHOLDER.findall(source)) == set(PLACEHOLDER.findall(translated)), \
-            f"{lang}: Platzhalter passen nicht zu {source!r}"
+            f"{lang}: placeholders do not match {source!r}"
 
 
 @pytest.mark.parametrize("lang", [p.stem for p in i18n.LOCALE_DIR.glob("*.json")])
 def test_no_catalog_entry_is_an_orphan(lang):
-    """Ein Eintrag, den kein Quelltext mehr benutzt, ist stiller Ballast."""
+    """An entry no source code uses any more is silent dead weight."""
     import ast
     import pathlib
 
@@ -108,8 +108,8 @@ def test_no_catalog_entry_is_an_orphan(lang):
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                     used.add(arg.value)
 
-    # Was ueber eine Tabelle laeuft (REMEDIES, _MESSAGES, _HINTS), steht als
-    # Konstante anderswo - deshalb zusaetzlich alle Stringkonstanten sammeln.
+    # Whatever goes through a table (REMEDIES, _MESSAGES, _HINTS) is a
+    # constant elsewhere - so also collect all string constants.
     for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -117,4 +117,4 @@ def test_no_catalog_entry_is_an_orphan(lang):
                 used.add(node.value)
 
     orphans = [k for k in catalog(lang) if k not in used]
-    assert not orphans, f"{lang}: nicht mehr benutzt: {orphans[:3]}"
+    assert not orphans, f"{lang}: no longer used: {orphans[:3]}"

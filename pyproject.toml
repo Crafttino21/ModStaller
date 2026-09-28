@@ -1,17 +1,20 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "modstaller"
 version = "1.2.0"
-description = "iOS-Sideloader fuer Linux: IPAs signieren und aufs iPhone installieren"
+description = "Multi-platform iOS sideloader: sign IPAs and install them on your iPhone"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "pymobiledevice3>=11.17",
     "anisette>=1.2.4",
     "cryptography>=43",
     "requests>=2.31",
+    "quickjs-ng>=0.16",
 ]
 
 [project.scripts]
@@ -23,3 +26,4 @@ include = ["modstaller*"]
 [tool.setuptools.package-data]
 "modstaller.apple" = ["certs/*.pem"]
 "modstaller" = ["locale/*.json"]
+"modstaller.device" = ["*.js"]

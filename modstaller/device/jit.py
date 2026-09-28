@@ -1,67 +1,64 @@
-"""JIT freischalten - auch auf iOS 26 und 27.
+"""Enabling JIT - on iOS 26 and 27 too.
 
-Bis iOS 18 genuegte es, einen Debugger anzuhaengen: der Kernel setzt dann
-``CS_DEBUGGED``, und der Prozess darf Speicher ausfuehrbar machen. Das
-ueberlebte das Loesen des Debuggers.
+Up to iOS 18 it was enough to attach a debugger: the kernel then sets
+``CS_DEBUGGED`` and the process may make memory executable. That survived
+detaching the debugger - and on devices without TXM it still does.
 
-Auf Geraeten mit TXM/SPTM - allen neueren iPhones - reicht das nicht mehr.
-Dort kann eine Seite nur noch ausfuehrbar werden, wenn ein *angehaengter*
-Debugger von aussen hineinschreibt: ein Byte je 16-KB-Seite, und genau dieser
-Zugriff erteilt das Recht.
+On devices with TXM/SPTM - all newer iPhones - that is no longer enough.
+There a page can only become executable if an *attached* debugger writes
+into it from outside: one byte per 16 KB page, and exactly that access grants
+the right.
 
-Damit ist JIT keine einmalige Freischaltung mehr, sondern ein Gespraech. Die
-App bittet ueber einen Haltepunkt (``brk #0xf00d``) um Vorbereitung einzelner
-Bereiche; der Befehl steht in ``x16``, Adresse und Laenge in ``x0``/``x1``.
-Der Debugger bereitet vor, traegt die Adresse in ``x0`` ein und laesst
-weiterlaufen - bis die App sich abmeldet.
+So JIT is no longer a one-off unlock but a conversation. The app asks via a
+breakpoint (``brk #0xf00d``) for individual regions to be prepared; the
+command is in ``x16``, address and length in ``x0``/``x1``. The debugger
+prepares them, puts the address into ``x0`` and lets the app continue -
+until the app signs off.
 
-**Die App muss mitspielen.** Wer diesen Haltepunkt nicht auslöst, bekommt
-auch kein JIT, egal welcher Debugger anhaengt. Amethyst bringt die
-Unterstuetzung mit (``UniversalJIT26.js`` im Bundle).
+The debugger side of that conversation is the "universal" protocol that
+StikDebug established. Apps may extend it: they send a piece of JavaScript
+(``brk #0x68``, or command 2) that registers commands of their own. That is
+why our side is JavaScript too - ``jit_host.js``, run in QuickJS - so such
+an extension really runs instead of being nodded through.
+
+**The app has to play along.** An app that never triggers this breakpoint
+gets no JIT on TXM devices, no matter which debugger is attached.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..errors import DeviceError
 from ..i18n import _
-from .gdb import REG_PC, REG_X0, REG_X1, REG_X16, GdbClient
+from .gdb import GdbClient
+from .models import _numbers
 
-#: Der Debugger-Dienst hinter dem RSD-Tunnel (iOS 17+).
+log = logging.getLogger(__name__)
+
+#: The debugger service behind the RSD tunnel (iOS 17+).
 DEBUGPROXY = "com.apple.internal.dt.remote.debugproxy"
 
-#: Der Haltepunkt, mit dem eine App um JIT bittet.
-BRK_JIT = 0xF00D
-#: Aeltere Haltepunkte, die noch vorkommen.
-BRK_SCRIPT = 0x68
-BRK_LEGACY = 0x69
+#: Our side of the protocol.
+HOST_SCRIPT = Path(__file__).with_name("jit_host.js")
 
-#: Befehle in x16.
-CMD_DETACH = 0
-CMD_PREPARE_REGION = 1
-CMD_NEW_BREAKPOINTS = 2
-CMD_SET_DETACH_AFTER_FIRST = 3
-CMD_PREPARE_FOR_PATCHING = 4
-
-#: Groesste Menge, die wir in einem Paket lesen oder schreiben.
-_CHUNK = 4096
-
-#: Seitengroesse. Je Seite genuegt ein Byte-Zugriff.
+#: Page size. A single byte access per page is enough.
 PAGE_SIZE = 16 * 1024
 
-#: Muster einer ARM64-BRK-Instruktion.
-_BRK_MASK = 0xFFE0001F
-_BRK_OPCODE = 0xD4200000
-
-#: Wie lange wir auf die naechste Anfrage der App warten. Grosszuegig, weil
-#: die App erst beim Start einer Instanz nach JIT fragt - der Nutzer muss
-#: dazwischen im Programm navigieren.
+#: How long we wait for the app's next request. Generous, because the app
+#: only asks for JIT when an instance is started - the user has to navigate
+#: through the program in between.
 WAIT_FOR_APP = 300.0
 
-#: Schutz gegen ein Programm, das endlos Haltepunkte ausloest.
+#: Guard against a program that triggers breakpoints endlessly.
 MAX_BREAKPOINTS = 5000
+
+#: Marks a failed host call for the script (see ``jit_host.js``).
+_FAILED = "\x00"
 
 
 @dataclass
@@ -71,10 +68,15 @@ class JitResult:
     prepared_regions: int = 0
     prepared_bytes: int = 0
     detached_cleanly: bool = False
+    #: Whether the device needed the conversation at all.
+    txm: bool = True
     notes: list[str] = field(default_factory=list)
 
     @property
     def summary(self) -> str:
+        if not self.txm:
+            return _("JIT is in place - this device only needs the debugger "
+                     "attached once.")
         if not self.prepared_regions:
             return _("The debugger was attached, but the app did not request "
                      "any region.")
@@ -83,219 +85,199 @@ class JitResult:
                  count=self.prepared_regions, size=mb)
 
 
-def _is_brk(instruction: int) -> bool:
-    return (instruction & _BRK_MASK) == _BRK_OPCODE
+def has_txm(product_type: str, ios_version: str) -> bool:
+    """Whether the device needs the conversation (as StikDebug decides it).
 
-
-def _brk_immediate(instruction: int) -> int:
-    return (instruction >> 5) & 0xFFFF
-
-
-async def _prepare_region(gdb: GdbClient, address: int, size: int) -> int:
-    """Erteilt einem Speicherbereich das Ausfuehrungsrecht.
-
-    Auf TXM/SPTM-Geraeten geschieht das allein dadurch, dass der angehaengte
-    Debugger in jede Seite schreibt. Wir lesen deshalb ein Byte und schreiben
-    dasselbe Byte zurueck - der Inhalt bleibt unveraendert, das Recht wird
-    erteilt.
+    TXM arrived with the A15 (iPhone14,2) and M2 iPads (iPad14,5) - but it
+    only locks JIT down from iOS 26 on. From iOS 27 every supported device
+    has it except the two iPad Pros that are still around.
     """
-    written = 0
-    for page in range(address, address + size, PAGE_SIZE):
-        current = await gdb.read_memory(page, 1)
-        await gdb.write_memory(page, current)
-        written += 1
-    return written
+    try:
+        major = int(ios_version.split(".")[0])
+    except ValueError:
+        return True             # unknown: rather talk than miss requests
+    if major >= 27:
+        return product_type not in ("iPad8,11", "iPad8,12")
+    if major < 26:
+        return False
+    numbers = _numbers(product_type)
+    if numbers is None:
+        return True
+    if product_type.startswith("iPad"):
+        return numbers >= (14, 5)
+    return numbers >= (14, 2)
 
 
-class Jit26Session:
-    """Fuehrt das Gespraech mit der App, bis sie sich abmeldet."""
+async def touch_pages(gdb: GdbClient, address: int, size: int) -> int:
+    """Grants a memory region the right to execute.
 
-    def __init__(self, gdb: GdbClient, result: JitResult, on_step,
-                 verbose: bool = False) -> None:
+    On TXM/SPTM devices this happens solely by the attached debugger writing
+    into every page. We read the first byte of every page and write the same
+    byte back - the content stays unchanged, the right is granted. Both
+    passes go out in batches; one round trip per page would take minutes
+    for a large region.
+    """
+    pages = list(range(address, address + size, PAGE_SIZE))
+    replies = await gdb.send_batch([f"m{page:x},1" for page in pages])
+    for page, reply in zip(pages, replies):
+        if len(reply) != 2 or reply.startswith("E"):
+            raise DeviceError(_(
+                "Memory at 0x{address:x} is not readable (reply: {reply!r})",
+                address=page, reply=reply))
+    replies = await gdb.send_batch(
+        [f"M{page:x},1:{byte}" for page, byte in zip(pages, replies)])
+    for page, reply in zip(pages, replies):
+        if reply.startswith("E"):
+            raise DeviceError(_(
+                "Memory at 0x{address:x} is not writable (reply: {reply!r})",
+                address=page, reply=reply))
+    return len(pages)
+
+
+class ScriptHost:
+    """Runs ``jit_host.js`` and lends it the debugger connection.
+
+    QuickJS calls are synchronous, the connection is async. So the script
+    runs in a worker thread, and every call it makes is handed to the event
+    loop and waited for there.
+    """
+
+    def __init__(self, gdb: GdbClient, result: JitResult, on_step, *,
+                 txm: bool = True, verbose: bool = False) -> None:
         self._gdb = gdb
         self._result = result
         self._say = on_step
+        self._txm = txm
         self._verbose = verbose
-        self._detached = False
-        #: Manche Apps lassen den Debugger nach der ersten Anfrage gehen.
-        self._detach_after_first = False
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._stop = threading.Event()
+        #: The first failure of a host call - raised again once the script
+        #: has unwound.
+        self._error: BaseException | None = None
 
-    def _trace(self, message: str) -> None:
+    async def run(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        try:
+            reason = await asyncio.to_thread(self._run_script)
+        except BaseException:
+            self._stop.set()
+            raise
+        if reason == "silent":
+            self._result.notes.append(_(
+                "The app stopped reporting back - it probably just kept "
+                "running."))
+        elif reason == "exited":
+            self._result.notes.append(_(
+                "The app quit while the debugger was attached."))
+        elif reason == "limit":
+            self._result.notes.append(_(
+                "Aborted: the app triggered an unusual number of "
+                "breakpoints."))
+
+    def _run_script(self) -> str:
+        import quickjs
+
+        ctx = quickjs.Context()
+        ctx.add_callable("__host_send", self._send)
+        ctx.add_callable("__host_prepare", self._prepare)
+        ctx.add_callable("__host_log", self._log)
+        ctx.add_callable("__host_event", self._event)
+        ctx.add_callable("__host_pid", lambda: self._result.pid)
+        ctx.add_callable("__host_txm", lambda: self._txm)
+        try:
+            ctx.eval(HOST_SCRIPT.read_text(encoding="utf-8"))
+            return str(ctx.eval(f"main({MAX_BREAKPOINTS})"))
+        except quickjs.JSException as exc:
+            if self._error is not None:
+                raise self._error from None
+            raise DeviceError(_("The JIT script failed: {error}",
+                                error=str(exc).splitlines()[0])) from exc
+
+    # -- Called from the script (worker thread). Never raise. ---------------
+
+    def _await(self, coro):
+        """Runs ``coro`` on the event loop and waits for it here."""
+        try:
+            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        except RuntimeError:
+            coro.close()
+            raise
+        while True:
+            if self._stop.is_set():
+                future.cancel()
+                raise DeviceError(_("Stopped."))
+            try:
+                return future.result(timeout=0.25)
+            except TimeoutError:
+                continue
+
+    def _failed(self, exc: BaseException) -> str:
+        if self._error is None:
+            self._error = exc
+        return _FAILED + str(exc)
+
+    def _send(self, payload: str) -> str:
+        try:
+            if payload == "D":
+                self._await(self._gdb.send("D", expect_reply=False))
+                if not self._result.detached_cleanly:
+                    self._say(_("The app is detaching - JIT is in place."))
+                self._result.detached_cleanly = True
+                return ""
+            waits = payload == "c" or payload.startswith("vCont")
+            return self._await(self._gdb.send(
+                payload, timeout=WAIT_FOR_APP if waits else None))
+        except BaseException as exc:
+            return self._failed(exc)
+
+    def _prepare(self, address: str, size: str) -> str:
+        try:
+            address_, size_ = int(address), int(size)
+            if not size_:
+                return "OK"
+            pages = self._await(touch_pages(self._gdb, address_, size_))
+            self._result.prepared_regions += 1
+            self._result.prepared_bytes += size_
+            self._say(f"Region {self._result.prepared_regions}: "
+                      f"{size_ // 1024} KB released in {pages} pages")
+            return "OK"
+        except BaseException as exc:
+            return self._failed(exc)
+
+    def _log(self, message: str) -> None:
+        log.debug("jit: %s", message)
         if self._verbose:
             self._say(f"    {message}")
 
-    async def run(self) -> None:
-        handled = 0
-        while not self._detached:
-            if handled >= MAX_BREAKPOINTS:
-                self._result.notes.append(_(
-                    "Aborted: the app triggered an unusual number of "
-                    "breakpoints."))
-                return
-            stop = await self._gdb.cont(timeout=WAIT_FOR_APP)
-            if not stop.is_stop:
-                self._result.notes.append(_(
-                    "The app stopped reporting back - it probably just kept "
-                    "running."))
-                return
-            handled += 1
-            await self._handle(stop)
-
-    async def _handle(self, stop) -> None:
-        pc = stop.register(REG_PC)
-        thread = stop.thread
-        if pc is None or thread is None:
-            return
-
-        instruction = int.from_bytes(await self._gdb.read_memory(pc, 4),
-                                     "little")
-        self._trace(
-            f"Halt bei pc=0x{pc:x} instr=0x{instruction:08x} "
-            f"x0=0x{stop.register(REG_X0) or 0:x} "
-            f"x1=0x{stop.register(REG_X1) or 0:x} "
-            f"x16=0x{stop.register(REG_X16) or 0:x}")
-        if not _is_brk(instruction):
-            # Ein gewoehnliches Signal - unveraendert durchreichen, sonst
-            # verschluckt der Debugger einen Absturz der App.
-            if stop.signal:
-                await self._gdb.cont_with_signal(stop.signal, thread)
-            return
-
-        immediate = _brk_immediate(instruction)
-        self._trace(f"Haltepunkt 0x{immediate:x}")
-        # Ueber den Haltepunkt hinwegsetzen, sonst haelt die App dort erneut.
-        await self._gdb.set_register(REG_PC, pc + 4, thread)
-
-        if immediate == BRK_JIT:
-            await self._dispatch(stop, thread)
-        elif immediate == BRK_LEGACY:
-            await self._get_jit_mapping(stop, thread)
-        elif immediate == BRK_SCRIPT:
-            await self._accept_script(stop, thread)
-        else:
-            self._result.notes.append(
-                f"Unbekannter Haltepunkt 0x{immediate:x} uebersprungen.")
-
-    async def _dispatch(self, stop, thread: str) -> None:
-        command = stop.register(REG_X16)
-        if command == CMD_DETACH:
-            self._say(_("The app is detaching - JIT is in place."))
-            await self._gdb.detach()
-            self._detached = True
-            self._result.detached_cleanly = True
-            return
-
-        if command == CMD_PREPARE_REGION:
-            address = stop.register(REG_X0) or 0
-            size = stop.register(REG_X1) or 0
-            if not size:
-                return
-            if address == 0:
-                # Die App ueberlaesst dem Debugger die Wahl der Adresse.
-                address = await self._gdb.allocate(size, "rx")
-            pages = await _prepare_region(self._gdb, address, size)
-            self._result.prepared_regions += 1
-            self._result.prepared_bytes += size
-            self._say(f"Bereich {self._result.prepared_regions}: "
-                      f"{size // 1024} KB in {pages} Seiten freigegeben")
-            await self._gdb.set_register(REG_X0, address, thread)
-            return
-
-        if command == CMD_NEW_BREAKPOINTS:
-            await self._accept_script(stop, thread)
-            return
-
-        if command == CMD_SET_DETACH_AFTER_FIRST:
-            self._detach_after_first = bool(stop.register(REG_X0))
-            return
-
-        if command == CMD_PREPARE_FOR_PATCHING:
-            address = stop.register(REG_X0) or 0
-            size = stop.register(REG_X1) or 0
-            if address and size:
-                await self._rewrite(address, size)
-                self._say(_("{size} KB released for patching",
-                            size=size // 1024))
-            return
-
-        self._result.notes.append(_("Skipped unknown command {command}.",
-                                    command=command))
-
-    async def _get_jit_mapping(self, stop, thread: str) -> None:
-        """Der aeltere Weg, Speicher anzufordern (``brk #0x69``).
-
-        Hier steht die *Groesse* in ``x0`` - nicht die Adresse. Wer das mit
-        dem neueren Aufruf verwechselt, fordert einen Bereich an der Adresse
-        "Groesse" an und bekommt Unsinn zurueck.
-        """
-        size = stop.register(REG_X0) or 0
-        if not size:
-            return
-        address = await self._gdb.allocate(size, "rx")
-        self._trace(f"0x{size:x} Byte angefordert -> 0x{address:x}")
-        pages = await _prepare_region(self._gdb, address, size)
-        self._result.prepared_regions += 1
-        self._result.prepared_bytes += size
-        self._say(f"Bereich {self._result.prepared_regions}: "
-                  f"{size // 1024} KB in {pages} Seiten freigegeben")
-        await self._gdb.set_register(REG_X0, address, thread)
-        self._trace(f"x0 := 0x{address:x} zurueckgemeldet")
-
-        if self._detach_after_first:
-            self._say(_("The app lets the debugger go - JIT is in place."))
-            await self._gdb.detach()
-            self._detached = True
-            self._result.detached_cleanly = True
-
-    async def _accept_script(self, stop, thread: str) -> None:
-        """Die App moechte den Debugger um eigene Befehle erweitern.
-
-        Sie schickt dafuer ein JavaScript-Schnipsel. ModStaller fuehrt kein
-        JavaScript aus - die Befehle, die dieses Schnipsel ueblicherweise
-        nachruestet, sind hier fest eingebaut. Deshalb genuegt es, die
-        Anfrage anzunehmen und weiterzumachen.
-        """
-        self._trace("The app offers a debugger extension")
-        address = stop.register(REG_X0) or 0
-        size = min(stop.register(REG_X1) or 0, _CHUNK)
-        if address and size:
-            try:
-                raw = await self._gdb.read_memory(address, size)
-                text = raw.split(b"\x00", 1)[0].decode("utf-8", "replace")
-                self._result.notes.append(_(
-                    "The app offered a debugger extension; the commands it "
-                    "usually adds are built in here.")
-                    + (_(" (detected: {text!r}…)", text=text[:60])
-                       if text else ""))
-            except Exception:
-                pass
-
-    async def _rewrite(self, address: int, size: int) -> None:
-        """Liest einen Bereich und schreibt ihn unveraendert zurueck.
-
-        Auch hier erteilt der Schreibzugriff des Debuggers das Recht - nur
-        geht es diesmal um den ganzen Bereich, nicht um eine Seite je 16 KB.
-        """
-        offset = 0
-        while offset < size:
-            length = min(_CHUNK, size - offset)
-            current = await self._gdb.read_memory(address + offset, length)
-            await self._gdb.write_memory(address + offset, current)
-            offset += length
+    def _event(self, kind: str, detail: str) -> None:
+        if kind == "script":
+            self._say(_("The app sent a debugger extension - it is active "
+                        "now."))
+        elif kind == "script_failed":
+            self._result.notes.append(_(
+                "The app's debugger extension failed: {error}",
+                error=detail))
+        elif kind == "unknown_command":
+            self._result.notes.append(_("Skipped unknown command {command}.",
+                                        command=detail))
 
 
 async def enable_jit(sp, bundle_id: str, *,
                      on_step=lambda msg: None,
                      verbose: bool = False) -> JitResult:
-    """Startet die App und begleitet sie, bis JIT steht."""
+    """Launches the app and stays with it until JIT is in place."""
     from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
     from pymobiledevice3.services.dvt.instruments.process_control import (
         ProcessControl,
     )
 
+    from .connection import device_info
     from .readiness import mount_developer_image
 
-    await mount_developer_image(sp.lockdown, on_step)
+    info = await device_info(sp.lockdown)
+    txm = has_txm(info.product_type, info.ios_version)
+
+    await mount_developer_image(sp, on_step)
 
     rsd = await sp.rsd()
 
@@ -308,11 +290,18 @@ async def enable_jit(sp, bundle_id: str, *,
         raise DeviceError(_("{bundle_id} could not be launched: {error}",
                             bundle_id=bundle_id, error=exc)) from exc
 
-    result = JitResult(bundle_id=bundle_id, pid=pid)
+    result = JitResult(bundle_id=bundle_id, pid=pid, txm=txm)
 
     try:
         port = rsd.get_service_port(DEBUGPROXY)
     except Exception as exc:
+        if DEBUGPROXY not in rsd.peer_info.get("Services", {}):
+            # The image counts as mounted, but iOS never started its
+            # services - seen after swapping images without a restart.
+            raise DeviceError(_(
+                "The Developer Disk Image is mounted, but the iPhone does "
+                "not offer its debugger. Restart the iPhone and try again - "
+                "ModStaller mounts the image anew.")) from exc
         raise DeviceError(_("The debugger service is not reachable: {error}",
                             error=exc)) from exc
 
@@ -325,9 +314,18 @@ async def enable_jit(sp, bundle_id: str, *,
             raise DeviceError(_(
                 "The debugger could not attach to the app."))
 
+        if not txm:
+            # Attaching alone sets CS_DEBUGGED - and that outlasts the
+            # debugger here.
+            await gdb.detach()
+            result.detached_cleanly = True
+            on_step(result.summary)
+            return result
+
         on_step(_("Waiting for requests from the app … (start the instance "
                   "inside the app now)"))
-        await Jit26Session(gdb, result, on_step, verbose=verbose).run()
+        await ScriptHost(gdb, result, on_step, txm=txm,
+                         verbose=verbose).run()
     finally:
         try:
             if not result.detached_cleanly:

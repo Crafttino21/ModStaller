@@ -1,17 +1,18 @@
-"""Ist das iPhone bereit fuers Sideloading - und was davon kann ModStaller selbst erledigen?
+"""Is the iPhone ready for sideloading - and how much of that can ModStaller
+handle itself?
 
-Jede Pruefung sagt, was los ist, und - wo es geht - wie man es behebt:
-entweder automatisch (``fix``) oder mit einer Anleitung (``manual``), wenn
-Apple den Schritt dem Menschen am Geraet vorbehaelt.
+Every check says what is going on and - where possible - how to fix it:
+either automatically (``fix``) or with instructions (``manual``) when Apple
+reserves the step for the human at the device.
 
-Zwei Grenzen setzt iOS selbst:
+iOS itself sets two limits:
 
-* **Entwicklermodus mit Code-Sperre.** Ohne Code schaltet AMFI ihn auf
-  Zuruf ein, startet neu und laesst sich die Nachfrage bestaetigen. Mit Code
-  verweigert es das. Dann machen wir wenigstens den Schalter in den
-  Einstellungen sichtbar - bis ein Entwicklerwerkzeug das tut, fehlt er dort.
-* **"Entwickler vertrauen".** Dafuer gibt es keine Schnittstelle; das bleibt
-  ein Fingertipp in den Einstellungen.
+* **Developer Mode with a passcode.** Without a passcode, AMFI turns it on
+  on request, restarts and lets us confirm the prompt. With a passcode it
+  refuses. Then we at least make the switch visible in Settings - until a
+  developer tool does that, it is missing there.
+* **"Trust developer".** There is no interface for this; it remains a tap in
+  Settings.
 """
 
 from __future__ import annotations
@@ -32,17 +33,17 @@ FIX_DEVELOPER_MODE = "developer-mode"
 FIX_DDI = "ddi"
 FIX_EXPIRED_PROFILES = "expired-profiles"
 
-#: Gratis-Accounts: so viele sideloadete Apps laesst iOS gleichzeitig zu.
+#: Free accounts: how many sideloaded apps iOS allows at the same time.
 FREE_APP_LIMIT = 3
 
-#: Darunter wird es fuer groessere IPAs knapp.
+#: Below this, space gets tight for larger IPAs.
 LOW_SPACE_BYTES = 1_000_000_000
 
-#: Pairing-Dialog und Neustart brauchen einen Menschen - also Geduld.
+#: The pairing dialog and the restart need a human - hence patience.
 PAIR_TIMEOUT = 90.0
 DEVELOPER_MODE_TIMEOUT = 300.0
 
-#: Erst beim Abruf uebersetzen - beim Import steht die Sprache noch nicht fest.
+#: Translated only on use - the language isn't known yet at import time.
 TRUST_HINT = (
     "When an app is started for the first time: Settings › General › VPN & "
     "Device Management › your Apple ID › “Trust”. Once per certificate."
@@ -59,17 +60,17 @@ class Check:
     label: str
     state: str
     detail: str = ""
-    #: Kennung fuer :func:`run_fix`, wenn ModStaller es selbst beheben kann.
+    #: Identifier for :func:`run_fix` if ModStaller can fix it itself.
     fix: str | None = None
     fix_label: str = ""
-    #: Was der Mensch am iPhone tun muss, wenn es keine Automatik gibt.
+    #: What the human has to do on the iPhone when there is no automation.
     manual: str = ""
 
 
 @dataclass
 class FixResult:
     message: str
-    #: Leer, wenn alles erledigt ist - sonst der verbleibende Handgriff.
+    #: Empty when everything is done - otherwise the remaining manual step.
     manual: str = ""
 
 
@@ -84,11 +85,11 @@ def _gb(n: int) -> str:
     return f"{n / 1e9:.1f} GB"
 
 
-# -- Pruefen -----------------------------------------------------------------
+# -- Checking ----------------------------------------------------------------
 
 
 async def run_checks(udid: str | None = None) -> list[Check]:
-    """Alle Pruefungen. Ohne angestecktes iPhone eine leere Liste."""
+    """All checks. An empty list if no iPhone is plugged in."""
     try:
         async with ServiceProvider(udid) as sp:
             return await _checks(sp)
@@ -157,6 +158,8 @@ async def _ddi_check(sp: ServiceProvider, major: int, *, ready: bool) -> Check:
     try:
         async with MobileImageMounterService(lockdown=sp.lockdown) as mounter:
             mounted = await mounter.is_image_mounted(image_type)
+        if not mounted and major >= 27:
+            mounted = await _ddi_cryptex_installed(sp)
     except Exception as exc:
         return Check("ddi", label, INFO,
                      _("Cannot be queried: {error}", error=exc))
@@ -168,8 +171,26 @@ async def _ddi_check(sp: ServiceProvider, major: int, *, ready: bool) -> Check:
                  fix=FIX_DDI, fix_label=_("Mount now"))
 
 
+async def _ddi_cryptex_installed(sp: ServiceProvider) -> bool:
+    """From iOS 27 on the image is installed as a cryptex.
+
+    The image mounter doesn't list it - only cryptexd does, and only over
+    the RSD tunnel.
+    """
+    from pymobiledevice3.services.cryptexd import (
+        DDI_CRYPTEX_IDENTIFIER, CryptexdService,
+    )
+    service = CryptexdService(await sp.rsd())
+    await service.connect()
+    try:
+        installed = await service.copy_installed()
+    finally:
+        await service.close()
+    return any(c.identifier == DDI_CRYPTEX_IDENTIFIER for c in installed)
+
+
 async def _profiles(sp: ServiceProvider):
-    """Provisioning-Profile auf dem Geraet: lockdown zuerst, RSD als Rueckfall."""
+    """Provisioning profiles on the device: lockdown first, RSD as fallback."""
     from pymobiledevice3.services.misagent import MisagentService
     try:
         async with MisagentService(sp.lockdown) as mis:
@@ -228,29 +249,90 @@ async def _space_check(sp: ServiceProvider) -> Check:
                  _("{size} free", size=_gb(free)))
 
 
-# -- Beheben -----------------------------------------------------------------
+# -- Fixing ------------------------------------------------------------------
 
 
-async def mount_developer_image(lockdown, on_step=lambda msg: None) -> None:
-    """Laedt das passende Developer Disk Image, falls es noch fehlt."""
+#: How long we wait for the user to unlock the iPhone during mounting.
+UNLOCK_WAIT = 90.0
+UNLOCK_POLL = 2.0
+
+
+def _locked(exc: BaseException) -> bool:
+    """Whether the image mounter refused because the iPhone is locked.
+
+    The service answers ``{'Error': 'DeviceLocked'}``. pymobiledevice3 passes
+    that on as text for mounting itself - but for the queries before it, it
+    only looks for the expected key and turns the refusal into an empty
+    ``MessageNotSupportedError``. So that one counts as "locked" too; if it
+    is something else, it still surfaces once the wait is over.
+    """
+    from pymobiledevice3.exceptions import MessageNotSupportedError
+
+    seen: BaseException | None = exc
+    while seen is not None:
+        if isinstance(seen, MessageNotSupportedError) or \
+                "DeviceLocked" in str(seen):
+            return True
+        seen = seen.__cause__ or seen.__context__
+    return False
+
+
+async def _mount_provider(sp: ServiceProvider):
+    """Where the image is mounted from: the RSD tunnel from iOS 17 on.
+
+    From iOS 27 on this is mandatory - the image is installed as a cryptex,
+    and pymobiledevice3 refuses plain lockdown with ``RSDRequiredError``.
+    Below that the tunnel works just as well, so there is only one way.
+    """
+    if _major(str(sp.lockdown.product_version)) >= 17:
+        return await sp.rsd()
+    return sp.lockdown
+
+
+async def mount_developer_image(sp: ServiceProvider,
+                                on_step=lambda msg: None, *,
+                                unlock_wait: float = UNLOCK_WAIT) -> None:
+    """Mounts the matching Developer Disk Image if it is still missing.
+
+    Only works while the iPhone is unlocked. If it is locked, we ask for
+    that and keep trying for a while instead of failing right away - the
+    screen going dark between two steps is the normal case.
+    """
     from pymobiledevice3.exceptions import (
         AlreadyMountedError, DeveloperDiskImageNotFoundError,
     )
     from pymobiledevice3.services.mobile_image_mounter import auto_mount
 
     on_step(_("Preparing Developer Disk Image …"))
-    try:
-        await auto_mount(lockdown)
-    except AlreadyMountedError:
-        pass
-    except DeveloperDiskImageNotFoundError as exc:
-        raise DeviceError(_(
-            "No matching Developer Disk Image found - for very new iOS "
-            "versions there is none yet. ({error})", error=exc)) from exc
-    except Exception as exc:
-        raise DeviceError(_(
-            "Developer Disk Image could not be mounted: {error}",
-            error=exc or type(exc).__name__)) from exc
+    provider = await _mount_provider(sp)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + unlock_wait
+    asked = False
+    while True:
+        try:
+            await auto_mount(provider)
+            return
+        except AlreadyMountedError:
+            return
+        except DeveloperDiskImageNotFoundError as exc:
+            raise DeviceError(_(
+                "No matching Developer Disk Image found - for very new iOS "
+                "versions there is none yet. ({error})", error=exc)) from exc
+        except Exception as exc:
+            if not _locked(exc):
+                raise DeviceError(_(
+                    "Developer Disk Image could not be mounted: {error}",
+                    error=str(exc) or type(exc).__name__)) from exc
+            if loop.time() >= deadline:
+                raise DeviceError(_(
+                    "The iPhone is locked - please unlock it and try "
+                    "again.")) from exc
+            if not asked:
+                on_step(_("Please unlock the iPhone - the Developer Disk "
+                          "Image can only be mounted while it is "
+                          "unlocked …"))
+                asked = True
+            await asyncio.sleep(UNLOCK_POLL)
 
 
 async def run_fix(fix: str, udid: str | None = None, *,
@@ -262,7 +344,7 @@ async def run_fix(fix: str, udid: str | None = None, *,
         if fix == FIX_DEVELOPER_MODE:
             return await _enable_developer_mode(sp, on_step)
         if fix == FIX_DDI:
-            await mount_developer_image(sp.lockdown, on_step)
+            await mount_developer_image(sp, on_step)
             return FixResult(_("Developer Disk Image is mounted."))
         if fix == FIX_EXPIRED_PROFILES:
             return await _remove_expired_profiles(sp, on_step)
@@ -307,8 +389,8 @@ async def _enable_developer_mode(sp: ServiceProvider, on_step) -> FixResult:
         await asyncio.wait_for(amfi.enable_developer_mode(enable_post_restart=True),
                                DEVELOPER_MODE_TIMEOUT)
     except DeviceHasPasscodeSetError:
-        # Mit Code-Sperre bleibt der Schalter dem Menschen vorbehalten. Wir
-        # sorgen wenigstens dafuer, dass er in den Einstellungen auftaucht.
+        # With a passcode, the switch is reserved for the human. We at least
+        # make sure it shows up in Settings.
         on_step(_("Passcode set - the switch has to be flipped on the iPhone. "
                   "It is now shown in Settings."))
         await amfi.reveal_developer_mode_option_in_ui()

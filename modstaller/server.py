@@ -1,21 +1,21 @@
-"""Backend fuer die grafische Oberflaeche: JSON-RPC 2.0 ueber stdio.
+"""Backend for the graphical interface: JSON-RPC 2.0 over stdio.
 
-Eine Nachricht pro Zeile. Die Oberflaeche (gui/) startet ``modstaller serve``
-als Kindprozess und ist nur ein weiterer Client der vorhandenen Logik - wie
-``cli.py`` auch.
+One message per line. The interface (gui/) starts ``modstaller serve`` as a
+child process and is just another client of the existing logic - like
+``cli.py``.
 
-Drei Dinge gehen ueber das, was eine Anfrage-Antwort-Schleife kann:
+Three things go beyond what a request-response loop can do:
 
-* **Laufende Arbeit meldet sich.** Installieren, Erneuern und JIT schicken
-  ``log`` und ``progress`` als Notification, gekennzeichnet mit der ID der
-  Anfrage, zu der sie gehoeren.
-* **Laufende Arbeit laesst sich abbrechen.** ``cancel`` mit dieser ID. Fuer
-  JIT unverzichtbar: es wartet, bis sich die App abmeldet.
-* **Der Login fragt zurueck.** Der 2FA-Code kommt aus der Oberflaeche; der
-  Server stellt dafuer seinerseits eine Anfrage ``prompt.2fa``.
+* **Running work reports back.** Install, renew and JIT send ``log`` and
+  ``progress`` as notifications, tagged with the ID of the request they
+  belong to.
+* **Running work can be cancelled.** ``cancel`` with that ID. Essential for
+  JIT: it waits until the app detaches.
+* **Login asks back.** The 2FA code comes from the interface; for that the
+  server in turn sends a ``prompt.2fa`` request.
 
-stdout gehoert allein dem Protokoll. Alles, was sonst dorthin will - ein
-vergessenes ``print``, eine gespraechige Bibliothek -, landet auf stderr.
+stdout belongs to the protocol alone. Anything else that wants to go there -
+a forgotten ``print``, a chatty library - ends up on stderr.
 """
 
 from __future__ import annotations
@@ -36,17 +36,17 @@ from . import config
 from .errors import describe
 from .i18n import _, available, language, set_language
 
-#: JSON-RPC-Fehlercodes. Eigene liegen im freigegebenen Bereich darunter.
+#: JSON-RPC error codes. Our own ones live in the reserved range below.
 PARSE_ERROR = -32700
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
-USER_ERROR = -32000        # ModStallerError & Co. - Meldung ist fuer Menschen
+USER_ERROR = -32000        # ModStallerError & co. - message is for humans
 CANCELLED = -32800
 
 
-#: Wie lange ein Geraete-Eintrag im Status gilt, bevor der Akku neu gelesen
-#: wird. Kuerzer lohnt nicht: lockdown jedes Mal neu aufzubauen kostet.
+#: How long a device entry in the status stays valid before the battery is
+#: read again. Shorter is not worth it: rebuilding lockdown every time costs.
 BATTERY_TTL = 30.0
 
 
@@ -72,7 +72,7 @@ def method(name: str):
 
 
 class Job:
-    """Eine laufende Anfrage: kann melden und abgebrochen werden."""
+    """A running request: can report back and be cancelled."""
 
     def __init__(self, server: "Server", req_id) -> None:
         self.server = server
@@ -92,11 +92,11 @@ class Job:
             self._cancel()
 
     async def isolated(self, make_coro: Callable[[], Awaitable[object]]):
-        """Fuehrt eine Arbeit in eigenem Thread mit eigenem Event-Loop aus.
+        """Runs work in its own thread with its own event loop.
 
-        Die Pipeline ruft Apple synchron auf und wuerde den Server-Loop sonst
-        sekundenlang blockieren - dann kaeme weder der Status noch ein
-        ``cancel`` durch.
+        The pipeline calls Apple synchronously and would otherwise block the
+        server loop for seconds - then neither the status nor a ``cancel``
+        would get through.
         """
         def runner():
             loop = asyncio.new_event_loop()
@@ -126,16 +126,16 @@ class Server:
         self._ids = itertools.count(1)
         self._tasks: set[asyncio.Task] = set()
         self.loop: asyncio.AbstractEventLoop | None = None
-        #: Serial -> Status-Felder. Der Status wird alle paar Sekunden
-        #: abgefragt; lockdown dafuer jedes Mal neu aufzubauen waere teuer.
+        #: Serial -> status fields. The status is polled every few seconds;
+        #: rebuilding lockdown for it every time would be expensive.
         self.device_cache: dict[str, dict] = {}
 
-    # -- Senden ------------------------------------------------------------
+    # -- Sending -----------------------------------------------------------
 
     def send(self, msg: dict) -> None:
         data = (json.dumps(msg, ensure_ascii=False, default=_jsonable)
                 + "\n").encode()
-        # Aus mehreren Threads aufgerufen - eine Zeile darf nie zerreissen.
+        # Called from several threads - a line must never be torn apart.
         with self._lock:
             view = memoryview(data)
             while view:
@@ -146,7 +146,7 @@ class Server:
         self.send({"jsonrpc": "2.0", "method": name, "params": params})
 
     async def ask(self, name: str, params: dict | None = None):
-        """Stellt der Oberflaeche eine Frage und wartet auf die Antwort."""
+        """Asks the interface a question and waits for the answer."""
         req_id = f"s{next(self._ids)}"
         fut = asyncio.get_running_loop().create_future()
         self._pending[req_id] = fut
@@ -158,11 +158,11 @@ class Server:
             self._pending.pop(req_id, None)
 
     def ask_blocking(self, name: str, params: dict | None = None):
-        """:meth:`ask` aus einem Worker-Thread heraus."""
+        """:meth:`ask` from within a worker thread."""
         return asyncio.run_coroutine_threadsafe(
             self.ask(name, params), self.loop).result()
 
-    # -- Empfangen ---------------------------------------------------------
+    # -- Receiving ---------------------------------------------------------
 
     def handle_line(self, line: bytes) -> None:
         line = line.strip()
@@ -179,7 +179,7 @@ class Server:
             return
 
         if "method" not in msg:
-            # Antwort auf eine unserer Fragen.
+            # Answer to one of our questions.
             fut = self._pending.get(msg.get("id"))
             if fut is not None and not fut.done():
                 if "error" in msg:
@@ -238,11 +238,11 @@ class Server:
         return True
 
     async def serve(self, stream) -> None:
-        """Verarbeitet Zeilen aus ``stream`` (binaer, blockierend) bis EOF.
+        """Processes lines from ``stream`` (binary, blocking) until EOF.
 
-        Gelesen wird in einem eigenen Thread statt mit
-        ``loop.connect_read_pipe``: das kann unter Windows mit den anonymen
-        Pipes, die Electron anlegt, nicht umgehen. Ein Thread geht ueberall.
+        Reading happens in a separate thread instead of with
+        ``loop.connect_read_pipe``: on Windows that cannot cope with the
+        anonymous pipes Electron creates. A thread works everywhere.
         """
         self.loop = asyncio.get_running_loop()
         lines: asyncio.Queue = asyncio.Queue()
@@ -255,7 +255,7 @@ class Server:
         threading.Thread(target=read, name="stdin", daemon=True).start()
         while (line := await lines.get()) is not None:
             self.handle_line(line)
-        # Oberflaeche weg: laufende Arbeit abbrechen, nicht verwaisen lassen.
+        # Interface gone: cancel running work rather than orphaning it.
         for job in list(self._jobs.values()):
             job.cancel()
         for task in list(self._tasks):
@@ -274,7 +274,7 @@ def _jsonable(obj):
     return str(obj)
 
 
-# -- Methoden ----------------------------------------------------------------
+# -- Methods -----------------------------------------------------------------
 
 
 def _need(params: dict, key: str) -> str:
@@ -323,7 +323,7 @@ async def _status(server: Server, job: Job, params: dict):
     device = None
     if serials:
         entry = cache.get(serials[0])
-        # Der Akku aendert sich - nach BATTERY_TTL gilt der Eintrag als alt.
+        # The battery changes - after BATTERY_TTL the entry counts as stale.
         stale = entry is None or time.monotonic() - entry["_at"] > BATTERY_TTL
         if stale or params.get("refresh"):
             cache.pop(serials[0], None)
@@ -434,7 +434,7 @@ async def _jit(server: Server, job: Job, params: dict):
     return {"summary": r.summary, "notes": r.notes, "pid": r.pid,
             "preparedRegions": r.prepared_regions,
             "preparedBytes": r.prepared_bytes,
-            "detachedCleanly": r.detached_cleanly}
+            "detachedCleanly": r.detached_cleanly, "txm": r.txm}
 
 
 def _anisette():
@@ -465,9 +465,9 @@ async def _login(server: Server, job: Job, params: dict):
         return server.ask_blocking("prompt.2fa") or ""
 
     def run():
-        job.log("Anisette vorbereiten …")
+        job.log("Preparing Anisette …")
         ani = _anisette()
-        job.log("Bei Apple anmelden …")
+        job.log("Signing in to Apple …")
         session = login(apple_id, password, ani, code_prompt=prompt_code)
         return [str(t) for t in DeveloperServices(session, ani).list_teams()]
 
@@ -492,11 +492,11 @@ async def _account(server: Server, job: Job, params: dict):
     from .provisioning import Capabilities, app_id_in_use
     from .state import store
 
-    # Belegt ist eine App-ID nicht nur durch das, was ModStaller installiert
-    # hat: an ihr kann genauso eine App eines anderen Werkzeugs haengen. Ohne
-    # das Geraet stuende "frei" neben einer App-ID, deren Loeschen eine
-    # laufende App zerstoert. Das iPhone ist aber nicht immer da - dann sagen
-    # wir es lieber, statt zu raten (``usageKnown``).
+    # An App ID is not only taken by what ModStaller installed: an app from
+    # another tool can just as well depend on it. Without the device, "free"
+    # would appear next to an App ID whose deletion breaks a working app.
+    # But the iPhone is not always there - then we would rather say so than
+    # guess (``usageKnown``).
     protected = {r.bundle_id for r in store.all_installs()}
     usage_known = False
     try:
@@ -508,7 +508,7 @@ async def _account(server: Server, job: Job, params: dict):
         protected |= {b for b, m in apps.items() if app_origin(m)["sideloaded"]}
         usage_known = True
     except Exception:
-        pass    # Kein iPhone angesteckt - die Kontoseite bleibt benutzbar.
+        pass    # No iPhone plugged in - the account page stays usable.
 
     def run():
         api = _api()
@@ -535,13 +535,13 @@ async def _account(server: Server, job: Job, params: dict):
 
 @method("appids.delete")
 async def _appids_delete(server: Server, job: Job, params: dict):
-    """Loescht eine App-ID im Apple-Konto.
+    """Deletes an App ID in the Apple account.
 
-    Gibt *kein* Wochenkontingent zurueck: Apple zaehlt neu angelegte App-IDs
-    in einem rollierenden Sieben-Tage-Fenster, nicht die vorhandenen. Wer
-    aufraeumen will, kann das hier tun; wer wieder installieren will, dem
-    hilft es nicht - dafuer weicht ModStaller von selbst auf eine freie
-    App-ID aus (siehe provisioning.ensure_app_id).
+    Gives *no* weekly quota back: Apple counts newly created App IDs in a
+    rolling seven-day window, not the existing ones. Anyone who wants to
+    tidy up can do so here; it does not help anyone who wants to install
+    again - for that ModStaller falls back to a free App ID on its own (see
+    provisioning.ensure_app_id).
     """
     from .provisioning import pick_team
     app_id_id = _need(params, "appIdId")
@@ -623,7 +623,7 @@ def _app_name(bundle_id: str, meta: dict) -> str:
 
 
 def _record_fields(rec) -> dict:
-    """Was ModStaller ueber eine selbst installierte App weiss."""
+    """What ModStaller knows about an app it installed itself."""
     from .status import URGENT_DAYS
     if rec is None:
         return {"sourceIpa": "", "sourceMissing": False,
@@ -645,16 +645,16 @@ def _record_fields(rec) -> dict:
 
 @method("apps.overview")
 async def _apps_overview(server: Server, job: Job, params: dict):
-    """Alles Sideloadete auf dem iPhone - eigenes und fremdes, mit Herkunft.
+    """Everything sideloaded on the iPhone - ours and foreign, with origin.
 
-    An einer Stelle: was ModStaller installiert hat (samt Quell-IPA und
-    Ablauf) und was ein anderes Werkzeug dort abgelegt hat. Fremdes laesst
-    sich nur entfernen, nicht erneuern - die Original-IPA und der private
-    Schluessel liegen beim anderen Werkzeug.
+    In one place: what ModStaller installed (including source IPA and
+    expiry) and what another tool put there. Foreign apps can only be
+    removed, not renewed - the original IPA and the private key live with
+    the other tool.
 
-    Eintraege, die ModStaller kennt, die aber nicht mehr auf dem Geraet
-    liegen, kommen mit ``onDevice: false`` mit: sonst bliebe unerklaerlich,
-    warum sie noch App-IDs belegen.
+    Entries ModStaller knows about but which are no longer on the device
+    are included with ``onDevice: false``: otherwise it would be
+    unexplainable why they still take up App IDs.
     """
     from .device.connection import ServiceProvider
     from .device.install import app_origin, list_apps
@@ -699,7 +699,7 @@ async def _device_fix(server: Server, job: Job, params: dict):
     from .device.readiness import run_fix
     fix = _need(params, "fix")
     result = await job.isolated(lambda: run_fix(fix, on_step=job.log))
-    # Entwicklermodus & Co. stehen im Status-Cache - der ist jetzt veraltet.
+    # Developer Mode & co. live in the status cache - it is now outdated.
     server.device_cache.clear()
     return asdict(result)
 
@@ -718,11 +718,11 @@ async def _info(server: Server, job: Job, params: dict):
 
 @method("i18n.set")
 async def _i18n_set(server: Server, job: Job, params: dict):
-    """Sagt dem Backend, in welcher Sprache es antworten soll.
+    """Tells the backend which language to answer in.
 
-    Die Oberflaeche schickt das gleich nach dem Verbinden und bei jedem
-    Wechsel. Rueckgabe ist die Sprache, die tatsaechlich gilt - eine, die wir
-    nicht haben, faellt auf Englisch zurueck.
+    The interface sends this right after connecting and on every change.
+    Returns the language actually in effect - one we do not have falls back
+    to English.
     """
     return set_language(_need(params, "language"))
 
@@ -736,21 +736,21 @@ async def _version(server: Server, job: Job, params: dict):
         return "dev"
 
 
-# -- Einstieg ----------------------------------------------------------------
+# -- Entry point -------------------------------------------------------------
 
 
 def take_stdout() -> int:
-    """Behaelt stdout fuer das Protokoll und leitet alles andere um.
+    """Keeps stdout for the protocol and redirects everything else.
 
-    Auf FD-Ebene, damit auch C-Erweiterungen und Kindprozesse, die auf FD 1
-    schreiben, das Protokoll nicht verunreinigen.
+    At the FD level, so that C extensions and child processes writing to
+    FD 1 do not pollute the protocol either.
     """
     sys.stdout.flush()
     out = os.dup(1)
     os.dup2(2, 1)
     if os.name == "nt":
-        # Unter Windows erben Kindprozesse nicht FD 1, sondern das
-        # Standard-Handle des Prozesses - das biegt dup2 nicht mit um.
+        # On Windows child processes inherit not FD 1 but the process's
+        # standard handle - dup2 does not redirect that.
         import ctypes
         import msvcrt
         STD_OUTPUT_HANDLE = -11

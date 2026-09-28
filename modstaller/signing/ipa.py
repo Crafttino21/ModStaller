@@ -1,9 +1,9 @@
-"""IPA hineinschauen, ohne sie zu veraendern.
+"""Looking inside an IPA without changing it.
 
-Wir brauchen vorab drei Dinge: die Bundle-ID (fuer die App-ID bei Apple),
-den Anzeigenamen, und ob Extensions drinstecken - denn jede Extension
-verbraucht bei einem Gratis-Account eine eigene App-ID aus einem Kontingent
-von zehn pro Woche.
+We need three things up front: the bundle ID (for the App ID at Apple), the
+display name, and whether it contains extensions - because with a free
+account every extension uses up an App ID of its own from a quota of ten per
+week.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ class IPAInfo:
 
     @property
     def app_id_demand(self) -> int:
-        """Wie viele App-IDs bei Apple noetig waeren: App + jede Extension."""
+        """How many App IDs Apple would require: the app + every extension."""
         return 1 + len(self.extensions)
 
     def summary(self) -> str:
@@ -43,14 +43,14 @@ class IPAInfo:
             f"  min. iOS    {self.minimum_os or '?'}",
         ]
         if self.dylibs:
-            lines.append(f"  dylibs      {len(self.dylibs)} injiziert "
+            lines.append(f"  dylibs      {len(self.dylibs)} injected "
                          f"({', '.join(d.rsplit('/', 1)[-1] for d in self.dylibs[:3])}"
                          f"{' …' if len(self.dylibs) > 3 else ''})")
         if self.frameworks:
             lines.append(f"  Frameworks  {len(self.frameworks)}")
         if self.extensions:
             lines.append(f"  Extensions  {len(self.extensions)} "
-                         f"(braucht {self.app_id_demand} App-IDs)")
+                         f"(needs {self.app_id_demand} App IDs)")
         return "\n".join(lines)
 
 
@@ -99,8 +99,8 @@ def inspect(path: str | Path) -> IPAInfo:
             n[len(prefix):] for n in names
             if n.startswith(prefix + "Frameworks/") and n.endswith(".dylib")
         })
-        # App Store DRM erkennen: dann ist das Binary verschluesselt und
-        # kann nicht neu signiert werden.
+        # Detect App Store DRM: then the binary is encrypted and cannot be
+        # re-signed.
         encrypted = any(n.startswith(prefix + "SC_Info/") for n in names)
 
     return IPAInfo(

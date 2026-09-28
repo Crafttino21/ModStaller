@@ -1,10 +1,10 @@
-"""Geraete-Schicht gegen ein nachgebildetes lockdown.
+"""Device layer against a mocked lockdown.
 
-pymobiledevice3 ist durchgehend asynchron. Ein vergessenes ``await`` faellt
-nicht beim Import auf, sondern erst am Geraet - mit einer Meldung
-("'coroutine' object has no attribute ...", "was never awaited"), die vom
-eigentlichen Ort wegfuehrt. Diese Tests laufen die Pfade ohne iPhone ab und
-scheitern genau dann, wenn ein await fehlt.
+pymobiledevice3 is asynchronous throughout. A forgotten ``await`` doesn't
+show up on import but only on the device - with a message
+("'coroutine' object has no attribute ...", "was never awaited") that leads
+away from the actual spot. These tests walk the paths without an iPhone and
+fail exactly when an await is missing.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ VALUES = {
 
 
 class FakeLockdown:
-    """Nachbildung mit denselben asynchronen Signaturen wie das Original."""
+    """Mock with the same asynchronous signatures as the original."""
 
     udid = VALUES["UniqueDeviceID"]
 
@@ -37,7 +37,7 @@ class FakeLockdown:
 
     async def get_developer_mode_status(self) -> bool:
         if self._raises:
-            raise RuntimeError("Domain unbekannt")
+            raise RuntimeError("unknown domain")
         return self._dev_mode
 
     async def close(self) -> None:
@@ -57,7 +57,7 @@ async def test_device_info_reads_values():
 
 @pytest.mark.asyncio
 async def test_device_info_survives_missing_developer_mode_switch():
-    """Aeltere Systeme kennen den Schalter nicht - das ist kein Fehler."""
+    """Older systems don't know the switch - that is not an error."""
     info = await device_info(FakeLockdown(dev_mode_raises=True))
     assert info.developer_mode is False
 
@@ -65,7 +65,7 @@ async def test_device_info_survives_missing_developer_mode_switch():
 @pytest.mark.asyncio
 async def test_device_info_renders_warning_when_developer_mode_off():
     text = str(await device_info(FakeLockdown(dev_mode=False)))
-    assert "AUS" in text
+    assert "OFF" in text
 
 
 @pytest.mark.asyncio
@@ -78,12 +78,12 @@ async def test_service_provider_closes_lockdown(monkeypatch):
     monkeypatch.setattr("modstaller.device.connection.connect", fake_connect)
     async with ServiceProvider() as sp:
         assert sp.udid == VALUES["UniqueDeviceID"]
-    assert fake.closed, "lockdown muss geschlossen werden"
+    assert fake.closed, "lockdown must be closed"
 
 
 @pytest.mark.asyncio
 async def test_list_devices_is_empty_without_usbmuxd():
-    """usbmuxd ist socket-aktiviert: ohne iPhone laeuft es gar nicht.
-    Das darf keine Ausnahme werfen, sondern nur eine leere Liste ergeben."""
+    """usbmuxd is socket-activated: without an iPhone it isn't running.
+    That must not raise, but simply yield an empty list."""
     from modstaller.device.connection import list_devices
     assert isinstance(await list_devices(), list)

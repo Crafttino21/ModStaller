@@ -1,20 +1,20 @@
-"""Uebersetzung der Texte, die beim Nutzer ankommen.
+"""Translation of the texts that reach the user.
 
-Quellsprache im Code ist Englisch - der englische Satz *ist* der Schluessel.
-Das hat zwei Vorteile: man liest an der Fundstelle, was dort steht, ohne einen
-Katalog aufzuschlagen, und eine fehlende Uebersetzung faellt auf Englisch
-zurueck statt auf ``apps.install.error.3``.
+The source language in the code is English - the English sentence *is* the
+key. That has two advantages: you read what it says right where it is used,
+without looking up a catalog, and a missing translation falls back to English
+instead of ``apps.install.error.3``.
 
     from .i18n import _
     raise DeviceError(_("No iPhone connected."))
     raise SigningError(_("zsign failed (exit {code}).", code=rc))
 
-Platzhalter sind benannt, nie positionell: in anderen Sprachen steht die
-Reihenfolge der Satzteile anders.
+Placeholders are named, never positional: other languages order the parts
+of a sentence differently.
 
-Welche Sprache gilt, sagt die Oberflaeche beim Verbinden (``i18n.set``). Die
-CLI bleibt bei der Quellsprache. Kommentare und Docstrings sind deutsch und
-bleiben es - die liest niemand ausser uns.
+The interface says which language applies when it connects (``i18n.set``).
+The CLI sticks to the source language. Comments and docstrings are in
+English, too.
 """
 
 from __future__ import annotations
@@ -22,10 +22,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-#: Hier liegen die Kataloge, eine JSON-Datei je Sprache.
+#: The catalogs live here, one JSON file per language.
 LOCALE_DIR = Path(__file__).parent / "locale"
 
-#: Die Quellsprache braucht keinen Katalog.
+#: The source language needs no catalog.
 SOURCE = "en"
 
 _language = SOURCE
@@ -33,7 +33,7 @@ _catalog: dict[str, str] = {}
 
 
 def available() -> list[str]:
-    """Welche Sprachen mitgeliefert sind - Quellsprache zuerst."""
+    """Which languages are shipped - source language first."""
     others = sorted(p.stem for p in LOCALE_DIR.glob("*.json"))
     return [SOURCE] + [o for o in others if o != SOURCE]
 
@@ -43,12 +43,12 @@ def language() -> str:
 
 
 def set_language(lang: str) -> str:
-    """Stellt die Sprache um. Rueckgabe: was tatsaechlich gilt.
+    """Switches the language. Returns what actually applies.
 
-    Unbekanntes faellt auf die Quellsprache zurueck, statt zu scheitern - eine
-    Oberflaeche in einer Sprache, die wir nicht haben, soll trotzdem laufen.
-    Ein Regionszusatz wird abgeschnitten, wenn nur die Sprache vorliegt
-    (``de-AT`` findet ``de``), und ``pt-BR`` zaehlt als eigene Sprache.
+    Anything unknown falls back to the source language instead of failing -
+    an interface in a language we don't have should still work. A region
+    suffix is dropped if only the language exists (``de-AT`` finds ``de``),
+    and ``pt-BR`` counts as a language of its own.
     """
     global _language, _catalog
 
@@ -72,28 +72,28 @@ def set_language(lang: str) -> str:
         _language, _catalog = SOURCE, {}
         return _language
 
-    # Leere Eintraege heissen "noch nicht uebersetzt" - dann lieber Englisch.
+    # Empty entries mean "not translated yet" - then English is better.
     _catalog = {k: v for k, v in raw.items() if isinstance(v, str) and v}
     _language = match
     return _language
 
 
 def _(text: str, /, **params: object) -> str:
-    """Der uebersetzte Satz, mit eingesetzten Platzhaltern."""
+    """The translated sentence, with placeholders filled in."""
     out = _catalog.get(text, text)
     if not params:
         return out
     try:
         return out.format(**params)
     except (IndexError, KeyError):
-        # Ein Katalog mit falschem Platzhalter darf nichts abstuerzen lassen.
+        # A catalog with a wrong placeholder must not crash anything.
         return text.format(**params)
 
 
 def _n(singular: str, plural: str, count: int, /, **params: object) -> str:
-    """Ein- oder Mehrzahl. ``count`` steht als ``{count}`` zur Verfuegung.
+    """Singular or plural. ``count`` is available as ``{count}``.
 
-    Bewusst nur zwei Formen: mehr braucht keine der mitgelieferten Sprachen.
-    Die Katalogschluessel sind die beiden englischen Saetze.
+    Deliberately only two forms: none of the shipped languages needs more.
+    The catalog keys are the two English sentences.
     """
     return _(singular if count == 1 else plural, count=count, **params)

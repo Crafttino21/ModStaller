@@ -1,8 +1,8 @@
-"""Was installiert ist und wann es ablaeuft.
+"""What is installed and when it expires.
 
-Absichtlich eine schlichte JSON-Datei: der Datenbestand ist klein, und der
-Refresh-Daemon soll ihn auch dann noch lesen koennen, wenn ModStaller selbst
-gerade kaputt ist.
+Deliberately a plain JSON file: the data set is small, and the refresh
+daemon should still be able to read it even when ModStaller itself is
+currently broken.
 """
 
 from __future__ import annotations
@@ -20,15 +20,15 @@ INSTALLS_FILE = DATA_DIR / "apps.json"
 
 @dataclass
 class InstallRecord:
-    bundle_id: str               # die neue, signierte ID auf dem Geraet
+    bundle_id: str               # the new, signed ID on the device
     original_bundle_id: str
     name: str
     team_id: str
     udid: str
-    source_ipa: str              # Pfad zur Original-IPA, fuer den Refresh
+    source_ipa: str              # path to the original IPA, for refresh
     app_id_id: str
     profile_path: str
-    expires_at: float            # Unix-Zeit
+    expires_at: float            # Unix time
     installed_at: float = field(default_factory=time.time)
     last_refresh_at: float = 0.0
     strip_extensions: bool = False
@@ -62,7 +62,7 @@ def all_installs() -> list[InstallRecord]:
         try:
             out.append(InstallRecord(**raw))
         except TypeError:
-            continue  # aelteres Format - ignorieren statt abstuerzen
+            continue  # older format - skip instead of crashing
     return sorted(out, key=lambda r: r.expires_at)
 
 

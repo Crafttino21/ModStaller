@@ -1,8 +1,9 @@
-"""Aus ``iPhone17,2`` wird "iPhone 16 Pro Max" - und die passende Bauform.
+"""Turns ``iPhone17,2`` into "iPhone 16 Pro Max" - and the matching form
+factor.
 
-Die Namen stammen aus der Geraetetabelle von pymobiledevice3, die mit jeder
-neuen Generation gepflegt wird. Die Bauform brauchen wir nur fuers Bild in der
-Oberflaeche: Home-Button, Notch oder Dynamic Island.
+The names come from pymobiledevice3's device table, which is kept up to date
+with every new generation. We only need the form factor for the picture in
+the UI: home button, notch or Dynamic Island.
 """
 
 from __future__ import annotations
@@ -11,14 +12,14 @@ import re
 
 HOME_BUTTON, NOTCH, ISLAND, IPAD = "home", "notch", "island", "ipad"
 
-#: Neuere Geraete ohne Dynamic Island: die "e"-Modelle erben das Gehaeuse
-#: mit Notch. Alles andere ab iPhone15,2 (14 Pro) hat eine Island.
+#: Newer devices without a Dynamic Island: the "e" models inherit the
+#: notched body. Everything else from iPhone15,2 (14 Pro) on has an island.
 _NOTCH_LATE = frozenset({"iPhone17,5", "iPhone18,5"})
 
-#: Home-Button trotz neuer Nummer: die SE-Modelle im iPhone-8-Gehaeuse.
+#: Home button despite a new number: the SE models in the iPhone 8 body.
 _HOME_LATE = frozenset({"iPhone12,8", "iPhone14,6"})
 
-#: Varianten, die fuer den Menschen dasselbe Geraet sind.
+#: Variants that are the same device as far as a human is concerned.
 _VARIANT = re.compile(r"\s*\((Global|GSM|CDMA|China|WiFi|Cellular)\)$")
 
 
@@ -48,7 +49,7 @@ def form_factor(product_type: str) -> str:
         return HOME_BUTTON
     if product_type in _NOTCH_LATE:
         return NOTCH
-    # iPhone10,3/10,6 ist das iPhone X - die erste Notch.
+    # iPhone10,3/10,6 is the iPhone X - the first notch.
     if nums < (10, 3) or product_type in ("iPhone10,4", "iPhone10,5"):
         return HOME_BUTTON
     if nums < (15, 2):

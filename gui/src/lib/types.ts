@@ -97,6 +97,8 @@ export interface JitResult {
   preparedRegions: number;
   preparedBytes: number;
   detachedCleanly: boolean;
+  /** False when the device needs no conversation - attaching once is enough. */
+  txm: boolean;
 }
 
 export interface Team {

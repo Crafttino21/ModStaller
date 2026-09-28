@@ -1,16 +1,15 @@
-"""Verbindung zum iPhone: usbmux, lockdown und - wo noetig - der RSD-Tunnel.
+"""Connection to the iPhone: usbmux, lockdown and - where needed - the RSD
+tunnel.
 
-Ab iOS 17 sind Teile der Entwickler-Dienste hinter einen CoreDevice-Tunnel
-gewandert. ``com.apple.mobile.installation_proxy`` nimmt ueber die klassische
-usbmux-Verbindung zwar noch Verbindungen an, beantwortet ein ``Install`` aber
-teilweise nie - der Dienst muss dann als
-``com.apple.mobile.installation_proxy.shim.remote`` ueber RSD angesprochen
-werden.
+Since iOS 17, parts of the developer services have moved behind a CoreDevice
+tunnel. ``com.apple.mobile.installation_proxy`` still accepts connections over
+the classic usbmux link, but sometimes never answers an ``Install`` - the
+service then has to be addressed as
+``com.apple.mobile.installation_proxy.shim.remote`` via RSD.
 
-Welcher Weg auf einem konkreten iOS geht, ist eine empirische Frage. Deshalb
-probiert :func:`service_provider` lockdown zuerst und faellt auf den
-Userspace-Tunnel zurueck - der braucht kein root, weil er den TCP-Stack im
-Prozess selbst haelt.
+Which route works on a given iOS is an empirical question. That is why
+:func:`service_provider` tries lockdown first and falls back to the userspace
+tunnel - it needs no root because it keeps the TCP stack inside the process.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ class DeviceInfo:
     developer_mode: bool
 
     def __str__(self) -> str:
-        dm = "an" if self.developer_mode else "AUS"
+        dm = "on" if self.developer_mode else "OFF"
         return (f"{self.name} ({self.product_type}) - iOS {self.ios_version} "
                 f"[{self.build}] - Developer Mode {dm}\n  UDID {self.udid}")
 
@@ -42,12 +41,12 @@ async def list_devices() -> list[str]:
     try:
         return [d.serial for d in await _ls()]
     except Exception:
-        # usbmuxd ist socket-aktiviert: ohne Geraet laeuft es gar nicht.
+        # usbmuxd is socket-activated: without a device it isn't running.
         return []
 
 
 async def connect(udid: str | None = None, *, timeout: float = 0.0):
-    """Oeffnet eine lockdown-Verbindung, optional wartend."""
+    """Opens a lockdown connection, optionally waiting for one."""
     from pymobiledevice3.exceptions import (
         NotPairedError, PasswordRequiredError, ConnectionFailedError,
     )
@@ -81,8 +80,8 @@ async def device_info(lockdown) -> DeviceInfo:
     try:
         dev_mode = bool(await lockdown.get_developer_mode_status())
     except Exception:
-        # Aeltere Systeme kennen den Schalter nicht - dort gibt es ihn nicht,
-        # und das ist kein Fehler.
+        # Older systems don't know the switch - it doesn't exist there, and
+        # that is not an error.
         pass
     return DeviceInfo(
         udid=v.get("UniqueDeviceID", ""),
@@ -96,12 +95,12 @@ async def device_info(lockdown) -> DeviceInfo:
 
 @dataclass(frozen=True)
 class Battery:
-    level: int          # Prozent
+    level: int          # percent
     charging: bool
 
 
 async def battery(lockdown) -> Battery | None:
-    """Akkustand - ``None``, wenn das Geraet ihn nicht verraet."""
+    """Battery level - ``None`` if the device doesn't reveal it."""
     try:
         v = await lockdown.get_value(domain="com.apple.mobile.battery")
         return Battery(level=int(v["BatteryCurrentCapacity"]),
@@ -111,9 +110,9 @@ async def battery(lockdown) -> Battery | None:
 
 
 class ServiceProvider:
-    """Haelt lockdown und - bei Bedarf - den RSD-Tunnel.
+    """Holds lockdown and - when needed - the RSD tunnel.
 
-    Nutzung::
+    Usage::
 
         async with ServiceProvider(udid) as sp:
             provider = await sp.for_installation()
@@ -143,7 +142,7 @@ class ServiceProvider:
                 pass
 
     async def rsd(self):
-        """Baut den Userspace-RSD-Tunnel auf (ohne root) und cached ihn."""
+        """Sets up the userspace RSD tunnel (without root) and caches it."""
         if self._rsd is not None:
             return self._rsd
         from pymobiledevice3.remote.userspace_tunnel import UserspaceRsdTunnel

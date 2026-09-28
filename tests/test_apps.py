@@ -1,7 +1,7 @@
-"""Herkunft installierter Apps und Belegung von App-IDs.
+"""Origin of installed apps and usage of App IDs.
 
-Beides sind reine Funktionen ueber Daten, die vom iPhone bzw. von Apple
-kommen - die Beispiele hier sind an einem echten Geraet abgelesen (iOS 27).
+Both are pure functions over data coming from the iPhone or from Apple -
+the examples here were read off a real device (iOS 27).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def test_an_app_from_the_store_is_not_a_sideload():
 
 
 def test_testflight_is_not_a_sideload_either():
-    """Ohne diesen Fall zaehlte jede Beta-App als sideloadet."""
+    """Without this case every beta app would count as sideloaded."""
     o = app_origin(meta("TestFlight Beta Distribution", team="BUMSKVQ3D9"))
     assert o["origin"] == "testflight"
     assert not o["sideloaded"]
@@ -38,13 +38,13 @@ def test_a_developer_signed_app_is_a_sideload():
                         task_allow=True, team="PP2WVWJJYZ"))
     assert o["origin"] == "developer"
     assert o["sideloaded"] and o["developerSigned"]
-    # Die Team-ID steht in den Entitlements, nicht im Namen der Identitaet.
+    # The team ID is in the entitlements, not in the identity's name.
     assert o["teamId"] == "PP2WVWJJYZ"
 
 
 def test_anything_else_counts_as_a_sideload_but_not_as_developer():
-    """Firmensignierte IPAs: sideloadet, aber kein JIT und kein 7-Tage-Ablauf."""
-    o = app_origin(meta("Irgendeine Firma GmbH", team="ABCDE12345"))
+    """Enterprise-signed IPAs: sideloaded, but no JIT and no 7-day expiry."""
+    o = app_origin(meta("Some Company Inc.", team="ABCDE12345"))
     assert o["origin"] == "other"
     assert o["sideloaded"] and not o["developerSigned"]
 
@@ -59,13 +59,13 @@ def test_an_app_id_of_an_installed_app_is_in_use():
 
 
 def test_the_app_id_of_an_extension_counts_as_used():
-    """Die App-ID einer Extension traegt die der App als Praefix."""
+    """An extension's App ID carries the app's as a prefix."""
     assert app_id_in_use("com.x.app.share", {"com.x.app"})
 
 
 def test_an_unrelated_app_id_is_free():
     assert not app_id_in_use("com.y.other", {"com.x.app"})
-    # Kein blosser Praefix-Vergleich: "com.x.apple" haengt nicht an "com.x.app".
+    # Not a plain prefix check: "com.x.apple" does not hang off "com.x.app".
     assert not app_id_in_use("com.x.applesauce", {"com.x.app"})
 
 

@@ -1,7 +1,7 @@
-"""Die Zustandslogik hinter der Oberflaeche.
+"""The state logic behind the interface.
 
-*Was* angeboten wird, haengt vom Zustand ab - und genau daran entscheidet
-sich, ob die Oberflaeche hilft oder im Weg steht.
+*What* is offered depends on the state - and that is exactly what decides
+whether the interface helps or gets in the way.
 """
 
 from __future__ import annotations

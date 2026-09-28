@@ -1,13 +1,13 @@
-"""Pfade, Einstellungen und das Anlegen der State-Verzeichnisse.
+"""Paths, settings and creating the state directories.
 
-Secrets liegen unter 0600 in 0700-Verzeichnissen. Gelesen wird nur, was auch
-korrekt restriktiv ist - lieber lautstark abbrechen als still leaken.
+Secrets are stored as 0600 in 0700 directories. Only files that are properly
+restrictive are read - better to fail loudly than to leak silently.
 
-Unter Windows gibt es keine Unix-Rechte: dort liegt alles unter
-``%LOCALAPPDATA%\\modstaller``, das die NTFS-Rechte des Benutzerprofils
-schuetzen. Bewusst nicht unter ``%APPDATA%``: dort legt die Oberflaeche
-(Electron) ihren Ordner "ModStaller" an - und Windows unterscheidet keine
-Gross-/Kleinschreibung.
+Windows has no Unix permissions: there everything lives under
+``%LOCALAPPDATA%\\modstaller``, protected by the NTFS permissions of the
+user profile. Deliberately not under ``%APPDATA%``: that is where the
+interface (Electron) creates its "ModStaller" folder - and Windows is
+case-insensitive.
 """
 
 from __future__ import annotations
@@ -26,14 +26,14 @@ from .i18n import _
 APP_NAME = "modstaller"
 
 
-#: Unix-Dateirechte gibt es nur hier - unter Windows ist ``st_mode`` fuer
-#: Gruppe/Andere immer "offen" und sagt nichts ueber den Zugriff aus.
+#: Unix file permissions only exist here - on Windows ``st_mode`` is always
+#: "open" for group/others and says nothing about access.
 POSIX = os.name != "nt"
 
 
 def base_dirs(env: dict | None = None, *, posix: bool = POSIX,
               home: Path | None = None) -> tuple[Path, Path, Path, Path]:
-    """Konfig-, Daten-, Cache- und State-Verzeichnis fuer dieses System."""
+    """Config, data, cache and state directories for this system."""
     env = os.environ if env is None else env
     home = home or Path.home()
     if not posix:
@@ -60,23 +60,24 @@ OUT_DIR = CACHE_DIR / "out"
 LOCK_FILE = STATE_DIR / "modstaller.lock"
 DB_FILE = DATA_DIR / "state.db"
 
-#: Apples private CA-Kette fuer gsa.apple.com. Der Host wird *nicht* von einer
-#: oeffentlichen CA signiert, sondern von "Apple Server Authentication CA".
-#: Ohne dieses Bundle scheitert jede Verbindung mit CERTIFICATE_VERIFY_FAILED.
+#: Apple's private CA chain for gsa.apple.com. The host is *not* signed by a
+#: public CA but by "Apple Server Authentication CA". Without this bundle
+#: every connection fails with CERTIFICATE_VERIFY_FAILED.
 GSA_CA_BUNDLE = Path(__file__).parent / "apple" / "certs" / "apple-gsa-ca.pem"
 
-#: Verzeichnisse, die Secrets enthalten - strikt 0700.
+#: Directories that hold secrets - strictly 0700.
 _PRIVATE_DIRS = (DATA_DIR, SECRETS_DIR, ANISETTE_DIR, CERTS_DIR, PROFILES_DIR,
                  IPA_CACHE_DIR, STATE_DIR)
 _PUBLIC_DIRS = (CONFIG_DIR, CACHE_DIR, WORK_DIR, OUT_DIR)
 
 
 def find_zsign(configured: str = "zsign") -> str | None:
-    """Wo zsign liegt - im PATH oder direkt neben der eigenen .exe.
+    """Where zsign is - on the PATH or right next to our own .exe.
 
-    Die Windows-CLI kommt als Zip mit ``modstaller.exe`` und ``zsign.exe``
-    nebeneinander, ohne PATH-Eintrag. Beim Aufruf faende Windows zsign dort
-    zwar von selbst, ``shutil.which`` (und damit der Systemcheck) aber nicht.
+    The Windows CLI ships as a zip with ``modstaller.exe`` and ``zsign.exe``
+    side by side, without a PATH entry. Windows would find zsign there on its
+    own when running it, but ``shutil.which`` (and so the system check)
+    would not.
     """
     if found := shutil.which(configured):
         return found
@@ -96,7 +97,7 @@ def ensure_dirs() -> None:
 
 
 def write_secret(path: Path, data: bytes) -> None:
-    """Schreibt eine Datei, die von Anfang an 0600 ist - nie kurz offen."""
+    """Writes a file that is 0600 from the start - never briefly open."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.parent.chmod(0o700)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -108,7 +109,7 @@ def write_secret(path: Path, data: bytes) -> None:
 
 
 def read_secret(path: Path) -> bytes:
-    """Liest eine Secret-Datei und verweigert sie, wenn sie zu offen liegt."""
+    """Reads a secret file and refuses it if its permissions are too open."""
     mode = path.stat().st_mode
     if POSIX and mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise ConfigError(_(
@@ -120,16 +121,16 @@ def read_secret(path: Path) -> bytes:
 
 @dataclass
 class Settings:
-    """Was in config.toml stehen darf. Keine Secrets."""
+    """What may go into config.toml. No secrets."""
 
-    #: "local" nutzt die ADI-Libraries auf diesem Rechner, "remote" einen
-    #: anisette-v3-Server. Lokal ist Default - auch unter Windows -, damit
-    #: keine Geraete-Identifier das System verlassen.
+    #: "local" uses the ADI libraries on this machine, "remote" an
+    #: anisette-v3 server. Local is the default - on Windows too - so that
+    #: no device identifiers leave the system.
     anisette_provider: str = "local"
     anisette_server: str = "https://ani.sidestore.io"
     default_udid: str | None = None
     default_team_id: str | None = None
-    #: Free-Accounts: Profile laufen nach 7 Tagen ab, ab hier wird erneuert.
+    #: Free accounts: profiles expire after 7 days; renew from this point on.
     renew_threshold_days: float = 2.0
     zsign_path: str = "zsign"
     extra: dict = field(default_factory=dict)

@@ -1,21 +1,22 @@
-"""Anisette-Provider: Apples Geraete-Attestation fuer GSA-Logins.
+"""Anisette providers: Apple's device attestation for GSA logins.
 
-Ohne diese Header akzeptiert Apple keinen Login. Zwei Quellen:
+Without these headers Apple accepts no login. Two sources:
 
-* :class:`LocalProvider` (Default) - fuehrt Apples ADI-Libraries
-  (``libstoreservicescore.so``, ``libCoreADI.so`` aus der Apple-Music-APK)
-  lokal in einer ARM-Emulation aus. Nichts verlaesst den Rechner. Setzt unter
-  Windows voraus, dass Control Flow Guard aus ist - siehe
-  :func:`local_supported`.
-* :class:`RemoteV3Provider` - anisette-v3-Protokoll gegen einen fremden
-  Server. Nur als Fallback; Geraete-Identifier gehen dann an einen Dritten.
+* :class:`LocalProvider` (default) - runs Apple's ADI libraries
+  (``libstoreservicescore.so``, ``libCoreADI.so`` from the Apple Music APK)
+  locally in an ARM emulation. Nothing leaves the machine. On Windows this
+  requires Control Flow Guard to be off - see :func:`local_supported`.
+* :class:`RemoteV3Provider` - anisette-v3 protocol against a third-party
+  server. Fallback only; device identifiers then go to a third party.
 
-Zwei Dinge korrigiert dieses Modul am Verhalten der ``anisette``-Bibliothek:
+This module corrects two things about the ``anisette`` library's behaviour:
 
-1. Ihr Default-``server_friendly_description`` traegt ``com.apple.dt.Xcode``,
-   was Apple seit August 2026 mit HTTP 503 abweist. Siehe :mod:`.clientinfo`.
-2. Ihre Default-Device-Config hat *hartcodierte* IDs, die jede Installation
-   der Bibliothek teilt. Wir erzeugen pro Installation eigene, stabile IDs.
+1. Its default ``server_friendly_description`` carries
+   ``com.apple.dt.Xcode``, which Apple has rejected with HTTP 503 since
+   August 2026. See :mod:`.clientinfo`.
+2. Its default device config has *hardcoded* IDs shared by every
+   installation of the library. We generate our own stable IDs per
+   installation.
 """
 
 from __future__ import annotations
@@ -33,9 +34,9 @@ from ..errors import AppleError
 from ..i18n import _
 from . import clientinfo
 
-#: Provisioning-State (adi.pb). Apple bindet die 2FA-Vertrauensstellung daran.
-#: Geht die Datei verloren, fragt Apple bei jedem Lauf wieder einen Code ab -
-#: was den unbeaufsichtigten Refresh-Daemon unbrauchbar macht.
+#: Provisioning state (adi.pb). Apple ties the 2FA trust to it. If the file
+#: is lost, Apple asks for a code again on every run - which renders the
+#: unattended refresh daemon useless.
 PROVISIONING_FILE = ANISETTE_DIR / "provisioning.bin"
 LIBS_FILE = ANISETTE_DIR / "libs.bin"
 DEVICE_FILE = ANISETTE_DIR / "device.json"
@@ -47,11 +48,11 @@ class AnisetteProvider(Protocol):
 
 
 def _load_or_create_device() -> dict[str, str]:
-    """Eine stabile, pro Installation eigene Geraete-Identitaet.
+    """A stable device identity, unique to this installation.
 
-    Stabil, weil Apple wechselnde Identitaeten als verdaechtig behandelt und
-    dann erneut 2FA verlangt. Eigen, weil die Defaults der Bibliothek von
-    allen ihren Nutzern geteilt werden.
+    Stable, because Apple treats changing identities as suspicious and then
+    demands 2FA again. Unique, because the library's defaults are shared by
+    all of its users.
     """
     if DEVICE_FILE.exists():
         return json.loads(read_secret(DEVICE_FILE))
@@ -66,20 +67,20 @@ def _load_or_create_device() -> dict[str, str]:
     return device
 
 
-#: Notausgang, falls jemand es trotzdem versuchen will.
+#: Escape hatch, in case someone wants to try anyway.
 ALLOW_LOCAL_ENV = "MODSTALLER_ALLOW_LOCAL_ANISETTE"
 
-#: ProcessControlFlowGuardPolicy aus PROCESS_MITIGATION_POLICY.
+#: ProcessControlFlowGuardPolicy from PROCESS_MITIGATION_POLICY.
 _CFG_POLICY = 7
 
 
 def control_flow_guard_active() -> bool:
-    """Ob fuer *diesen* Prozess Control Flow Guard aktiv ist.
+    """Whether Control Flow Guard is active for *this* process.
 
-    Entschieden wird das von der Haupt-EXE, fuer den ganzen Prozess. Gemessen
-    statt geraten: gepackte Programme, die :func:`packaging.build_backend
-    .clear_cfg` durchlaufen haben, sind sauber, aeltere nicht - und in der
-    Entwicklung laeuft ohnehin ``python.exe``, die CFG nie setzt.
+    The main EXE decides that, for the whole process. Measured rather than
+    guessed: packaged programs that went through :func:`packaging.build_backend
+    .clear_cfg` are clean, older ones are not - and during development it is
+    ``python.exe`` running anyway, which never sets CFG.
     """
     if POSIX:
         return False
@@ -100,27 +101,27 @@ def control_flow_guard_active() -> bool:
             return False
         return bool(flags.value & 1)        # EnableControlFlowGuard
     except Exception:
-        # Nicht feststellbar - dann nicht im Weg stehen.
+        # Cannot be determined - then don't get in the way.
         return False
 
 
 def local_supported() -> bool:
-    """Ob die lokale ADI-Emulation in diesem Prozess laufen kann.
+    """Whether the local ADI emulation can run in this process.
 
-    Mit aktivem Control Flow Guard nicht: ``unicorn.dll`` springt mit
-    ``longjmp`` aus JIT-erzeugtem Code heraus, MSVCs Laufzeit findet dafuer
-    keinen Eintrag in der CFG-Tabelle und ruft ``__fastfail`` (0xC0000409,
-    FAST_FAIL_INVALID_SET_OF_CONTEXT). Kein Fehler, den man abfangen koennte -
-    der Prozess ist sofort weg, und mit ihm das Backend der Oberflaeche. Die
-    Sperre greift deshalb *vor* dem Import von ``anisette``, damit
-    ``unicorn.dll`` gar nicht erst geladen wird.
+    Not with Control Flow Guard active: ``unicorn.dll`` uses ``longjmp`` to
+    jump out of JIT-generated code, MSVC's runtime finds no entry for it in
+    the CFG table and calls ``__fastfail`` (0xC0000409,
+    FAST_FAIL_INVALID_SET_OF_CONTEXT). Not an error one could catch - the
+    process is gone instantly, and with it the GUI's backend. The check
+    therefore applies *before* ``anisette`` is imported, so that
+    ``unicorn.dll`` is never loaded in the first place.
     """
     return (not control_flow_guard_active()
             or os.environ.get(ALLOW_LOCAL_ENV) == "1")
 
 
 class LocalProvider:
-    """ADI-Emulation auf diesem Rechner."""
+    """ADI emulation on this machine."""
 
     name = "local"
 
@@ -143,8 +144,8 @@ class LocalProvider:
         ANISETTE_DIR.chmod(0o700)
 
         device = _load_or_create_device()
-        # Client-Info hier schon sanitisieren: dann stimmt die Identitaet, mit
-        # der provisioniert wird, mit der ueberein, mit der wir spaeter reden.
+        # Sanitize the client info right here: then the identity used for
+        # provisioning matches the one we talk with later.
         device["server_friendly_description"] = clientinfo.sanitize(
             device["server_friendly_description"]
         )
@@ -176,7 +177,7 @@ class LocalProvider:
 
 
 class RemoteV3Provider:
-    """anisette-v3-Protokoll gegen einen fremden Server."""
+    """anisette-v3 protocol against a third-party server."""
 
     name = "remote"
 
@@ -189,8 +190,8 @@ class RemoteV3Provider:
         self._client_info: str | None = None
 
     def client_info(self) -> str:
-        # Den Server nach seiner Client-Info *fragen* statt sie zu raten -
-        # dann trifft uns Apples naechste Aenderung nicht erneut.
+        # *Ask* the server for its client info instead of guessing it -
+        # then Apple's next change won't catch us out again.
         if self._client_info is None:
             try:
                 r = self._session.get(f"{self._base}/v3/client_info",
@@ -217,8 +218,8 @@ class RemoteV3Provider:
 
 
 def build(provider: str = "local", server: str = "") -> AnisetteProvider:
-    """Baut den konfigurierten Provider. 'local' faellt nicht still auf
-    'remote' zurueck - wer lokal gewaehlt hat, will keine Daten verschicken."""
+    """Builds the configured provider. 'local' does not silently fall back to
+    'remote' - whoever chose local doesn't want to send data anywhere."""
     if provider == "local":
         return LocalProvider()
     if provider == "remote":

@@ -1,9 +1,9 @@
-"""developerservices2.apple.com - dieselbe API, die Xcode fuer Free
-Provisioning benutzt.
+"""developerservices2.apple.com - the same API Xcode uses for free
+provisioning.
 
-Die .action-Endpunkte sprechen Plist, der neuere /services/v1-Teil JSON.
-Antworten tragen einen ``resultCode``; alles ausser 0 ist ein Fehler, wobei
-einige Codes in Wahrheit Erfolg bedeuten (siehe :mod:`..errors`).
+The .action endpoints speak plist, the newer /services/v1 part JSON.
+Responses carry a ``resultCode``; anything other than 0 is an error, although
+some codes actually mean success (see :mod:`..errors`).
 """
 
 from __future__ import annotations
@@ -21,15 +21,15 @@ from ..errors import (
 from ..i18n import _
 from . import http
 
-#: Xcodes Client-Id. Die API erwartet sie.
+#: Xcode's client ID. The API expects it.
 CLIENT_ID = "XABBG36SBA"
 
-#: Xcode-Version, die wir vorgeben.
+#: Xcode version we claim to be.
 XCODE_VERSION = "11.2 (11B41)"
 
-#: Genau die Anisette-Header, die developerservices2 erwartet - eine feste
-#: Liste statt "alles, was mit X- anfaengt", damit klar ist, was hierher
-#: gehoert und was nur die Anmeldung braucht.
+#: Exactly the Anisette headers developerservices2 expects - a fixed list
+#: rather than "everything starting with X-", so it is clear what belongs
+#: here and what only the sign-in needs.
 _ANISETTE_HEADERS = (
     "X-Apple-I-MD",
     "X-Apple-I-MD-M",
@@ -52,25 +52,25 @@ class Team:
 
     @property
     def is_free(self) -> bool:
-        """Nur verlaesslich, wenn Apple den Typ ausdruecklich "Free" nennt.
+        """Only reliable if Apple explicitly calls the type "Free".
 
-        Fuer Einzelaccounts meldet Apple sonst ``Individual`` - unabhaengig
-        davon, ob dafuer bezahlt wurde. Wer hier raet, raet falsch; die Frage
-        beantwortet erst die Laufzeit eines echten Profils.
+        Otherwise Apple reports ``Individual`` for single accounts -
+        regardless of whether they are paid. Guessing here means guessing
+        wrong; only the lifetime of a real profile answers the question.
         """
         return self.type.lower().startswith("free")
 
     def __str__(self) -> str:
-        return f"{self.name} [{self.team_id}] - Typ {self.type}"
+        return f"{self.name} [{self.team_id}] - type {self.type}"
 
 
 @dataclass(frozen=True)
 class Certificate:
     cert_id: str
     serial: str
-    #: Name des Rechners, der das Zertifikat angefordert hat - das einzige
-    #: brauchbare Unterscheidungsmerkmal, weil Apple allen denselben Namen
-    #: "iOS Development: <Person>" gibt.
+    #: Name of the machine that requested the certificate - the only usable
+    #: distinguishing feature, because Apple gives all of them the same name
+    #: "iOS Development: <Person>".
     name: str
     content: bytes
     expires_at: object = None
@@ -102,7 +102,7 @@ class Profile:
 
 
 class DeveloperServices:
-    """Client fuer Apples Entwickler-API."""
+    """Client for Apple's developer API."""
 
     def __init__(self, session, anisette) -> None:
         self._session = session
@@ -113,10 +113,10 @@ class DeveloperServices:
 
     def _post(self, action: str, params: dict[str, Any] | None = None,
               *, team_id: str | None = None) -> dict:
-        # Die Client-Id steht zusaetzlich in der URL. Fehlt sie dort, weist
-        # Apple die Anfrage mit resultCode 1100 ("session has expired") ab -
-        # obwohl die Sitzung frisch ist und der Fehler nichts mit ihr zu tun
-        # hat.
+        # The client ID also goes into the URL. If it is missing there,
+        # Apple rejects the request with resultCode 1100 ("session has
+        # expired") - even though the session is fresh and the error has
+        # nothing to do with it.
         url = (f"{http.DEV_SERVICES}/{http.PROTOCOL_VERSION}/{action}"
                f"?clientId={CLIENT_ID}")
         body: dict[str, Any] = {
@@ -136,7 +136,7 @@ class DeveloperServices:
             **self._session.auth_headers,
         }
         headers.update({k: ani[k] for k in _ANISETTE_HEADERS if k in ani})
-        # Apple erwartet die Sprache unter zwei Namen.
+        # Apple expects the locale under two names.
         headers.setdefault("X-Apple-I-Locale", ani.get("X-Apple-Locale", "en_US"))
 
         resp = self._http.post(url, data=plistlib.dumps(body),
@@ -150,7 +150,7 @@ class DeveloperServices:
             data = plistlib.loads(resp.content)
         except Exception as exc:
             raise AppleError(
-                f"Unlesbare Antwort von {action}: {resp.content[:200]!r}"
+                f"Unreadable response from {action}: {resp.content[:200]!r}"
             ) from exc
         return self._check(data, action)
 
@@ -175,17 +175,17 @@ class DeveloperServices:
             for t in data.get("teams", [])
         ]
 
-    # -- Geraete -----------------------------------------------------------
+    # -- Devices -----------------------------------------------------------
 
     def register_device(self, team_id: str, udid: str, name: str) -> None:
-        """Meldet das iPhone beim Team an. Schon registriert = Erfolg."""
+        """Registers the iPhone with the team. Already registered = success."""
         self._post("ios/addDevice.action", {"deviceNumber": udid, "name": name},
                    team_id=team_id)
 
     def list_devices(self, team_id: str) -> list[dict]:
         return self._post("ios/listDevices.action", team_id=team_id).get("devices", [])
 
-    # -- Zertifikate -------------------------------------------------------
+    # -- Certificates -----------------------------------------------------
 
     def submit_csr(self, team_id: str, csr_pem: str, machine_id: str,
                    machine_name: str) -> Certificate:
@@ -231,7 +231,7 @@ class DeveloperServices:
         ]
 
     def add_app_id(self, team_id: str, identifier: str, name: str) -> AppID:
-        # Apple akzeptiert im Namen nur Buchstaben, Ziffern und Leerzeichen.
+        # Apple accepts only letters, digits and spaces in the name.
         safe = "".join(c if c.isalnum() or c == " " else " " for c in name).strip()
         data = self._post("ios/addAppId.action",
                           {"identifier": identifier, "name": safe or "ModStaller App"},
@@ -244,7 +244,7 @@ class DeveloperServices:
     def delete_app_id(self, team_id: str, app_id_id: str) -> None:
         self._post("ios/deleteAppId.action", {"appIdId": app_id_id}, team_id=team_id)
 
-    # -- Provisioning-Profile ---------------------------------------------
+    # -- Provisioning profiles --------------------------------------------
 
     def download_profile(self, team_id: str, app_id_id: str) -> Profile:
         data = self._post("ios/downloadTeamProvisioningProfile.action",
@@ -258,10 +258,10 @@ class DeveloperServices:
 
 
 def _profile_expiry(blob: bytes) -> datetime | None:
-    """Liest das Ablaufdatum aus dem Profil.
+    """Reads the expiry date from the profile.
 
-    Das Profil ist ein CMS-Container; das Plist darin steht im Klartext,
-    deshalb reicht es, den Plist-Teil herauszuschneiden.
+    The profile is a CMS container; the plist inside is plain text, so it
+    is enough to cut out the plist part.
     """
     start = blob.find(b"<?xml")
     end = blob.find(b"</plist>")

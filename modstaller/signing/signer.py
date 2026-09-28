@@ -1,13 +1,13 @@
-"""Signieren mit zsign.
+"""Signing with zsign.
 
-zsign nimmt uns die heikle Arbeit ab: es signiert nested Frameworks und
-injizierte dylibs von innen nach aussen, entfernt alte Signaturen und legt
-das ``embedded.mobileprovision`` an der richtigen Stelle ab. Genau die Punkte,
-an denen handgeschriebene Signierer typischerweise scheitern.
+zsign takes the tricky work off our hands: it signs nested frameworks and
+injected dylibs from the inside out, removes old signatures and puts the
+``embedded.mobileprovision`` in the right place. Exactly the spots where
+hand-written signers typically fail.
 
-Die Entitlements ziehen wir bewusst *nicht* selbst zusammen: ohne ``-e`` nimmt
-zsign die aus dem Provisioning-Profil - und das ist per Definition genau das,
-was Apple dem Account tatsaechlich gewaehrt hat.
+We deliberately do *not* assemble the entitlements ourselves: without ``-e``
+zsign takes them from the provisioning profile - and that is, by definition,
+exactly what Apple has actually granted the account.
 """
 
 from __future__ import annotations
@@ -21,15 +21,15 @@ from pathlib import Path
 from ..errors import SigningError
 from ..i18n import _
 
-#: Wie zsign aufgerufen wird - an beiden Aufrufstellen gleich.
+#: How zsign is invoked - the same at both call sites.
 #:
-#: ``encoding``: ohne Angabe dekodiert ``text=True`` mit der Codepage des
-#: Systems (cp1252 auf deutschem Windows); ein Sonderzeichen in zsigns Ausgabe
-#: wuerde dann mitten in ``subprocess.run`` einen UnicodeDecodeError werfen.
+#: ``encoding``: if unset, ``text=True`` decodes with the system code page
+#: (cp1252 on German Windows); a special character in zsign's output would
+#: then raise a UnicodeDecodeError in the middle of ``subprocess.run``.
 #:
-#: ``creationflags``: zsign ist ein Konsolenprogramm. Das ``windowsHide`` der
-#: Oberflaeche gilt nur fuer das Backend, nicht fuer dessen Kindprozesse -
-#: ohne CREATE_NO_WINDOW blitzt bei jedem Signieren ein Fenster auf.
+#: ``creationflags``: zsign is a console program. The UI's ``windowsHide``
+#: only applies to the backend, not to its child processes - without
+#: CREATE_NO_WINDOW a window flashes up on every signing run.
 RUN_KWARGS: dict = {
     "capture_output": True,
     "text": True,
@@ -49,8 +49,8 @@ class SignRequest:
     profile: Path
     bundle_id: str | None = None
     display_name: str | None = None
-    #: Extensions entfernen. Bei Gratis-Accounts fast immer sinnvoll: jede
-    #: Extension braucht eine eigene App-ID aus dem Wochenkontingent.
+    #: Remove extensions. Almost always sensible for free accounts: every
+    #: extension needs an App ID of its own from the weekly quota.
     strip_extensions: bool = False
     strip_watch: bool = False
 
@@ -75,8 +75,8 @@ def sign(req: SignRequest, *, timeout: float = 900.0,
         "-p", req.p12_password,
         "-m", str(req.profile),
         "-o", str(req.output),
-        "-z", "1",          # leichte Kompression: deutlich schneller, kaum groesser
-        "-f",               # Cache umgehen - sonst ueberlebt eine alte Signatur
+        "-z", "1",          # light compression: much faster, hardly bigger
+        "-f",               # skip the cache - else an old signature survives
     ]
     if req.bundle_id:
         cmd += ["-b", req.bundle_id]
@@ -108,7 +108,7 @@ def sign(req: SignRequest, *, timeout: float = 900.0,
 
 
 def check_identity(p12: Path, password: str, zsign: str = "zsign") -> str:
-    """Prueft die Identitaet und gibt zsigns Beschreibung zurueck."""
+    """Checks the identity and returns zsign's description of it."""
     proc = subprocess.run(
         [zsign, "-C", "-k", str(p12), "-p", password],
         timeout=120, **RUN_KWARGS,

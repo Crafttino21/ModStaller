@@ -1,23 +1,23 @@
-"""X-MMe-Client-Info: Aushandeln, Sanitisieren, Validieren.
+"""X-MMe-Client-Info: negotiating, sanitizing, validating.
 
-Hintergrund
------------
-Apple weist seit Ende August 2026 an der Edge jeden Request an
-``gsa.apple.com/grandslam/GsService2`` ab, dessen ``X-MMe-Client-Info`` den
-Identifier ``com.apple.dt.Xcode`` traegt. Die Antwort ist ein HTTP 503 mit
-einer 190 Byte grossen HTML-Seite nach ~0,2 s - also genau das, was ein
-transienter Ausfall auch waere. Naives Retry-Verhalten wartet hier ewig.
+Background
+----------
+Since late August 2026 Apple rejects at the edge every request to
+``gsa.apple.com/grandslam/GsService2`` whose ``X-MMe-Client-Info`` carries
+the identifier ``com.apple.dt.Xcode``. The response is an HTTP 503 with a
+190-byte HTML page after ~0.2 s - exactly what a transient outage would look
+like. Naive retry behaviour waits forever here.
 
-Der Identifier muss stattdessen ``com.apple.akd`` lauten, Apples eigenen
-Authentication-Daemon. Empirisch gegen Apple geprueft (2026-09-22):
+The identifier must instead be ``com.apple.akd``, Apple's own authentication
+daemon. Verified empirically against Apple (2026-09-22):
 
-    com.apple.dt.Xcode  -> HTTP 503, 190 B   (an der Edge abgewiesen)
-    com.apple.akd/1.0   -> HTTP 404, 0 B     (durchgekommen, Service antwortet)
+    com.apple.dt.Xcode  -> HTTP 503, 190 B   (rejected at the edge)
+    com.apple.akd/1.0   -> HTTP 404, 0 B     (got through, service responds)
 
-GSA setzt diesen Header getrennt von den uebrigen Auth-Headern. Wer ihn nur an
-einer Call-Site korrigiert, laesst die anderen kaputt. Deshalb gibt es genau
-dieses Modul - und :func:`assert_safe` als Transport-Guard, der jeden Ausreisser
-lokal stoppt, bevor er ueberhaupt rausgeht.
+GSA sets this header separately from the other auth headers. Fixing it at
+only one call site leaves the others broken. That is why this one module
+exists - plus :func:`assert_safe` as a transport guard that stops any stray
+value locally, before it even goes out.
 """
 
 from __future__ import annotations
@@ -27,33 +27,33 @@ import re
 from ..errors import ClientInfoPolicyViolation
 from ..i18n import _
 
-#: Der von Apple abgelehnte Identifier.
+#: The identifier Apple rejects.
 REJECTED_IDENTIFIER = "com.apple.dt.Xcode"
 
-#: Womit wir ihn ersetzen.
+#: What we replace it with.
 AKD_IDENTIFIER = "com.apple.akd/1.0"
 
-#: Fallback, falls ein Provider gar keine Client-Info liefert.
+#: Fallback in case a provider supplies no client info at all.
 DEFAULT_CLIENT_INFO = (
     "<MacBookPro13,2> <macOS;13.1;22C65> "
     f"<com.apple.AuthKit/1 ({AKD_IDENTIFIER})>"
 )
 
-#: Erwartete Form: <Modell> <OS;Version;Build> <com.apple.AuthKit/N (app/ver)>
+#: Expected shape: <model> <OS;version;build> <com.apple.AuthKit/N (app/ver)>
 _SHAPE = re.compile(
     r"^<[^<>]+>\s+<[^<>]+>\s+<com\.apple\.AuthKit/\d+\s+\([^()<>]+\)>$"
 )
 
-#: Die App-Komponente in der dritten Klammer, z.B. "com.apple.dt.Xcode/3594.4.19".
+#: The app component in the third bracket, e.g. "com.apple.dt.Xcode/3594.4.19".
 _APP_COMPONENT = re.compile(r"\(([^()]+)\)>\s*$")
 
 
 def sanitize(client_info: str | None) -> str:
-    """Macht einen beliebigen Client-Info-String GSA-tauglich.
+    """Makes an arbitrary client info string acceptable to GSA.
 
-    Ersetzt die App-Komponente durch ``com.apple.akd/1.0``, wenn sie Xcode
-    nennt. Modell- und OS-Angabe des Providers bleiben erhalten - die passen
-    zur ADI-Identitaet des Rechners und sollen konsistent bleiben.
+    Replaces the app component with ``com.apple.akd/1.0`` if it names Xcode.
+    The provider's model and OS details are kept - they match the machine's
+    ADI identity and should stay consistent.
     """
     if not client_info or not client_info.strip():
         return DEFAULT_CLIENT_INFO
@@ -64,7 +64,7 @@ def sanitize(client_info: str | None) -> str:
 
     replaced, n = _APP_COMPONENT.subn(f"({AKD_IDENTIFIER})>", cleaned)
     if n == 0 or REJECTED_IDENTIFIER in replaced:
-        # Unerwartete Form - lieber der bekannt gute Default als ein 503.
+        # Unexpected shape - better the known-good default than a 503.
         return DEFAULT_CLIENT_INFO
     return replaced
 
@@ -73,8 +73,8 @@ def is_safe(client_info: str | None) -> bool:
     return bool(client_info) and REJECTED_IDENTIFIER not in client_info
 
 
-def assert_safe(client_info: str | None, *, where: str = "GSA-Request") -> None:
-    """Transport-Guard. Wirft lokal, bevor Apple mit 503 antworten kann."""
+def assert_safe(client_info: str | None, *, where: str = "GSA request") -> None:
+    """Transport guard. Raises locally before Apple can answer with a 503."""
     if not client_info:
         raise ClientInfoPolicyViolation(_(
             "{where}: X-MMe-Client-Info is missing. Apple would reject the "
@@ -89,6 +89,6 @@ def assert_safe(client_info: str | None, *, where: str = "GSA-Request") -> None:
 
 
 def looks_well_formed(client_info: str) -> bool:
-    """Formpruefung. Bewusst nur eine Warnung wert, kein harter Abbruch -
-    Apple aendert die Form gelegentlich, und Form ist nicht Policy."""
+    """Shape check. Deliberately worth only a warning, not a hard abort -
+    Apple changes the shape occasionally, and shape is not policy."""
     return bool(_SHAPE.match(client_info))
