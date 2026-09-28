@@ -1,7 +1,7 @@
 {
   "name": "modstaller-gui",
   "productName": "ModStaller",
-  "version": "1.2.1-beta4",
+  "version": "1.2.1-beta5",
   "description": "iOS-Sideloader fuer Linux und Windows",
   "private": true,
   "main": "electron/main.cjs",
