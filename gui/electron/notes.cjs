@@ -73,6 +73,8 @@ function stripTags(text) {
     text = text.replace(/<!--[\s\S]*?-->/g, "").replace(/<\/?[a-z][^<>]*>/gi, "");
   } while (text !== before);
 
+  // Ein offener Kommentar ohne "-->" faellt ganz weg - so verlangt es
+  // CodeQL (PR #2); das letzte replace allein liesse "!--" stehen.
   let afterBangCleanup;
   do {
     afterBangCleanup = text;

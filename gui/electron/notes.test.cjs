@@ -63,6 +63,7 @@ test("die Formen von electron-updater kommen alle an", () => {
 test("was die Schleife nicht als Tag erkennt, kann auch keins werden", () => {
   // Ein unvollstaendiges Tag ohne ">" bleibt Text - aber ohne das "<".
   assert.equal(stripTags("<script src=x"), "script src=x");
-  assert.equal(stripTags("<!-- offen"), "!-- offen");
+  // Ein offener Kommentar faellt ganz weg (CodeQL-Autofix aus PR #2).
+  assert.equal(stripTags("<!-- offen"), " offen");
   assert.equal(stripTags("x </b"), "x /b");
 });
