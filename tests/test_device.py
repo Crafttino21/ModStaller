@@ -84,9 +84,17 @@ async def test_service_provider_closes_lockdown(monkeypatch):
 @pytest.mark.asyncio
 async def test_list_devices_is_empty_without_usbmuxd():
     """usbmuxd is socket-activated: without an iPhone it isn't running.
-    That must not raise, but simply yield an empty list."""
+    That must not raise, but simply yield an empty list.
+
+    Windows is different: there a missing service is named instead (the CI
+    runner has no Apple Devices) - see the test below."""
+    from modstaller import config
     from modstaller.device.connection import list_devices
-    assert isinstance(await list_devices(), list)
+    from modstaller.errors import UsbServiceUnavailable
+    try:
+        assert isinstance(await list_devices(), list)
+    except UsbServiceUnavailable:
+        assert not config.POSIX, "only Windows names a missing service"
 
 
 @pytest.mark.asyncio

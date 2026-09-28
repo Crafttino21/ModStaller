@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import plistlib
 import struct
 import zipfile
@@ -102,7 +103,8 @@ def test_unpacking_leaves_out_the_dropped_extension(tmp_path):
     app = out / "Payload" / "A.app"
     assert (app / "PlugIns" / "Keep.appex" / "Keep").read_bytes() == b"x"
     assert not (app / "PlugIns" / "Drop.appex").exists()
-    assert (app / "A").stat().st_mode & 0o100, "executables stay executable"
+    if os.name != "nt":     # Windows has no executable bit
+        assert (app / "A").stat().st_mode & 0o100, "executables stay executable"
 
 
 @pytest.mark.parametrize("evil", ["../escape.txt", "Payload/../../escape.txt"])
