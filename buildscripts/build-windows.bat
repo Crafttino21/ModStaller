@@ -110,6 +110,11 @@ if not defined MSBUILD (
 set "ZSRC=%TEMP%\modstaller-zsign"
 if exist "%ZSRC%" rmdir /s /q "%ZSRC%"
 git clone -q --depth 1 --branch %ZSIGN_REF% https://github.com/zhlynn/zsign.git "%ZSRC%" || goto fail
+rem  Eigene Korrekturen - dieselben wie in packaging\build-zsign.sh.
+for %%p in ("%ROOT%\packaging\zsign-patches\*.patch") do (
+    git -C "%ZSRC%" apply "%%~fp" || goto fail
+    echo zsign-Patch: %%~nxp
+)
 "%MSBUILD%" "%ZSRC%\build\windows\vs2022\zsign.sln" -p:Configuration=Release -p:Platform=x64 -m -nologo -v:minimal || goto fail
 
 set "ZBUILT="

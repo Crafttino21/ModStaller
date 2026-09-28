@@ -200,7 +200,8 @@ async def install(
                 bundle_id=new_id, display_name=display_name or None,
                 strip_extensions=bool(info.extensions) and not keep,
                 strip_watch=info.has_watch, icon=icon,
-            ), zsign=find_zsign(settings.zsign_path) or settings.zsign_path)
+            ), zsign=find_zsign(settings.zsign_path) or settings.zsign_path,
+               on_warning=on_step)
         finally:
             if unpacked is not None:
                 shutil.rmtree(unpacked, ignore_errors=True)

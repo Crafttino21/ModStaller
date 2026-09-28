@@ -150,18 +150,21 @@ class LocalProvider:
         from anisette import Anisette
         from anisette._device import AnisetteDeviceConfig
 
-        ANISETTE_DIR.mkdir(parents=True, exist_ok=True)
-        ANISETTE_DIR.chmod(0o700)
-
-        device = _load_or_create_device()
-        # Sanitize the client info right here: then the identity used for
-        # provisioning matches the one we talk with later.
-        device["server_friendly_description"] = clientinfo.sanitize(
-            device["server_friendly_description"]
-        )
-        self._cfg = AnisetteDeviceConfig(**device)
-        self._Anisette = Anisette
+        # Everything under the lock - including the device identity: two
+        # first starts at once would otherwise read a half-written
+        # device.json, or each create an identity of its own.
         with _LOCAL_LOCK:
+            ANISETTE_DIR.mkdir(parents=True, exist_ok=True)
+            ANISETTE_DIR.chmod(0o700)
+
+            device = _load_or_create_device()
+            # Sanitize the client info right here: then the identity used for
+            # provisioning matches the one we talk with later.
+            device["server_friendly_description"] = clientinfo.sanitize(
+                device["server_friendly_description"]
+            )
+            self._cfg = AnisetteDeviceConfig(**device)
+            self._Anisette = Anisette
             self._ani = self._shared(fresh=False)
 
     def _shared(self, *, fresh: bool):

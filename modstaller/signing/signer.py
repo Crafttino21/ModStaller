@@ -64,8 +64,23 @@ def _redact(cmd: list[str], password: str) -> str:
     return " ".join("***" if a == password else a for a in cmd)
 
 
+def skipped_binaries(output: str) -> list[str]:
+    """Files zsign could not read as Mach-O and therefore left unsigned.
+
+    Only code matters (.dylib, a framework's binary) - iOS refuses to load
+    unsigned code, so the app may not start. Plain resources that zsign
+    looked at by mistake are none of our business.
+    """
+    out = []
+    for m in re.finditer(r"Skipping non-Mach-O file:\s*(.+)", output):
+        name = m.group(1).strip()
+        if name.endswith(".dylib") or ".framework" in name.replace("\\", "/"):
+            out.append(name)
+    return out
+
+
 def sign(req: SignRequest, *, timeout: float = 900.0,
-         zsign: str = "zsign") -> Path:
+         zsign: str = "zsign", on_warning=None) -> Path:
     # A folder is fine too: an IPA unpacked beforehand (Payload/ inside),
     # e.g. with single extensions taken out.
     if not req.ipa.exists():
@@ -125,6 +140,12 @@ def sign(req: SignRequest, *, timeout: float = 900.0,
             "Signing failed (exit {code}).\nCall: {call}\n{detail}",
             code=proc.returncode, call=_redact(cmd, req.p12_password),
             detail=detail[-1200:]))
+    if on_warning is not None:
+        for name in skipped_binaries((proc.stdout or "") + (proc.stderr or "")):
+            on_warning(_("  Warning: zsign could not read {file} and left it "
+                         "unsigned. If the app loads it, iOS will refuse to "
+                         "start the app - the IPA itself is broken there.",
+                         file=name))
     return req.output
 
 

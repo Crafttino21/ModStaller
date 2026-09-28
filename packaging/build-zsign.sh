@@ -7,6 +7,13 @@ ZSIGN_REF=${ZSIGN_REF:-v1.1.1}
 WORK=$(mktemp -d)
 
 git clone -q --depth 1 --branch "$ZSIGN_REF" https://github.com/zhlynn/zsign.git "$WORK/zsign"
+# Eigene Korrekturen (packaging/zsign-patches) - dieselben wie unter Windows.
+PATCHES=${PATCHES:-/src/packaging/zsign-patches}
+for p in "$PATCHES"/*.patch; do
+  [ -e "$p" ] || continue
+  git -C "$WORK/zsign" apply "$p"
+  echo "zsign-Patch: $(basename "$p")"
+done
 make -C "$WORK/zsign/build/linux" -j"$(nproc)" \
   OPENSSL_LIB="-Wl,-Bstatic -lcrypto -Wl,-Bdynamic -ldl -lpthread"
 

@@ -1,6 +1,7 @@
 {
   "    could not be revoked: {error}": "    n’a pas pu être révoqué : {error}",
   "  Revoking foreign certificate: {cert}": "  Révocation du certificat étranger : {cert}",
+  "  Warning: zsign could not read {file} and left it unsigned. If the app loads it, iOS will refuse to start the app - the IPA itself is broken there.": "  Attention : zsign n’a pas pu lire {file} et l’a laissé non signé. Si l’app le charge, iOS refusera de la lancer - l’IPA elle-même est défectueuse à cet endroit.",
   "  Weekly quota exhausted - ModStaller reuses the free App ID\n  {app_id}. The app runs under it perfectly normally; only\n  the internal identifier does not match the name.": "  Quota hebdomadaire épuisé - ModStaller réutilise l’identifiant d’app libre\n  {app_id}. L’application fonctionne tout à fait normalement dessous ; seul\n  l’identifiant interne ne correspond pas au nom.",
   ", expires {date}": ", expire le {date}",
   "Aborted: the app triggered an unusual number of breakpoints.": "Abandon : l’application a déclenché un nombre inhabituel de points d’arrêt.",

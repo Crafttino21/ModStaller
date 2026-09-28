@@ -135,6 +135,12 @@ jobs:
           $ErrorActionPreference = "Stop"
           $src = Join-Path $env:RUNNER_TEMP "zsign"
           git clone -q --depth 1 --branch $env:ZSIGN_REF https://github.com/zhlynn/zsign.git $src
+          # Eigene Korrekturen - dieselben wie in packaging/build-zsign.sh.
+          Get-ChildItem packaging\zsign-patches -Filter *.patch | Sort-Object Name | ForEach-Object {
+            git -C $src apply $_.FullName
+            if ($LASTEXITCODE -ne 0) { Write-Output "::error::zsign-Patch $($_.Name) passt nicht"; exit 1 }
+            Write-Output "zsign-Patch: $($_.Name)"
+          }
           $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
           $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
           if (-not $msbuild) { Write-Output "::error::MSBuild nicht gefunden"; exit 1 }

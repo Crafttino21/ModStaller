@@ -147,3 +147,13 @@ def test_zsign_gets_every_profile_the_icon_and_a_harmless_cwd(tmp_path, monkeypa
     assert cmd[cmd.index("-I") + 1] == str(tmp_path / "icon.png")
     assert cmd[cmd.index("-n") + 1] == "MyTube" and "-W" in cmd
     assert cmd[-1] == str(folder) and seen["cwd"] == str(folder)
+
+
+def test_unsigned_code_is_named():
+    """RevHeadz.dylib: zsign skipped it - the user has to hear about it."""
+    from modstaller.signing.signer import skipped_binaries
+    out = (">>> Invalid arch file in fat mach-o file!\n"
+           ">>> Warning: Skipping non-Mach-O file: \tRevHeadz.dylib\n"
+           ">>> Warning: Skipping non-Mach-O file: \tassets/readme.txt\n"
+           ">>> Warning: Skipping non-Mach-O file: \tFrameworks\\X.framework\\X\n")
+    assert skipped_binaries(out) == ["RevHeadz.dylib", "Frameworks\\X.framework\\X"]

@@ -1,0 +1,84 @@
+From: ModStaller
+Subject: [PATCH] Unmap a Mach-O file that failed to parse
+
+ZMachO::OpenFile maps every file read-write and, when parsing fails
+("Invalid arch file in fat mach-o file!"), returns without unmapping it.
+On Windows that writable mapping locks the file: archiving the IPA then
+fails with "Zip: Failed to open file" (seen with RevHeadz.dylib). Linux
+does not care. Also: CloseFile forgets the pointer, and the destructor
+closes a mapping that is still open.
+---
+diff --git a/src/macho.cpp b/src/macho.cpp
+index a55b3fa..57fc171 100644
+--- a/src/macho.cpp
++++ b/src/macho.cpp
+@@ -14,6 +14,9 @@ ZMachO::ZMachO()
+ 
+ ZMachO::~ZMachO()
+ {
++	// A file that failed to parse stays mapped otherwise - on Windows the
++	// writable mapping then locks it, and archiving fails later on.
++	CloseFile();
+ 	FreeArchOes();
+ }
+ 
+@@ -46,12 +49,15 @@ bool ZMachO::NewArchO(uint8_t* pBase, uint32_t uLength)
+ 	return false;
+ }
+ 
+-void ZMachO::FreeArchOes()
++void ZMachO::FreeArchOes(bool bUnmap)
+ {
+ 	for (size_t i = 0; i < m_arrArchOes.size(); i++) {
+ 		ZArchO* archo = m_arrArchOes[i];
+ 		delete archo;
+ 	}
++	if (bUnmap) {
++		CloseFile();
++	}
+ 	m_pBase = NULL;
+ 	m_sSize = 0;
+ 	m_arrArchOes.clear();
+@@ -74,16 +80,19 @@ bool ZMachO::OpenFile(const char* szPath)
+ 				uint32_t uArchLength = (FAT_MAGIC == magic) ? pFatArch->size : LE(pFatArch->size);
+ 				if (!NewArchO(pArchBase, uArchLength)) {
+ 					ZLog::ErrorV(">>> Invalid arch file in fat mach-o file!\n");
++					FreeArchOes(true);
+ 					return false;
+ 				}
+ 			}
+ 		} else if (MH_MAGIC == magic || MH_CIGAM == magic || MH_MAGIC_64 == magic || MH_CIGAM_64 == magic) {
+ 			if (!NewArchO(m_pBase, (uint32_t)m_sSize)) {
+ 				ZLog::ErrorV(">>> Invalid mach-o file!\n");
++				FreeArchOes(true);
+ 				return false;
+ 			}
+ 		} else {
+ 			ZLog::ErrorV(">>> Invalid mach-o file (magic: 0x%08x)!\n", magic);
++			FreeArchOes(true);
+ 			return false;
+ 		}
+ 	}
+@@ -101,6 +110,9 @@ bool ZMachO::CloseFile()
+ 		ZLog::ErrorV(">>> CodeSign write(munmap) failed! Error: %p, %lu, %s\n", m_pBase, m_sSize, strerror(errno));
+ 		return false;
+ 	}
++	// Unmapped - never again (the destructor tries once more).
++	m_pBase = NULL;
++	m_sSize = 0;
+ 	return true;
+ }
+ 
+diff --git a/src/macho.h b/src/macho.h
+index 463d648..df996c8 100644
+--- a/src/macho.h
++++ b/src/macho.h
+@@ -27,7 +27,7 @@ private:
+ 	bool CloseFile();
+ 
+ 	bool NewArchO(uint8_t* pBase, uint32_t uLength);
+-	void FreeArchOes();
++	void FreeArchOes(bool bUnmap = false);
+ 	bool ReallocCodeSignSpace();
+ 
+ private:
