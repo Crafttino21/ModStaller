@@ -72,7 +72,7 @@ function stripTags(text) {
     before = text;
     text = text.replace(/<!--[\s\S]*?-->/g, "").replace(/<\/?[a-z][^<>]*>/gi, "");
   } while (text !== before);
-  return text.replace(/<(?=[a-z/!?])/gi, "");
+  return text.replace(/<!--/g, "").replace(/<(?=[a-z/!?])/gi, "");
 }
 
 /**
