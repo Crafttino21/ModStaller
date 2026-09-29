@@ -343,3 +343,22 @@ async def test_apple_tv_without_developer_mode_says_where_to_turn_it_on(phone):
     check = _by_id(await rd.run_checks())["developer-mode"]
     assert check.state == rd.WARN and check.fix is None
     assert "Apple TV" in check.manual
+
+
+async def test_vision_pro_has_no_version_limit_and_says_where_developer_mode_is(phone):
+    phone["info"] = DeviceInfo(udid="V", name="Vision", product_type="RealityDevice14,1",
+                               ios_version="2.4", build="B", developer_mode=False,
+                               platform="xros", transport="remote")
+    checks = _by_id(await rd.run_checks())
+    assert checks["ios"].state == rd.OK and "visionOS 2.4" in checks["ios"].detail
+    assert "ddi" not in checks and "wifi" not in checks
+    assert "Vision Pro" in checks["developer-mode"].manual
+
+
+async def test_an_ipod_on_ios_15_needs_no_developer_mode(phone):
+    phone["info"] = DeviceInfo(udid="P", name="iPod", product_type="iPod9,1",
+                               ios_version="15.8", build="B", developer_mode=False)
+    checks = _by_id(await rd.run_checks())
+    assert checks["ios"].state == rd.OK
+    assert checks["developer-mode"].state == rd.NA
+    assert "wifi" in checks

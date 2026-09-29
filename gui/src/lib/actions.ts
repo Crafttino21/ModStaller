@@ -85,7 +85,8 @@ export function setWifi(udid: string, on: boolean) {
       : { message: t("Wi-Fi is off. The iPhone is only reachable over the cable again.") });
 }
 
-/** Ein Apple TV per PIN koppeln - die PIN fragt das Backend ueber "prompt.pin". */
+/** Ein Apple TV (per PIN - das Backend fragt ueber "prompt.pin") oder eine
+ *  Vision Pro (Bestaetigung am Geraet) koppeln. */
 export function pairTv(tv: PairableTv) {
   runTask<{ udid: string; name: string; osVersion: string }>("fix", t("Pair {name}", { name: tv.name }),
     "pair.start", { identifier: tv.identifier, host: tv.host, port: tv.port, name: tv.name },
@@ -93,7 +94,9 @@ export function pairTv(tv: PairableTv) {
       chooseDevice(r.udid);
       return {
         message: t("{name} is paired.", { name: r.name || tv.name }),
-        notes: [t("Next: turn on Developer Mode on the Apple TV (Settings › Privacy & Security), then install the tvOS version of an app.")],
+        notes: [tv.kind === "vision"
+          ? t("Next: turn on Developer Mode on the Vision Pro (Settings › Privacy & Security), then install an app.")
+          : t("Next: turn on Developer Mode on the Apple TV (Settings › Privacy & Security), then install the tvOS version of an app.")],
       };
     });
 }

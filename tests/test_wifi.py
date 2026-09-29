@@ -90,7 +90,7 @@ async def test_switching_on_needs_the_cable(sp):
 
 async def test_an_apple_tv_is_not_switched_on_this_way(sp):
     sp["sp"] = FakeSP(lockdown=FakeLockdown({**VALUES, "ProductType": "AppleTV14,1"}))
-    with pytest.raises(DeviceError, match="PIN"):
+    with pytest.raises(DeviceError, match="network"):
         await wifi.enable()
 
 

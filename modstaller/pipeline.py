@@ -41,8 +41,36 @@ def _ipa_mismatch(ipa_platform: str, device_platform: str) -> str:
     if ipa_platform == "tvos":
         return _("This IPA is an Apple TV app - it cannot be installed on an "
                  "iPhone. Pick the Apple TV as the device.")
+    if ipa_platform == "xros":
+        return _("This IPA is an Apple Vision Pro app - it only runs on a "
+                 "Vision Pro. Pick it as the device.")
     return _("This IPA is for iPhone and iPad - an Apple TV needs the app's "
              "tvOS version.")
+
+
+#: UIDeviceFamily values: 1 iPhone/iPod touch, 2 iPad.
+_IPHONE_FAMILY, _IPAD_FAMILY = 1, 2
+
+
+def incompatibility(info, dev) -> str | None:
+    """Why this IPA cannot go on this device - or None if it can.
+
+    * Apple TV and Vision Pro apps only on their own device.
+    * iPhone and iPad apps on a Vision Pro are fine - visionOS runs them
+      ("Designed for iPad").
+    * An iPhone app on an iPad runs in compatibility mode; an iPad-only app
+      on an iPhone or iPod touch does not start at all.
+    """
+    if info.platform != dev.platform:
+        if dev.platform == "xros" and info.platform == "ios":
+            return None
+        return _ipa_mismatch(info.platform, dev.platform)
+    families = set(getattr(info, "device_families", None) or [])
+    if (dev.platform == "ios" and families == {_IPAD_FAMILY}
+            and not dev.product_type.startswith("iPad")):
+        return _("This app is made for iPad only and does not start on an "
+                 "{kind}.", kind=dev.kind)
+    return None
 
 
 def _say(msg: str) -> None:
@@ -99,14 +127,21 @@ async def install(
         dev = await device_info(sp.lockdown, sp.transport)
         on_step("\n" + _("Device: {name}, {os} {version}",
                               name=dev.name, os=dev.os_name, version=dev.ios_version))
-        if info.platform != dev.platform:
-            raise SigningError(_ipa_mismatch(info.platform, dev.platform))
-        if icon is not None and dev.platform == "tvos":
-            # tvOS icons are layered image stacks - a PNG does not replace them.
-            on_step("  " + _("A new icon is not possible for Apple TV apps - "
-                             "the app keeps its own."))
+        problem = incompatibility(info, dev)
+        if problem:
+            raise SigningError(problem)
+        if dev.platform == "xros" and info.platform == "ios":
+            on_step("  " + _("An iPhone/iPad app on the Vision Pro - visionOS "
+                             "runs it in a window (“Designed for iPad”)."))
+        if icon is not None and info.platform in ("tvos", "xros"):
+            # tvOS and visionOS icons are layered image stacks - a PNG does
+            # not replace them.
+            on_step("  " + _("A new icon is not possible for Apple TV and "
+                             "Vision Pro apps - the app keeps its own."))
             icon = None
-        if not dev.developer_mode and dev.platform != "tvos":
+        # Network-only devices do not always tell their Developer Mode -
+        # the device check names it instead.
+        if not dev.developer_mode and dev.platform == "ios":
             raise SigningError(_(
                 "Developer Mode is off. Turn it on under Settings > Privacy & "
                 "Security > Developer Mode on the iPhone."))

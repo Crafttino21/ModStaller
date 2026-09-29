@@ -58,6 +58,10 @@ TV_DEVELOPER_MODE_HINT = (
     "On the Apple TV: Settings › Privacy & Security › Developer Mode. It "
     "appears there once the Apple TV is paired with ModStaller."
 )
+VISION_DEVELOPER_MODE_HINT = (
+    "On the Vision Pro: Settings › Privacy & Security › Developer Mode. It "
+    "appears there once the Vision Pro is paired with ModStaller."
+)
 
 
 @dataclass
@@ -121,8 +125,8 @@ async def run_checks(udid: str | None = None) -> list[Check]:
 
 async def _checks(sp: ServiceProvider) -> list[Check]:
     info = await device_info(sp.lockdown, sp.transport)
-    if info.platform == registry.TVOS:
-        return await _tv_checks(sp, info)
+    if info.platform in registry.NETWORK_ONLY:
+        return await _network_only_checks(sp, info)
     major = _major(info.ios_version)
     checks = [Check("pairing", _("Paired with this computer"), OK,
                     _("{name} trusts this computer.", name=info.name))]
@@ -174,26 +178,31 @@ def _wifi_check(sp: ServiceProvider, info) -> Check:
                  fix=FIX_WIFI, fix_label=_("Switch on"))
 
 
-async def _tv_checks(sp: ServiceProvider, info) -> list[Check]:
-    """Apple TV: paired by PIN, only in the network. No Developer Disk Image
-    and no JIT yet - so fewer checks."""
+async def _network_only_checks(sp: ServiceProvider, info) -> list[Check]:
+    """Apple TV and Vision Pro: paired over the network, reached only there.
+    No Developer Disk Image and no JIT yet - so fewer checks."""
+    tv = info.platform == registry.TVOS
     checks = [Check("pairing", _("Paired with this computer"), OK,
                     _("{name} is paired and reachable in the network.", name=info.name))]
     major = _major(info.ios_version)
-    if major and major < 17:
-        checks.append(Check("ios", _("tvOS version"), BAD,
+    label = _("tvOS version") if tv else _("visionOS version")
+    # RemotePairing arrived on the Apple TV with tvOS 17; visionOS had it
+    # from the first version on.
+    if tv and major and major < 17:
+        checks.append(Check("ios", label, BAD,
                             _("tvOS {version} is too old - ModStaller needs "
                               "tvOS 17 or newer.", version=info.ios_version)))
     else:
-        checks.append(Check("ios", _("tvOS version"), OK,
-                            f"tvOS {info.ios_version} ({info.build})"))
+        checks.append(Check("ios", label, OK,
+                            f"{info.os_name} {info.ios_version} ({info.build})"))
     if info.developer_mode:
         checks.append(Check("developer-mode", _("Developer Mode"), OK, _("on")))
     else:
         checks.append(Check("developer-mode", _("Developer Mode"), WARN,
                             _("Off or not readable - sideloaded apps only start "
                               "with it."),
-                            manual=_(TV_DEVELOPER_MODE_HINT)))
+                            manual=_(TV_DEVELOPER_MODE_HINT if tv
+                                     else VISION_DEVELOPER_MODE_HINT)))
     checks.append(await _profiles_check(sp))
     checks.append(await _space_check(sp))
     return checks

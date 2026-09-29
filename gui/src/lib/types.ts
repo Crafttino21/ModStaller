@@ -13,8 +13,8 @@ export interface Device {
   productType: string;
   /** "iPhone 16 Pro Max" statt "iPhone17,2". */
   model: string;
-  formFactor: "home" | "notch" | "island" | "ipad" | "tv";
-  platform: "ios" | "tvos";
+  formFactor: "home" | "notch" | "island" | "ipad" | "ipod" | "tv" | "vision";
+  platform: "ios" | "tvos" | "xros";
   transport: Transport;
   /** WLAN ist fuer dieses Geraet in ModStaller eingeschaltet. */
   wifiEnabled: boolean;
@@ -113,8 +113,10 @@ export interface IpaInfo {
   name: string;
   version: string;
   minimumOs: string;
-  /** Fuer iPhone/iPad oder fuers Apple TV. */
-  platform: "ios" | "tvos";
+  /** Fuer iPhone/iPad/iPod, Apple TV oder Vision Pro. */
+  platform: "ios" | "tvos" | "xros";
+  /** UIDeviceFamily: 1 iPhone/iPod, 2 iPad, 3 Apple TV, 7 Vision Pro. */
+  deviceFamilies: number[];
   extensions: string[];
   extensionDetails: ExtensionDetail[];
   hasWatch: boolean;
@@ -253,7 +255,7 @@ export interface DeviceInfo {
   iosVersion: string;
   build: string;
   developerMode: boolean;
-  platform: "ios" | "tvos";
+  platform: "ios" | "tvos" | "xros";
   transport: Transport;
 }
 
@@ -345,6 +347,8 @@ export interface PairableTv {
   host: string;
   port: number;
   model: string;
+  /** "appletv", "vision" - oder leer, wenn das Geraet es nicht sagt. */
+  kind: "appletv" | "vision" | "";
 }
 
 /** Linux-Setup: was schon installiert ist und wohin. */

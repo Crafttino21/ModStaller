@@ -4,11 +4,12 @@
     Wifi, Usb, Tv, Plus,
   } from "@lucide/svelte";
   import PhoneMockup from "./PhoneMockup.svelte";
+  import DeviceIcon from "./DeviceIcon.svelte";
   import BatteryLevel from "./BatteryLevel.svelte";
   import UpdateNotice from "./UpdateNotice.svelte";
   import { go, selectDevice, ui, type View } from "../lib/state.svelte";
   import { t } from "../lib/i18n.svelte";
-  import { deviceKind, osName, overNetwork, transportLabel } from "../lib/device";
+  import { deviceKind, mockupHeight, osName, overNetwork, transportLabel } from "../lib/device";
 
   // $derived, damit ein Sprachwechsel die Beschriftungen sofort mitnimmt.
   const items = $derived<{ view: View; label: string; icon: typeof LayoutGrid }[]>([
@@ -78,7 +79,7 @@
     {/if}
     {#if device}
       <button class="device" onclick={() => go("device")} title={t("Go to device")}>
-        <PhoneMockup form={device.formFactor} height={device.platform === "tvos" ? 40 : 58} />
+        <PhoneMockup form={device.formFactor} height={mockupHeight(device, 58)} />
         <div class="dev-info">
           <div class="dev-name">{device.name}</div>
           <div class="dev-model">{device.model || deviceKind(device)}</div>
@@ -106,15 +107,15 @@
       <div class="others">
         {#each others as d (d.udid)}
           <button class="other" onclick={() => selectDevice(d.udid)} title={t("Switch to this device")}>
-            {#if d.platform === "tvos"}<Tv size={15} />{:else}<Smartphone size={15} />{/if}
+            <DeviceIcon platform={d.platform} formFactor={d.formFactor} size={15} />
             <span class="other-name">{d.name}</span>
             {#if overNetwork(d)}<Wifi size={13} class="faint" />{:else}<Usb size={13} class="faint" />{/if}
           </button>
         {/each}
       </div>
     {/if}
-    <button class="other add" onclick={() => (ui.pairingOpen = true)} title={t("Pair Apple TV")}>
-      <Plus size={15} /><span class="other-name">{t("Pair Apple TV")}</span>
+    <button class="other add" onclick={() => (ui.pairingOpen = true)} title={t("Pair Apple TV or Vision Pro")}>
+      <Plus size={15} /><span class="other-name">{t("Pair Apple TV or Vision Pro")}</span>
     </button>
   </div>
 </aside>

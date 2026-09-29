@@ -1,13 +1,19 @@
-"""Pairing an Apple TV - by PIN, over the network.
+"""Pairing an Apple TV or a Vision Pro - over the network.
 
-An Apple TV 4K has no USB port. It pairs the way Xcode does it: on the
-Apple TV, *Settings › Remotes and Devices › Remote App and Devices* makes it
-advertise ``_remotepairing-manual-pairing._tcp``; the computer connects, the
-Apple TV shows a six-digit PIN, the user types it in here.
+Neither has a USB port for this. They pair the way Xcode does it, after the
+device is told to wait for a computer:
+
+* Apple TV: *Settings › Remotes and Devices › Remote App and Devices*. It
+  then shows a PIN, which the user types in here.
+* Vision Pro: *Settings › General › Remote Devices*. It asks for consent on
+  the device itself.
+
+Both then advertise ``_remotepairing-manual-pairing._tcp``.
 
 pymobiledevice3 has everything for that except the question: it reads the
 PIN with ``input()``. :class:`_PinPairing` asks through a callback instead -
-the interface (``prompt.pin``) or the terminal.
+the interface (``prompt.pin``) or the terminal - and does so exactly where
+pymobiledevice3 would: only for an Apple TV.
 
 The pairing leaves a RemotePairing record (``remote_<identifier>.plist`` in
 pymobiledevice3's home folder). With it the Apple TV is found again later by
@@ -33,8 +39,18 @@ BROWSE_TIMEOUT = 4.0
 AskPin = Callable[[str], Awaitable[str | None]]
 
 
+def kind_of(model: str) -> str:
+    """"appletv" or "vision" from the advert's model (``AppleTV14,1``,
+    ``RealityDevice14,1``) - for the list to show the right picture."""
+    if model.startswith("RealityDevice"):
+        return "vision"
+    if model.startswith("AppleTV"):
+        return "appletv"
+    return ""
+
+
 async def browse(timeout: float = BROWSE_TIMEOUT) -> list[dict]:
-    """Apple TVs that are waiting to be paired right now."""
+    """Apple TVs and Vision Pros waiting to be paired right now."""
     from pymobiledevice3.bonjour import browse_remotepairing_manual_pairing
 
     out = []
@@ -43,9 +59,10 @@ async def browse(timeout: float = BROWSE_TIMEOUT) -> list[dict]:
         identifier = answer.properties.get("identifier", "")
         if not host or not identifier:
             continue
+        model = answer.properties.get("model", "")
         out.append({"name": answer.properties.get("name") or answer.instance.split(".", 1)[0],
                     "identifier": identifier, "host": host, "port": answer.port,
-                    "model": answer.properties.get("model", "")})
+                    "model": model, "kind": kind_of(model)})
     return out
 
 
@@ -57,10 +74,12 @@ def _pin_pairing_class():
         """pymobiledevice3's manual pairing, with the PIN asked for instead of
         read from the terminal."""
 
-        def __init__(self, identifier: str, host: str, port: int, ask_pin: AskPin, name: str):
+        def __init__(self, identifier: str, host: str, port: int, ask_pin: AskPin, name: str,
+                     on_step: Callable[[str], None] = lambda m: None):
             super().__init__(identifier, host, port)
             self._ask_pin = ask_pin
             self._name = name
+            self._on_step = on_step
 
         async def _request_pair_consent(self):
             tlv = ts.PairingDataComponentTLVBuf.build([
@@ -78,13 +97,17 @@ def _pin_pairing_class():
                 raise PairingError(
                     response["pairingRejectedWithError"]["wrappedError"]["userInfo"]["NSLocalizedDescription"])
             if "awaitingUserConsent" in response:
+                # Vision Pro (and iPhones): the device asks - wait for it.
+                self._on_step(_("Confirm the pairing on {name} …", name=self._name))
                 pairing_data = await self._receive_pairing_data()
             else:
-                # tvOS: no consent dialog - it shows a PIN instead.
                 pairing_data = self._decode_bytes_if_needed(response["pairingData"]["_0"]["data"])
-                pin = await self._ask_pin(self._name)
-                if not pin:
-                    raise DeviceError(_("Pairing cancelled."))
+                # tvOS: no consent dialog - it shows a PIN instead. Only
+                # there, like pymobiledevice3 itself.
+                if "AppleTV" in self.remote_device_model:
+                    pin = await self._ask_pin(self._name)
+                    if not pin:
+                        raise DeviceError(_("Pairing cancelled."))
             data = self.decode_tlv(ts.PairingDataComponentTLVBuf.parse(pairing_data))
             return ts.PairConsentResult(
                 public_key=data[ts.PairingDataComponentType.PUBLIC_KEY],
@@ -117,35 +140,35 @@ async def _find_paired(identifier: str, timeout: float = BROWSE_TIMEOUT) -> disc
 async def pair(identifier: str, host: str, port: int, *, name: str = "",
                ask_pin: AskPin, on_step: Callable[[str], None] = lambda m: None
                ) -> registry.KnownDevice:
-    """Pairs the Apple TV at ``host:port`` and remembers it."""
+    """Pairs the Apple TV or Vision Pro at ``host:port`` and remembers it."""
     from pymobiledevice3.exceptions import PairingError, RemotePairingCompletedError
 
     on_step(_("Connecting to {name} …", name=name or host))
-    service = _pin_pairing_class()(identifier, host, port, ask_pin, name or host)
+    service = _pin_pairing_class()(identifier, host, port, ask_pin, name or host, on_step)
     try:
         try:
             await service.connect(autopair=True)
         except RemotePairingCompletedError:
             pass            # paired - the record is written
         except PairingError as exc:
-            raise DeviceError(_("The Apple TV refused the pairing: {error}", error=exc)) from exc
+            raise DeviceError(_("The device refused the pairing: {error}", error=exc)) from exc
         except (ConnectionError, OSError, asyncio.TimeoutError) as exc:
-            raise DeviceError(_("The Apple TV cannot be reached: {error}", error=exc)) from exc
+            raise DeviceError(_("The device cannot be reached: {error}", error=exc)) from exc
     finally:
         await service.close()
 
-    on_step(_("Paired. Asking the Apple TV who it is …"))
+    on_step(_("Paired. Asking the device who it is …"))
     ref = await _find_paired(identifier)
     if ref is None:
         raise DeviceError(_(
-            "Paired, but the Apple TV does not show up in the network afterwards. "
-            "Close the pairing screen on the Apple TV and try again."))
+            "Paired, but the device does not show up in the network afterwards. "
+            "Close the pairing screen on the device and try again."))
     return await _learn(ref)
 
 
 async def _learn(ref: discovery.DeviceRef) -> registry.KnownDevice:
-    """Opens the tunnel once and remembers what the Apple TV says about
-    itself - the status later shows it without building a tunnel."""
+    """Opens the tunnel once and remembers what the device says about itself
+    - the status later shows it without building a tunnel."""
     from . import tunnel
     from .connection import get_value
 

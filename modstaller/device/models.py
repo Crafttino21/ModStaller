@@ -3,7 +3,8 @@ factor.
 
 The names come from pymobiledevice3's device table, which is kept up to date
 with every new generation. We only need the form factor for the picture in
-the UI: home button, notch, Dynamic Island - or a TV for the Apple TV.
+the UI: home button, notch, Dynamic Island - or an iPad, an iPod touch, a
+TV for the Apple TV and a headset for the Vision Pro.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import re
 
 HOME_BUTTON, NOTCH, ISLAND, IPAD, TV = "home", "notch", "island", "ipad", "tv"
+IPOD, VISION = "ipod", "vision"
 
 #: Newer devices without a Dynamic Island: the "e" models inherit the
 #: notched body. Everything else from iPhone15,2 (14 Pro) on has an island.
@@ -39,9 +41,22 @@ def marketing_name(product_type: str) -> str:
     return product_type
 
 
+def device_kind(product_type: str) -> str:
+    """What a person calls it - for log lines and messages."""
+    for prefix, kind in (("iPad", "iPad"), ("iPod", "iPod touch"), ("AppleTV", "Apple TV"),
+                         ("RealityDevice", "Apple Vision Pro")):
+        if product_type.startswith(prefix):
+            return kind
+    return "iPhone"
+
+
 def form_factor(product_type: str) -> str:
     if product_type.startswith("AppleTV"):
         return TV
+    if product_type.startswith("RealityDevice"):
+        return VISION
+    if product_type.startswith("iPod"):
+        return IPOD
     if product_type.startswith("iPad"):
         return IPAD
     nums = _numbers(product_type)

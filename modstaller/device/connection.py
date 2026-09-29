@@ -54,7 +54,12 @@ class DeviceInfo:
 
     @property
     def os_name(self) -> str:
-        return "tvOS" if self.platform == registry.TVOS else "iOS"
+        return {registry.TVOS: "tvOS", registry.XROS: "visionOS"}.get(self.platform, "iOS")
+
+    @property
+    def kind(self) -> str:
+        from .models import device_kind
+        return device_kind(self.product_type)
 
     def __str__(self) -> str:
         dm = "on" if self.developer_mode else "OFF"

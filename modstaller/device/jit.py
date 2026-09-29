@@ -42,6 +42,15 @@ log = logging.getLogger(__name__)
 
 #: The debugger service behind the RSD tunnel (iOS 17+).
 DEBUGPROXY = "com.apple.internal.dt.remote.debugproxy"
+#: The same debugger before iOS 17 - a lockdown service, no tunnel needed.
+LEGACY_DEBUGSERVER = "com.apple.debugserver.DVTSecureSocketProxy"
+
+
+def _major(version: str) -> int:
+    try:
+        return int(str(version).split(".")[0])
+    except ValueError:
+        return 0
 
 #: Our side of the protocol.
 HOST_SCRIPT = Path(__file__).with_name("jit_host.js")
@@ -262,43 +271,41 @@ class ScriptHost:
                                         command=detail))
 
 
-async def enable_jit(sp, bundle_id: str, *,
-                     on_step=lambda msg: None,
-                     verbose: bool = False) -> JitResult:
-    """Launches the app and stays with it until JIT is in place."""
+async def _launch_and_attach(sp, info, bundle_id: str, on_step):
+    """Starts the app suspended and opens the debugger connection.
+
+    From iOS 17 on both live behind the RSD tunnel. Before that they are
+    plain lockdown services - DVT (instruments) and debugserver - on the
+    cable as well as over Wi-Fi, no tunnel involved. Returns ``(pid, conn)``.
+    """
     from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
     from pymobiledevice3.services.dvt.instruments.process_control import (
         ProcessControl,
     )
 
-    from .connection import device_info
-    from .readiness import mount_developer_image
-
-    info = await device_info(sp.lockdown, sp.transport)
-    if info.platform == "tvos":
-        # Needs a tvOS Developer Disk Image - pymobiledevice3 has none.
-        raise DeviceError(_("JIT is not available for Apple TV yet."))
-    txm = has_txm(info.product_type, info.ios_version)
-
-    await mount_developer_image(sp, on_step)
-
-    rsd = await sp.rsd()
+    legacy = _major(info.ios_version) < 17
+    provider = sp.lockdown if legacy else await sp.rsd()
 
     on_step(_("Launching the app suspended …"))
     try:
-        async with DvtProvider(rsd) as dvt, ProcessControl(dvt) as control:
+        async with DvtProvider(provider) as dvt, ProcessControl(dvt) as control:
             pid = await control.launch(bundle_id, kill_existing=True,
                                        start_suspended=True)
     except Exception as exc:
         raise DeviceError(_("{bundle_id} could not be launched: {error}",
                             bundle_id=bundle_id, error=exc)) from exc
 
-    result = JitResult(bundle_id=bundle_id, pid=pid, txm=txm)
+    if legacy:
+        try:
+            return pid, await provider.start_lockdown_service(LEGACY_DEBUGSERVER)
+        except Exception as exc:
+            raise DeviceError(_("The debugger service is not reachable: {error}",
+                                error=exc)) from exc
 
     try:
-        port = rsd.get_service_port(DEBUGPROXY)
+        port = provider.get_service_port(DEBUGPROXY)
     except Exception as exc:
-        if DEBUGPROXY not in rsd.peer_info.get("Services", {}):
+        if DEBUGPROXY not in provider.peer_info.get("Services", {}):
             # The image counts as mounted, but iOS never started its
             # services - seen after swapping images without a restart.
             raise DeviceError(_(
@@ -307,8 +314,26 @@ async def enable_jit(sp, bundle_id: str, *,
                 "ModStaller mounts the image anew.")) from exc
         raise DeviceError(_("The debugger service is not reachable: {error}",
                             error=exc)) from exc
+    return pid, await provider.create_service_connection(port)
 
-    conn = await rsd.create_service_connection(port)
+
+async def enable_jit(sp, bundle_id: str, *,
+                     on_step=lambda msg: None,
+                     verbose: bool = False) -> JitResult:
+    """Launches the app and stays with it until JIT is in place."""
+    from .connection import device_info
+    from .readiness import mount_developer_image
+
+    info = await device_info(sp.lockdown, sp.transport)
+    if info.platform != "ios":
+        # Needs a tvOS/visionOS Developer Disk Image - pymobiledevice3 has none.
+        raise DeviceError(_("JIT is not available for {kind} yet.", kind=info.kind))
+    txm = has_txm(info.product_type, info.ios_version)
+
+    await mount_developer_image(sp, on_step)
+
+    pid, conn = await _launch_and_attach(sp, info, bundle_id, on_step)
+    result = JitResult(bundle_id=bundle_id, pid=pid, txm=txm)
     gdb = GdbClient(conn)
     try:
         await gdb.start_no_ack_mode()

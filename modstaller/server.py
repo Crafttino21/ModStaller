@@ -472,8 +472,13 @@ def _log_usb_service(server, missing: bool) -> None:
                     SUCCESS)
 
 
-def _device_kind(platform: str | None) -> str:
-    return "Apple TV" if platform == "tvos" else "iPhone"
+def _device_kind(device: dict) -> str:
+    from .device.models import device_kind
+    return device_kind(device.get("productType") or "")
+
+
+def _os_name(platform: str | None) -> str:
+    return {"tvos": "tvOS", "xros": "visionOS"}.get(platform or "", "iOS")
 
 
 def _log_device_changes(server, refs: list, cache: dict, errors: dict) -> None:
@@ -505,15 +510,16 @@ def _log_device_changes(server, refs: list, cache: dict, errors: dict) -> None:
         via = _("USB") if ref.transport in (USB,) else _("Wi-Fi")
         if ref.transport == USBMUX_NET:
             via = _("Wi-Fi")
-        now = {"name": device.get("name") or _device_kind(device.get("platform")),
+        now = {"name": device.get("name") or _device_kind(device),
                "devMode": device.get("developerMode"), "error": "",
                "transport": ref.transport}
-        tv = device.get("platform") == "tvos"
+        # Network-only devices report no Developer Mode status we could trust.
+        tv = device.get("platform") in ("tvos", "xros")
         if before is None or not before.get("name"):
             logbook.log(logbook.DEVICE, _(
                 "Connected: {name} · {model} · {os} {version} · {via}",
                 name=now["name"], model=device.get("model", ""),
-                os="tvOS" if tv else "iOS",
+                os=_os_name(device.get("platform")),
                 version=device.get("iosVersion", ""), via=via))
             if now["devMode"] is False:
                 logbook.log(logbook.DEVICE, _(
@@ -755,6 +761,7 @@ async def _ipa_inspect(server: Server, job: Job, params: dict):
     return {"path": str(info.path), "bundleId": info.bundle_id,
             "name": info.name, "version": info.version,
             "minimumOs": info.minimum_os, "platform": info.platform,
+            "deviceFamilies": info.device_families,
             "extensions": info.extensions,
             "extensionDetails": [
                 {"path": e.path, "bundleId": e.bundle_id, "name": e.name,

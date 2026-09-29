@@ -483,11 +483,12 @@ def _device_forget(args) -> int:
 
 async def _pair_tv(args) -> int:
     from .device import tvpair
-    print("Looking for Apple TVs … (on the Apple TV: Settings > Remotes and "
-          "Devices > Remote App and Devices)")
+    print("Looking for devices to pair …\n"
+          "  Apple TV:   Settings > Remotes and Devices > Remote App and Devices\n"
+          "  Vision Pro: Settings > General > Remote Devices")
     found = await tvpair.browse()
     if not found:
-        print("None found. Open that screen on the Apple TV and make sure it is "
+        print("None found. Open that screen on the device and make sure it is "
               "in the same network.")
         return 1
     for i, tv in enumerate(found, 1):
@@ -582,7 +583,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("devices", help="Devices on USB and in the network"
                    ).set_defaults(afunc=_devices)
-    sub.add_parser("pair-tv", help="Pair an Apple TV by PIN (same network)"
+    sub.add_parser("pair", aliases=["pair-tv"],
+                   help="Pair an Apple TV (PIN) or Vision Pro over the network"
                    ).set_defaults(afunc=_pair_tv)
 
     dev = sub.add_parser("device", help="Device info")

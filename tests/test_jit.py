@@ -393,3 +393,73 @@ async def test_unreadable_page_is_an_error():
 
     with pytest.raises(DeviceError):
         await touch_pages(Unreadable([], {}), 0x100000000, PAGE_SIZE)
+
+
+# -- Before iOS 17: no tunnel ---------------------------------------------------
+
+
+class _Dvt:
+    def __init__(self, provider):
+        _Dvt.provider = provider
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        pass
+
+
+class _Control:
+    def __init__(self, dvt):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        pass
+
+    async def launch(self, bundle_id, kill_existing, start_suspended):
+        assert start_suspended
+        return 4242
+
+
+class _LegacyLockdown:
+    def __init__(self):
+        self.started = []
+
+    async def start_lockdown_service(self, name):
+        self.started.append(name)
+        return "conn"
+
+
+class _SP:
+    def __init__(self):
+        self.lockdown = _LegacyLockdown()
+
+    async def rsd(self):
+        raise AssertionError("no tunnel below iOS 17")
+
+
+@pytest.fixture
+def fake_dvt(monkeypatch):
+    monkeypatch.setattr("pymobiledevice3.services.dvt.instruments.dvt_provider.DvtProvider", _Dvt)
+    monkeypatch.setattr(
+        "pymobiledevice3.services.dvt.instruments.process_control.ProcessControl", _Control)
+
+
+@pytest.mark.parametrize("version", ["15.8", "12.5.7", "16.7.10"])
+async def test_below_ios_17_jit_uses_the_lockdown_debugserver(fake_dvt, version):
+    """iPod touch 7 (iOS 15) and older iPhones/iPads: DVT and debugserver
+    are plain lockdown services - asking for the tunnel would fail."""
+    from modstaller.device.connection import DeviceInfo
+    from modstaller.device.jit import LEGACY_DEBUGSERVER, _launch_and_attach
+
+    sp = _SP()
+    info = DeviceInfo(udid="X", name="iPod", product_type="iPod9,1", ios_version=version,
+                      build="B", developer_mode=False)
+    pid, conn = await _launch_and_attach(sp, info, "com.example.emu", lambda m: None)
+    assert (pid, conn) == (4242, "conn")
+    assert sp.lockdown.started == [LEGACY_DEBUGSERVER]
+    assert _Dvt.provider is sp.lockdown
+    assert has_txm("iPod9,1", version) is False

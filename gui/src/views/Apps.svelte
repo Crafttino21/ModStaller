@@ -7,12 +7,13 @@
   import { basename, date, days } from "../lib/format";
   import { enableJit, refreshApps, uninstallApp } from "../lib/actions";
   import { t } from "../lib/i18n.svelte";
+  import { jitAvailable } from "../lib/device";
   import type { SideloadedApp } from "../lib/types";
 
   const st = $derived(ui.status);
   const noDevice = $derived(!st?.device);
-  /** JIT gibt es fuers Apple TV noch nicht (kein tvOS-Developer-Disk-Image). */
-  const jit = $derived(st?.device?.platform !== "tvos");
+  /** JIT gibt es fuer Apple TV und Vision Pro noch nicht (kein Developer Disk Image). */
+  const jit = $derived(jitAvailable(st?.device));
   /** Mit mehreren Accounts: welcher eine App signiert hat. */
   const signedBy = (adsid: string) =>
     (st?.accounts.length ?? 0) > 1 ? st?.accounts.find((a) => a.adsid === adsid)?.label ?? "" : "";

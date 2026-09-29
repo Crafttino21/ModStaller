@@ -55,9 +55,11 @@ class IPAInfo:
     encrypted: bool = False
     extension_details: list[ExtensionInfo] = field(default_factory=list)
     has_watch: bool = False
-    #: "ios" (iPhone/iPad) or "tvos" (Apple TV) - they need different
-    #: binaries, and Apple signs them per platform.
+    #: "ios" (iPhone/iPad/iPod touch), "tvos" (Apple TV) or "xros" (Vision
+    #: Pro) - they need different binaries, and Apple signs them per platform.
     platform: str = "ios"
+    #: UIDeviceFamily: 1 iPhone/iPod touch, 2 iPad, 3 Apple TV, 7 Vision Pro.
+    device_families: list[int] = field(default_factory=list)
 
     @property
     def app_id_demand(self) -> int:
@@ -69,7 +71,7 @@ class IPAInfo:
             f"  Name        {self.name}",
             f"  Bundle-ID   {self.bundle_id}",
             f"  Version     {self.version}",
-            f"  min. {'tvOS' if self.platform == 'tvos' else 'iOS'}    {self.minimum_os or '?'}",
+            f"  min. {_OS_NAMES.get(self.platform, 'iOS'):<7}{self.minimum_os or '?'}",
         ]
         if self.dylibs:
             lines.append(f"  dylibs      {len(self.dylibs)} injected "
@@ -151,29 +153,52 @@ def inspect(path: str | Path) -> IPAInfo:
         extension_details=details,
         has_watch=has_watch,
         platform=platform_of(info),
+        device_families=device_families(info),
     )
 
 
-def platform_of(info: dict) -> str:
-    """tvOS or iOS, from the app's Info.plist.
+_OS_NAMES = {"ios": "iOS", "tvos": "tvOS", "xros": "visionOS"}
 
-    ``CFBundleSupportedPlatforms`` says it directly (``AppleTVOS`` vs.
-    ``iPhoneOS``); older or hand-built IPAs may lack it, then the device
-    family decides (3 = Apple TV)."""
-    platforms = info.get("CFBundleSupportedPlatforms") or []
-    if isinstance(platforms, str):
-        platforms = [platforms]
-    if any(str(p).lower().startswith("appletv") for p in platforms):
-        return "tvos"
-    if platforms:
-        return "ios"
+
+def device_families(info: dict) -> list[int]:
     family = info.get("UIDeviceFamily") or []
     if isinstance(family, int):
         family = [family]
+    out = []
+    for f in family:
+        try:
+            out.append(int(f))
+        except (TypeError, ValueError):
+            continue
+    return sorted(set(out))
+
+
+def platform_of(info: dict) -> str:
+    """iOS, tvOS or visionOS (xrOS), from the app's Info.plist.
+
+    ``CFBundleSupportedPlatforms`` says it directly (``AppleTVOS``, ``XROS``
+    or ``iPhoneOS``); older or hand-built IPAs may lack it, then the device
+    family decides (3 = Apple TV, 7 = Vision Pro)."""
+    platforms = info.get("CFBundleSupportedPlatforms") or []
+    if isinstance(platforms, str):
+        platforms = [platforms]
+    names = [str(p).lower() for p in platforms]
+    if any(n.startswith("appletv") for n in names):
+        return "tvos"
+    if any(n.startswith("xr") for n in names):
+        return "xros"
+    if names:
+        return "ios"
+    family = device_families(info)
     if family and all(f == 3 for f in family):
         return "tvos"
-    if str(info.get("DTPlatformName", "")).lower().startswith("appletv"):
+    if family and all(f == 7 for f in family):
+        return "xros"
+    dt = str(info.get("DTPlatformName", "")).lower()
+    if dt.startswith("appletv"):
         return "tvos"
+    if dt.startswith("xr"):
+        return "xros"
     return "ios"
 
 

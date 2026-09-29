@@ -77,8 +77,9 @@ async def enable(udid: str | None = None, *,
         udid = sp.udid
         product = values.get("ProductType", "")
         version = values.get("ProductVersion", "")
-        if registry.platform_for(product, values.get("DeviceClass", "")) == registry.TVOS:
-            raise DeviceError(_("An Apple TV is paired by PIN, not over the cable."))
+        if registry.platform_for(product, values.get("DeviceClass", "")) in registry.NETWORK_ONLY:
+            raise DeviceError(_("An Apple TV or Vision Pro is paired over the "
+                                "network, not over the cable."))
 
         on_step(_("Allowing connections over Wi-Fi …"))
         await lockdown.set_enable_wifi_connections(True)

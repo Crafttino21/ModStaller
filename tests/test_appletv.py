@@ -117,6 +117,7 @@ async def test_the_pin_is_asked_for_not_read_from_the_terminal(monkeypatch):
         return "123456"
 
     service = tvpair._pin_pairing_class()("ID", "10.0.0.5", 49152, ask_pin, "Living room")
+    service.handshake_info = {"peerDeviceInfo": {"model": "AppleTV14,1", "identifier": "ID"}}
     sent = []
 
     async def send(data):
@@ -148,6 +149,7 @@ async def test_no_pin_cancels(monkeypatch):
         return None
 
     service = tvpair._pin_pairing_class()("ID", "10.0.0.5", 49152, ask_pin, "TV")
+    service.handshake_info = {"peerDeviceInfo": {"model": "AppleTV14,1", "identifier": "ID"}}
 
     async def send(data):
         pass
@@ -185,3 +187,44 @@ async def test_pairing_asks_the_interface_for_the_pin(monkeypatch):
     reply = await w.reply_to(1)
     assert reply["result"]["udid"] == "TVUDID"
     assert srv  # imported for the method registry
+
+
+async def test_a_vision_pro_is_not_asked_for_a_pin(monkeypatch):
+    """Like pymobiledevice3: the PIN is an Apple TV thing. A Vision Pro asks
+    for consent on the device - ModStaller says so and waits."""
+    from pymobiledevice3.remote import tunnel_service as ts
+
+    from modstaller.device import tvpair
+
+    async def ask_pin(name):
+        pytest.fail("no PIN for a Vision Pro")
+
+    steps = []
+    service = tvpair._pin_pairing_class()("ID", "10.0.0.7", 49152, ask_pin, "Vision", steps.append)
+    service.handshake_info = {"peerDeviceInfo": {"model": "RealityDevice14,1", "identifier": "ID"}}
+
+    async def send(data):
+        pass
+
+    async def receive_plain():
+        return {"event": {"_0": {"awaitingUserConsent": {}}}}
+
+    async def receive_pairing_data():
+        return b"pd"
+    monkeypatch.setattr(service, "_send_pairing_data", send)
+    monkeypatch.setattr(service, "_receive_plain_response", receive_plain)
+    monkeypatch.setattr(service, "_receive_pairing_data", receive_pairing_data)
+    monkeypatch.setattr(service, "decode_tlv", lambda parsed: {
+        ts.PairingDataComponentType.PUBLIC_KEY: b"pk", ts.PairingDataComponentType.SALT: b"salt"})
+    monkeypatch.setattr(ts.PairingDataComponentTLVBuf, "parse", lambda data: data)
+
+    result = await service._request_pair_consent()
+    assert result.pin is None
+    assert any("Vision" in s for s in steps)
+
+
+def test_the_pairing_list_tells_the_devices_apart():
+    from modstaller.device.tvpair import kind_of
+    assert kind_of("AppleTV14,1") == "appletv"
+    assert kind_of("RealityDevice17,1") == "vision"
+    assert kind_of("") == ""

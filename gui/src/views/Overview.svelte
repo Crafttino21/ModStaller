@@ -13,7 +13,7 @@
   import { date, days } from "../lib/format";
   import { t } from "../lib/i18n.svelte";
   import { enableJit, refreshApps } from "../lib/actions";
-  import { deviceKind, osName, transportLabel } from "../lib/device";
+  import { deviceKind, jitAvailable, mockupHeight, networkOnly, osName, transportLabel } from "../lib/device";
 
   const st = $derived(ui.status);
   const urgent = $derived(st?.apps.filter((a) => a.urgent) ?? []);
@@ -40,7 +40,7 @@
 <div class="tiles">
   <div class="card tile">
     {#if st?.device}
-      <div class="mock"><PhoneMockup form={st.device.formFactor} height={st.device.platform === "tvos" ? 44 : 62} /></div>
+      <div class="mock"><PhoneMockup form={st.device.formFactor} height={mockupHeight(st.device, 62)} /></div>
     {:else}
       <div class="tile-icon"><Smartphone size={22} /></div>
     {/if}
@@ -55,7 +55,7 @@
           {#if st.device.battery}
             <span class="chip"><BatteryLevel level={st.device.battery.level} charging={st.device.battery.charging} /></span>
           {/if}
-          {#if st.device.developerMode || st.device.platform === "tvos"}
+          {#if st.device.developerMode || networkOnly(st.device)}
             {#if st.device.developerMode}<span class="chip ok"><span class="dot"></span>{t("Developer Mode on")}</span>{/if}
           {:else}
             <span class="chip warn"><span class="dot"></span>{t("Developer Mode off")}</span>
@@ -130,7 +130,7 @@
           </div>
         </div>
         <div class="app-actions">
-          {#if st.device?.platform !== "tvos"}
+          {#if jitAvailable(st.device)}
             <button class="btn sm icon" title={t("Enable JIT")} disabled={busy() || !st.device}
                     onclick={() => enableJit(app)}><Zap size={16} /></button>
           {/if}

@@ -5,7 +5,8 @@
   import UsbServiceBanner from "../components/UsbServiceBanner.svelte";
   import { busy, errorText, onDevice, refreshStatus, ui } from "../lib/state.svelte";
   import { forgetDevice, setWifi } from "../lib/actions";
-  import { deviceKind, osName, transportLabel } from "../lib/device";
+  import { deviceKind, networkOnly, osName, transportLabel } from "../lib/device";
+  import DeviceIcon from "../components/DeviceIcon.svelte";
   import { call } from "../lib/rpc";
   import type { DeviceApp, DeviceInfo } from "../lib/types";
   import { t } from "../lib/i18n.svelte";
@@ -68,7 +69,7 @@
     <Smartphone size={30} />
     <p>{ui.status?.deviceAttached ? t("Connected but not ready – unlock the iPhone and confirm “Trust”.") : t("No device connected. Plug the iPhone in via USB and unlock it – or bring it into the same Wi-Fi.")}</p>
     {#if ui.status?.error && (ui.status.usbService ?? "ok") === "ok"}<p class="faint small selectable">{ui.status.error}</p>{/if}
-    <button class="btn sm" onclick={() => (ui.pairingOpen = true)}><Tv size={15} /> {t("Pair Apple TV")}</button>
+    <button class="btn sm" onclick={() => (ui.pairingOpen = true)}><Tv size={15} /> {t("Pair Apple TV or Vision Pro")}</button>
   </div>
 {:else}
   {#if error}
@@ -79,7 +80,7 @@
       <div class="skeleton" style="height:120px"></div>
     {:else}
       <div class="head">
-        <div class="phone">{#if info.platform === "tvos"}<Tv size={30} />{:else}<Smartphone size={30} />{/if}</div>
+        <div class="phone"><DeviceIcon platform={info.platform} formFactor={ui.status?.device?.formFactor} size={30} /></div>
         <div>
           <h2>{info.name}</h2>
           <p class="muted">{info.productType} · {osName(info)} {info.iosVersion} ({info.build}) · {transportLabel(info)}</p>
@@ -101,8 +102,8 @@
     {@const d = ui.status.device}
     <div class="card pad">
       <h2 class="conn-head">{#if d.transport === "usb"}<Usb size={18} />{:else}<Wifi size={18} />{/if} {t("Connection")}</h2>
-      {#if d.platform === "tvos"}
-        <p class="muted small">{t("Paired by PIN – reachable while the Apple TV is on and in the same network.")}</p>
+      {#if networkOnly(d)}
+        <p class="muted small">{t("Paired over the network – reachable while the device is on and in the same network.")}</p>
       {:else if d.transport === "usb"}
         <p class="muted small">{d.wifiEnabled
           ? t("Connected via USB. Wi-Fi is on – without the cable ModStaller finds the iPhone in the same network.")
@@ -111,14 +112,14 @@
         <p class="muted small">{t("Connected via Wi-Fi. For JIT below iOS 17.4 the cable is still needed.")}</p>
       {/if}
       <div class="conn-actions">
-        {#if d.platform !== "tvos" && !d.wifiEnabled}
+        {#if !networkOnly(d) && !d.wifiEnabled}
           <button class="btn sm primary" disabled={busy() || d.transport !== "usb"} onclick={() => setWifi(d.udid, true)}>
             <Wifi size={15} /> {t("Switch on Wi-Fi")}
           </button>
-        {:else if d.platform !== "tvos"}
+        {:else if !networkOnly(d)}
           <button class="btn sm" disabled={busy()} onclick={() => setWifi(d.udid, false)}>{t("Switch off Wi-Fi")}</button>
         {/if}
-        {#if d.wifiEnabled || d.platform === "tvos"}
+        {#if d.wifiEnabled || networkOnly(d)}
           <button class="btn sm ghost" disabled={busy()}
                   onclick={async () => { if (await forgetDevice(d.udid, d.name)) refreshStatus(true); }}>
             {t("Forget device")}

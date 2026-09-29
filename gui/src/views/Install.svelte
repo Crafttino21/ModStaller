@@ -10,6 +10,7 @@
   import { call } from "../lib/rpc";
   import { mb, relative } from "../lib/format";
   import { installIpa, uninstallApp } from "../lib/actions";
+  import { incompatibility } from "../lib/device";
   import type { ExtensionDetail, FoundIpa, InstallPlan, IpaInfo } from "../lib/types";
 
   let found = $state<FoundIpa[] | null>(null);
@@ -178,8 +179,9 @@
   }
 
   const st = $derived(ui.status);
-  /** Apple-TV-Apps haben geschichtete Icons - ein PNG ersetzt sie nicht. */
-  const tvApp = $derived(info?.platform === "tvos");
+  /** Apple-TV- und Vision-Pro-Apps haben geschichtete Icons - ein PNG
+   *  ersetzt sie nicht. */
+  const tvApp = $derived(info?.platform === "tvos" || info?.platform === "xros");
   const slotsFull = $derived(!!plan?.isFree && !!plan.slots?.max && plan.slots.used >= plan.slots.max);
   const blockers = $derived.by(() => {
     const out: { text: string; action?: () => void; label?: string }[] = [];
@@ -188,12 +190,10 @@
     if (!st.device && st.deviceAttached)
       out.push({ text: t("The iPhone is plugged in but locked or not paired."), action: () => go("device"), label: t("Fix") });
     else if (!st.device) out.push({ text: t("No device connected – plug the iPhone in via USB and unlock it, or bring it into the same Wi-Fi.") });
-    else if (st.device.developerMode === false && st.device.platform !== "tvos")
+    else if (st.device.developerMode === false && st.device.platform === "ios")
       out.push({ text: t("Developer Mode is off."), action: () => go("device"), label: t("Turn on") });
-    if (info && st.device && info.platform !== st.device.platform)
-      out.push({ text: info.platform === "tvos"
-        ? t("This IPA is an Apple TV app – pick the Apple TV as the device.")
-        : t("This IPA is for iPhone and iPad – an Apple TV needs the app's tvOS version.") });
+    const problem = info && st.device ? incompatibility(info, st.device) : null;
+    if (problem) out.push({ text: problem });
     if (info?.encrypted) out.push({ text: t("This IPA is App Store encrypted (FairPlay) and cannot be re-signed.") });
     if (!bundleIdValid) out.push({ text: t("The bundle ID is not valid – letters, digits and hyphens, separated by dots.") });
     return out;
@@ -264,7 +264,9 @@
       <input type="file" accept="image/png,image/jpeg,image/webp" hidden bind:this={iconInput} onchange={pickIcon} />
       <div class="grow">
         <h2>{displayName.trim() || info.name}</h2>
-        <p class="muted">{tvApp
+        <p class="muted">{info.platform === "xros"
+          ? t("Version {version} · Apple Vision Pro · from visionOS {os}", { version: info.version || "?", os: info.minimumOs || "?" })
+          : tvApp
           ? t("Version {version} · Apple TV · from tvOS {os}", { version: info.version || "?", os: info.minimumOs || "?" })
           : t("Version {version} · from iOS {ios}", { version: info.version || "?", ios: info.minimumOs || "?" })} · {mb(info.size)}</p>
         <p class="faint mono small selectable">{info.bundleId}</p>

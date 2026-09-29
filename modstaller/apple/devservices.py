@@ -127,14 +127,23 @@ _PLATFORM_ACTIONS = frozenset({
     "ios/downloadTeamProvisioningProfile.action",
 })
 
-IOS, TVOS = "ios", "tvos"
+IOS, TVOS, XROS = "ios", "tvos", "xros"
+
+#: What tells Apple which platform a request is about. iOS needs nothing.
+#:
+#: The Vision Pro goes the iOS way for now: Apple counts it as a device class
+#: of the iOS family, and current iOS development profiles list "xrOS" /
+#: "visionOS" among their platforms. Not verified against a real device yet -
+#: if Apple refuses, this is the one place to change.
+_PLATFORM_PARAMS: dict[str, dict[str, str]] = {
+    IOS: {},
+    TVOS: {"DTDK_Platform": "tvos", "subPlatform": "tvOS"},
+    XROS: {},
+}
 
 
 def _platform_params(platform: str) -> dict[str, str]:
-    """What tells Apple the request is about an Apple TV - nothing for iOS."""
-    if platform == TVOS:
-        return {"DTDK_Platform": "tvos", "subPlatform": "tvOS"}
-    return {}
+    return dict(_PLATFORM_PARAMS.get(platform, {}))
 
 
 class DeveloperServices:

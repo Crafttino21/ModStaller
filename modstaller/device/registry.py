@@ -34,6 +34,11 @@ PAIRING_DIR = SECRETS_DIR / "pairing"
 
 IOS = "ios"
 TVOS = "tvos"
+#: Apple Vision Pro - Apple's own name for the platform is "xrOS".
+XROS = "xros"
+
+#: Reached only over the network, paired by RemotePairing.
+NETWORK_ONLY = frozenset({TVOS, XROS})
 
 
 @dataclass
@@ -42,7 +47,8 @@ class KnownDevice:
     name: str = ""
     product_type: str = ""
     os_version: str = ""
-    #: "ios" or "tvos" - decides the signing platform and the interface.
+    #: "ios", "tvos" or "xros" - decides the signing platform and the
+    #: interface. iPad and iPod touch are "ios".
     platform: str = IOS
     #: As lockdown reports it (``WiFiMACAddress``), lower case.
     wifi_mac: str = ""
@@ -58,11 +64,18 @@ class KnownDevice:
     def is_tv(self) -> bool:
         return self.platform == TVOS
 
+    @property
+    def network_only(self) -> bool:
+        return self.platform in NETWORK_ONLY
+
 
 def platform_for(product_type: str = "", device_class: str = "") -> str:
-    """tvOS for anything Apple TV, iOS otherwise (iPhone, iPad, iPod)."""
+    """tvOS for Apple TV, xrOS for Vision Pro, iOS otherwise (iPhone, iPad,
+    iPod touch)."""
     if device_class == "AppleTV" or product_type.startswith("AppleTV"):
         return TVOS
+    if device_class == "RealityDevice" or product_type.startswith("RealityDevice"):
+        return XROS
     return IOS
 
 

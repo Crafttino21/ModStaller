@@ -24,6 +24,11 @@ def test_platform_comes_from_the_model():
     assert registry.platform_for("AppleTV14,1") == registry.TVOS
     assert registry.platform_for("", "AppleTV") == registry.TVOS
     assert registry.platform_for("iPhone17,2") == registry.IOS
+    assert registry.platform_for("RealityDevice14,1") == registry.XROS
+    assert registry.platform_for("", "RealityDevice") == registry.XROS
+    # iPad and iPod touch are iOS devices as far as signing goes.
+    assert registry.platform_for("iPad16,3") == registry.IOS
+    assert registry.platform_for("iPod9,1") == registry.IOS
 
 
 def test_pair_records_are_private_and_only_offered_with_wifi_on():

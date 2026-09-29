@@ -326,8 +326,8 @@ const dict: Dict = {
     "Novas instalações são assinadas com a conta ativa. As renovações sempre usam a conta que instalou o app.",
   "Next: turn on Developer Mode on the Apple TV (Settings › Privacy & Security), then install the tvOS version of an app.":
     "Em seguida: ative o modo de desenvolvedor na Apple TV (Ajustes › Privacidade e Segurança) e instale a versão tvOS de um app.",
-  "No Apple TV found. Is the pairing screen open and the Apple TV in the same network?":
-    "Nenhuma Apple TV encontrada. A tela de pareamento está aberta e a Apple TV na mesma rede?",
+  "Next: turn on Developer Mode on the Vision Pro (Settings › Privacy & Security), then install an app.":
+    "Em seguida: ative o modo de desenvolvedor no Vision Pro (Ajustes › Privacidade e Segurança) e instale um app.",
   "No IPAs in Downloads, Documents or Desktop.":
     "Nenhum IPA em Downloads, Documentos ou Área de Trabalho.",
   "No app installed yet":
@@ -360,6 +360,8 @@ const dict: Dict = {
     "Sem sessão na Apple.",
   "Nothing found – everything on the iPhone comes from the store or from ModStaller.":
     "Nada encontrado – tudo o que está no iPhone vem da loja ou do ModStaller.",
+  "Nothing found. Is the pairing screen open on the device and is it in the same network?":
+    "Nada encontrado. A tela de pareamento está aberta no dispositivo e ele está na mesma rede?",
   "Nothing has happened yet.":
     "Nada aconteceu ainda.",
   "Nothing has happened yet. As soon as you plug in an iPhone or install something, it shows up here.":
@@ -374,6 +376,8 @@ const dict: Dict = {
     "Notificações",
   "On the Apple TV open Settings › Remotes and Devices › Remote App and Devices.":
     "Na Apple TV, abra Ajustes › Controles e Dispositivos › App Remote e Dispositivos.",
+  "On the Vision Pro open Settings › General › Remote Devices.":
+    "No Vision Pro, abra Ajustes › Geral › Dispositivos Remotos.",
   "One click fixes it – see above.":
     "Um clique resolve – veja acima.",
   "Only for installed copies and the AppImage - not in development builds.":
@@ -394,12 +398,12 @@ const dict: Dict = {
     "Conta paga – sem limite semanal de App IDs e sem limite de apps.",
   "Pair":
     "Parear",
-  "Pair Apple TV":
-    "Parear Apple TV",
+  "Pair Apple TV or Vision Pro":
+    "Parear Apple TV ou Vision Pro",
   "Pair {name}":
     "Parear {name}",
-  "Paired by PIN – reachable while the Apple TV is on and in the same network.":
-    "Pareada por PIN – acessível enquanto a Apple TV estiver ligada e na mesma rede.",
+  "Paired over the network – reachable while the device is on and in the same network.":
+    "Pareado pela rede – acessível enquanto o dispositivo estiver ligado e na mesma rede.",
   "Password":
     "Senha",
   "Pause":
@@ -410,6 +414,8 @@ const dict: Dict = {
     "Edição de fotos",
   "Pick an IPA – ModStaller signs it with your Apple account and puts it on the iPhone.":
     "Escolha um IPA – o ModStaller assina com a sua conta Apple e instala no iPhone.",
+  "Pick it below and confirm the pairing on the Vision Pro.":
+    "Escolha-o abaixo e confirme o pareamento no Vision Pro.",
   "Plug it in via USB and unlock it – or bring it into the same Wi-Fi.":
     "Conecte via USB e desbloqueie – ou coloque-o na mesma Wi-Fi.",
   "Preparing Anisette …":
@@ -600,8 +606,12 @@ const dict: Dict = {
     "Este IPA está criptografado pela App Store (FairPlay) e não pode ser reassinado.",
   "This IPA is an Apple TV app – pick the Apple TV as the device.":
     "Este IPA é um app de Apple TV – escolha a Apple TV como dispositivo.",
+  "This IPA is an Apple Vision Pro app – pick the Vision Pro as the device.":
+    "Este IPA é um app de Apple Vision Pro – escolha o Vision Pro como dispositivo.",
   "This IPA is for iPhone and iPad – an Apple TV needs the app's tvOS version.":
     "Este IPA é para iPhone e iPad – uma Apple TV precisa da versão tvOS do app.",
+  "This app is made for iPad only and does not start on an {kind}.":
+    "Este app é feito só para iPad e não inicia num {kind}.",
   "This does not give back weekly quota: Apple counts newly created App IDs, not existing ones. When the window is full, ModStaller falls back to a free App ID by itself.":
     "Isso não devolve cota semanal: a Apple conta os IDs de app recém-criados, não os existentes. Quando a janela está cheia, o ModStaller passa sozinho para um ID livre.",
   "This install needs {cost} – {missing} more than are left.":
@@ -652,6 +662,8 @@ const dict: Dict = {
     "A versão {version} está pronta",
   "Version {version} · Apple TV · from tvOS {os}":
     "Versão {version} · Apple TV · a partir do tvOS {os}",
+  "Version {version} · Apple Vision Pro · from visionOS {os}":
+    "Versão {version} · Apple Vision Pro · a partir do visionOS {os}",
   "Version {version} · from iOS {ios}":
     "Versão {version} · a partir do iOS {ios}",
   "View quotas and certificates":

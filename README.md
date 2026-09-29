@@ -20,7 +20,7 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 [Features](#features) ·
 [Roadmap](#roadmap) ·
 [Supported devices](#supported-devices) ·
-[Wi-Fi and Apple TV](#wi-fi-and-apple-tv) ·
+[Wi-Fi, Apple TV and Vision Pro](#wi-fi-apple-tv-and-vision-pro) ·
 [Installation](#installation) ·
 [Usage](#usage) ·
 [JIT](#jit) ·
@@ -40,9 +40,12 @@ Windows. See [Supported devices](#supported-devices) for the full list.
   remembered and the bundle ID stays stable, so app data survives.
 - **Wi-Fi**: pair an iPhone over USB once, then install, renew and list
   apps without the cable - the automatic renewal in the tray included.
-  See [Wi-Fi and Apple TV](#wi-fi-and-apple-tv).
+  See [Wi-Fi, Apple TV and Vision Pro](#wi-fi-apple-tv-and-vision-pro).
 - **Apple TV** (tvOS 17+, beta): pair it by PIN over the network, then sign
   and install tvOS apps and renew them like iPhone apps.
+- **iPad, iPod touch and Apple Vision Pro** (beta): iPads and the iPod touch
+  work like an iPhone, with JIT down to iOS 12. The Vision Pro pairs over the
+  network like an Apple TV and runs visionOS apps as well as iPhone/iPad apps.
 - **Runs in the tray** (Linux and Windows, starts with the system): reminds
   you 3 days before an app expires and renews it on its own on the last
   day, as soon as the iPhone is connected via USB. Updates are installed in
@@ -80,6 +83,9 @@ Windows. See [Supported devices](#supported-devices) for the full list.
       USB (install, renew, app list, automatic renewal in the tray)
 - [x] Apple TV (tvOS 17+): pairing by PIN, installing and renewing tvOS apps
       (beta)
+- [x] iPad, iPod touch (7th gen) and Apple Vision Pro (beta), with a check
+      which IPA fits which device
+- [x] JIT on iOS 12 - 16 through the classic debugserver (no tunnel needed)
 - [x] **IPA editor** - change display name, bundle ID, version, icon and
       entitlements before installing, and choose which extensions to keep
 
@@ -90,7 +96,9 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 - [ ] Test more devices, especially an A13/A14 iPhone without TXM and older
       iOS versions (see [Supported devices](#supported-devices))
 - [ ] iPad test pass; Apple TV test pass on more models
-- [ ] JIT on Apple TV (needs a tvOS Developer Disk Image)
+- [ ] JIT on Apple TV and Vision Pro (needs a tvOS / visionOS Developer Disk
+      Image)
+- [ ] Vision Pro test pass on a real device
 
 **Android**
 
@@ -132,14 +140,55 @@ and the output of `modstaller device info`.
 | iPhone 14, 14 Plus, 13 series, SE (3rd gen) | A15 | yes | 🟡 | 🟡 |
 | iPhone 12 series | A14 | from iOS 27 | 🟡 | 🟡 ¹ |
 | iPhone 11 series, SE (2nd gen) | A13 | from iOS 27 | 🟡 | 🟡 ¹ |
-| iPhone XS / XR and older | A12 and older | - | ❌ | ❌ |
+| iPhone XS, XS Max, XR (up to iOS 18) | A12 | - | 🟡 | 🟡 ⁴ |
+| iPhone 8, 8 Plus, X (up to iOS 16) | A11 | - | 🟡 | 🟡 ⁴ |
+| iPhone 6s, 6s Plus, SE (1st gen), 7, 7 Plus (up to iOS 15) | A9 / A10 | - | 🟡 | 🟡 ⁴ |
+| iPhone 5s, 6, 6 Plus (iOS 12) | A7 / A8 | - | 🟡 | 🟡 ⁴ |
+| iPhone 5c and older | 32-bit / iOS 10 | - | ❌ | ❌ |
 
 ¹ On iOS 26 and older these devices have no TXM, so attaching a debugger
 once is enough for JIT - ModStaller detects that and skips the conversation.
 From iOS 27 on, iOS treats every supported device like a TXM device.
 
-iPads use the same mechanism and should work in principle, but have not been
-tested yet.
+### iPad
+
+iPads use exactly the iPhone's way: cable or Wi-Fi, the same checks, the
+same JIT. iPhone apps run on an iPad in compatibility mode; an iPad-only app
+is refused on an iPhone or iPod touch before anything is created at Apple.
+
+| Model | Chip | TXM/SPTM | Install | JIT |
+|---|---|---|---|---|
+| iPad Pro, iPad Air (M2 and newer), iPad mini (A17 Pro) | M2+ / A17 Pro | yes | 🟡 | 🟡 |
+| iPad Pro, iPad Air (M1) | M1 | from iOS 27 | 🟡 | 🟡 ¹ |
+| iPad, iPad mini, iPad Air with A-chip (A12 and newer) | A12 - A16 | from iOS 27 | 🟡 | 🟡 ¹ |
+| Older iPads with iOS 12 or newer (iPad Air 1 / mini 2 and later) | A7 - A11 | - | 🟡 | 🟡 ⁴ |
+| iPad 4th gen, iPad mini 1 and older | 32-bit / iOS 10 | - | ❌ | ❌ |
+
+### iPod touch
+
+| Model | Chip | iOS | Install | JIT |
+|---|---|---|---|---|
+| iPod touch (7th gen, 2019) | A10 | up to 15.8 | 🟡 | 🟡 ⁴ |
+| iPod touch (6th gen, 2015) | A8 | up to 12.5 | 🟡 | 🟡 ⁴ |
+| iPod touch (5th gen) and older | 32-bit | up to 9.3 | ❌ | ❌ |
+
+⁴ Below iOS 17 JIT goes through the classic debugserver and the classic
+Developer Disk Image - no tunnel needed, and below iOS 16 no Developer Mode
+either. The limit is iOS 12: everything that runs it can be supported, 32-bit
+devices (iOS 10 and older) cannot.
+
+### Apple Vision Pro
+
+| Model | Chip | Identifier | Install | JIT |
+|---|---|---|---|---|
+| Apple Vision Pro (M5, 2025) | M5 | RealityDevice17,1 | 🟡 beta | ❌ ³ |
+| Apple Vision Pro (2024) | M2 | RealityDevice14,1 | 🟡 beta | ❌ ³ |
+
+Paired over the network like an Apple TV (see
+[Wi-Fi, Apple TV and Vision Pro](#wi-fi-apple-tv-and-vision-pro)). It runs
+native visionOS apps and iPhone/iPad apps ("Designed for iPad"). Not tested
+on a real device yet: ModStaller signs for it the iOS way, which Apple is
+expected to accept - reports very welcome.
 
 ### Apple TV
 
@@ -155,11 +204,11 @@ tested yet.
 (RemotePairing), which older tvOS versions don't offer. Apple TV support is
 new and still in beta - test reports are especially welcome here.
 
-³ JIT needs a Developer Disk Image for tvOS, which ModStaller cannot bring
-along yet.
+³ JIT needs a Developer Disk Image for tvOS or visionOS, which ModStaller
+cannot bring along yet.
 
 Apple TVs are reached over the network only, even models with a USB port -
-see [Wi-Fi and Apple TV](#wi-fi-and-apple-tv). Install the **tvOS** version
+see [Wi-Fi, Apple TV and Vision Pro](#wi-fi-apple-tv-and-vision-pro). Install the **tvOS** version
 of an app; iPhone IPAs do not run on an Apple TV.
 
 ### tvOS versions
@@ -176,8 +225,9 @@ of an app; iPhone IPAs do not run on an Apple TV.
 | 27.x | ✅ | ✅ | tested on 27.0; Developer Disk Image is a cryptex |
 | 26.x | 🟡 | 🟡 | expected to work |
 | 17.4 - 18.x | 🟡 | 🟡 | expected to work, untested |
-| 16.0 - 17.3 | 🟡 | ❓ | install should work; JIT uses an older tunnel variant and is unverified |
-| 15.x and older | ❌ | ❌ | not supported |
+| 17.0 - 17.3 | 🟡 | ❓ | JIT uses an older tunnel variant and is unverified |
+| 12.0 - 16.x | 🟡 | 🟡 | JIT through the classic debugserver (no tunnel, no Developer Mode before 16) |
+| 11.x and older | ❌ | ❌ | not supported |
 
 ### Apple's requirements for sideloading
 
@@ -338,7 +388,7 @@ modstaller jit <bundle-id>        # enable JIT (Java/emulator apps)
 
 modstaller devices                # everything on USB and in the network
 modstaller device wifi on         # iPhone on the cable: reach it over Wi-Fi too
-modstaller pair-tv                # pair an Apple TV by PIN
+modstaller pair                   # pair an Apple TV (PIN) or Vision Pro
 modstaller -u <udid> install app.ipa   # pick a device when there are several
 ```
 
@@ -364,7 +414,7 @@ The tray menu has *Renew now* and *Quit*. On GNOME the tray icon needs the
 AppIndicator extension; reminders and renewals work without it, and
 starting ModStaller again brings up the window.
 
-## Wi-Fi and Apple TV
+## Wi-Fi, Apple TV and Vision Pro
 
 **iPhone over Wi-Fi.** Apple only lets a computer become "trusted" over the
 cable. So Wi-Fi is switched on once while the iPhone is plugged in -
@@ -381,13 +431,24 @@ Xcode does it:
 
 1. On the Apple TV: *Settings › Remotes and Devices › Remote App and
    Devices*, and keep that screen open.
-2. In ModStaller: *Pair Apple TV* (bottom left), or `modstaller pair-tv`.
+2. In ModStaller: *Pair Apple TV or Vision Pro* (bottom left), or
+   `modstaller pair`.
 3. Type in the PIN the Apple TV shows.
 
 Then pick the Apple TV as the device and install the **tvOS** version of an
 app - an iPhone IPA is refused with a clear message. Developer Mode has to
 be on (*Settings › Privacy & Security › Developer Mode* on the Apple TV).
 JIT is not available on Apple TV yet.
+
+**Apple Vision Pro.** Like the Apple TV, over the network only:
+
+1. On the Vision Pro: *Settings › General › Remote Devices*.
+2. In ModStaller: *Pair Apple TV or Vision Pro*, or `modstaller pair`.
+3. Confirm the pairing on the Vision Pro.
+
+It takes native visionOS apps and iPhone/iPad apps alike. Developer Mode
+has to be on (*Settings › Privacy & Security › Developer Mode*). JIT is not
+available on the Vision Pro yet.
 
 Everything here runs without root or admin rights: the developer tunnel is a
 userspace TCP stack inside ModStaller. The search uses Bonjour (mDNS, UDP
