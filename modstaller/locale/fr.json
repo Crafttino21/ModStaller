@@ -68,7 +68,7 @@
   "Developer Mode is off - sideloaded apps will not start.": "Le mode développeur est désactivé - les apps installées en sideload ne démarreront pas.",
   "Developer Mode is off. Turn it on under Settings > Privacy & Security > Developer Mode on the iPhone.": "Le mode développeur est désactivé. Activez-le sur l’iPhone sous Réglages > Confidentialité et sécurité > Mode développeur.",
   "Developer Mode is on.": "Le mode développeur est activé.",
-  "Developer services over Wi-Fi need iOS 17.4 or newer - connect the iPhone via USB for this.": "Les services développeur en Wi-Fi nécessitent iOS 17.4 ou plus récent - branchez l’iPhone en USB pour cela.",
+  "Developer services over Wi-Fi need a developer tunnel, and this iPhone has none yet. Connect it via USB once and switch on Wi-Fi for it again - or use the cable for this.": "Les services développeur en Wi-Fi nécessitent un tunnel développeur, et cet iPhone n’en a pas encore. Branchez-le une fois en USB et réactivez le Wi-Fi pour lui - ou utilisez le câble pour cela.",
   "Developer tunnel over Wi-Fi not available: {error}": "Tunnel développeur en Wi-Fi indisponible : {error}",
   "Device connected but not ready: {error}": "Appareil connecté mais pas prêt : {error}",
   "Device forgotten.": "Appareil oublié.",

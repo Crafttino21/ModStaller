@@ -84,7 +84,7 @@
           <div class="dev-name">{device.name}</div>
           <div class="dev-model">{device.model || deviceKind(device)}</div>
           <div class="dev-meta">
-            <span>{osName(device)} {device.iosVersion}</span>
+            <span class="os">{osName(device)} {device.iosVersion}</span>
             <span class="via" title={transportLabel(device)}>
               {#if overNetwork(device)}<Wifi size={13} />{:else}<Usb size={13} />{/if}
             </span>
@@ -115,7 +115,7 @@
       </div>
     {/if}
     <button class="other add" onclick={() => (ui.pairingOpen = true)} title={t("Pair Apple TV or Vision Pro")}>
-      <Plus size={15} /><span class="other-name">{t("Pair Apple TV or Vision Pro")}</span>
+      <Plus size={15} /><span class="other-name">{t("Pair device")}</span>
     </button>
   </div>
 </aside>
@@ -123,6 +123,7 @@
 <style>
   aside {
     width: 232px;
+    min-width: 0;
     flex: none;
     display: flex;
     flex-direction: column;
@@ -171,7 +172,9 @@
   }
 
   .badge.bad { background: var(--bad); color: #fff; }
-  .foot { margin-top: auto; display: grid; gap: 8px; }
+  /* minmax(0, 1fr): sonst waechst die Spalte mit dem breitesten Inhalt mit
+     (lange Uebersetzungen, Geraetezeile) und schiebt ihn aus der Sidebar. */
+  .foot { margin-top: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .running {
     display: flex; align-items: center; gap: 8px;
     padding: 9px 12px; border-radius: 10px;
@@ -181,7 +184,7 @@
   .running span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .conn { display: flex; align-items: center; gap: 9px; padding: 8px 12px; font-size: 12.5px; color: var(--text-2); }
   .device {
-    display: flex; align-items: center; gap: 12px; width: 100%;
+    display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; overflow: hidden;
     padding: 10px 12px; border-radius: 12px;
     border: 1px solid var(--border); background: var(--surface);
     color: inherit; font: inherit; text-align: left; cursor: pointer;
@@ -193,8 +196,11 @@
   .dev-model { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dev-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 3px;
               font-size: 12px; color: var(--text-3); }
-  .via { display: inline-flex; color: var(--text-3); }
-  .others { display: grid; gap: 2px; }
+  .via { display: inline-flex; flex: none; color: var(--text-3); }
+  .os { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dev-meta :global(svg) { flex: none; }
+  .other :global(svg) { flex: none; }
+  .others { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .other {
     display: flex; align-items: center; gap: 9px; width: 100%;
     padding: 7px 12px; border-radius: 9px; border: 1px solid transparent;

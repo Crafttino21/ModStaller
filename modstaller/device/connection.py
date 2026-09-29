@@ -273,55 +273,89 @@ class ServiceProvider:
                 pass
 
     async def rsd(self):
-        """Sets up the userspace RSD tunnel (without root) and caches it."""
+        """Sets up the userspace RSD tunnel (without root) and caches it.
+
+        Over the network there can be more than one way; they are tried in
+        order and the first that stands is kept."""
         if self._rsd is not None:
             return self._rsd
         from . import tunnel
 
-        try:
-            self._tunnel = await self._make_tunnel(tunnel)
-            self._rsd = await self._tunnel.open()
-        except DeviceError:
-            self._tunnel = None
-            raise
-        except Exception as exc:
-            self._tunnel = None
-            if self.is_network:
-                raise DeviceError(_(
-                    "RSD tunnel over the network could not be established: "
-                    "{error}\nThe device has to be awake and in the same "
-                    "network.", error=exc)) from exc
+        errors: list[str] = []
+        for candidate in await self._tunnel_candidates(tunnel):
+            try:
+                self._rsd = await candidate.open()
+                self._tunnel = candidate
+                return self._rsd
+            except DeviceError:
+                raise
+            except Exception as exc:
+                # Only the log file - the next way may well work.
+                log.debug("RSD tunnel attempt failed: %r", exc)
+                errors.append(_error_text(exc))
+                try:
+                    await candidate.close()
+                except Exception:
+                    pass
+        error = "; ".join(dict.fromkeys(errors))
+        if self.is_network:
             raise DeviceError(_(
-                "RSD tunnel could not be established: {error}\nFrom iOS 17 "
-                "on, installing apps needs this tunnel. Often helps: unlock "
-                "the iPhone, re-plug the cable.", error=exc)) from exc
-        return self._rsd
+                "RSD tunnel over the network could not be established: "
+                "{error}\nThe device has to be awake and in the same "
+                "network.", error=error))
+        raise DeviceError(_(
+            "RSD tunnel could not be established: {error}\nFrom iOS 17 "
+            "on, installing apps needs this tunnel. Often helps: unlock "
+            "the iPhone, re-plug the cable.", error=error))
 
-    async def _make_tunnel(self, tunnel):
+    async def _tunnel_candidates(self, tunnel) -> list:
         ref = self.ref
         if ref is None or ref.transport == USB:
-            return tunnel.usb_tunnel(self.udid)
+            return [tunnel.usb_tunnel(self.udid)]
         if ref.transport == REMOTE:
-            return tunnel.provider_tunnel(tunnel.remote_pairing(ref.identifier, ref.host, ref.port))
-        # Wi-Fi or usbmuxd's network: iOS 17.4+ has the proxy behind lockdown.
-        if _version_at_least(getattr(self.lockdown, "product_version", ""), (17, 4)):
-            return tunnel.provider_tunnel(tunnel.core_device_proxy(self.lockdown))
-        # Below that only a RemotePairing record helps (made while Wi-Fi was
-        # switched on over the cable, iOS 17.0-17.3).
+            return [tunnel.provider_tunnel(tunnel.remote_pairing(ref.identifier, ref.host, ref.port))]
+        # Wi-Fi or usbmuxd's network. RemotePairing first: it is the way Xcode
+        # takes over Wi-Fi. The CoreDevice proxy behind lockdown opens over
+        # Wi-Fi too, but iOS (seen on 27) drops the connection as soon as the
+        # tunnel is requested - it only serves the cable. Kept as a fallback.
+        out = []
         known = registry.get(ref.udid)
-        remote = _remote_ref(ref.udid) if known and known.remote_identifier else None
-        if remote is not None:
-            return tunnel.provider_tunnel(
-                tunnel.remote_pairing(remote.identifier, remote.host, remote.port))
-        raise DeviceError(_(
-            "Developer services over Wi-Fi need iOS 17.4 or newer - connect "
-            "the iPhone via USB for this."))
+        if known is not None and known.remote_identifier:
+            remote = await _remote_ref(ref.udid)
+            if remote is not None:
+                out.append(tunnel.provider_tunnel(
+                    tunnel.remote_pairing(remote.identifier, remote.host, remote.port)))
+        if _version_at_least(getattr(self.lockdown, "product_version", ""), (17, 4)):
+            out.append(tunnel.provider_tunnel(tunnel.core_device_proxy(self.lockdown)))
+        if not out:
+            raise DeviceError(_(
+                "Developer services over Wi-Fi need a developer tunnel, and "
+                "this iPhone has none yet. Connect it via USB once and switch "
+                "on Wi-Fi for it again - or use the cable for this."))
+        return out
 
 
-def _remote_ref(udid: str) -> DeviceRef | None:
+def _error_text(exc: BaseException) -> str:
+    """Never an empty message - pymobiledevice3 raises several errors
+    without one (ConnectionTerminatedError())."""
+    text = str(exc).strip()
+    return f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+
+
+async def _remote_ref(udid: str) -> DeviceRef | None:
+    """The device's RemotePairing advert - from the background search, or,
+    if that has not seen it (yet: right after the start), searched for now."""
+    def pick(refs):
+        return next((r for r in refs if r.udid == udid and r.transport == REMOTE), None)
+
     scanner = discovery.SCANNER
-    refs = scanner.refs() if scanner is not None else []
-    return next((r for r in refs if r.udid == udid and r.transport == REMOTE), None)
+    hit = pick(scanner.refs()) if scanner is not None else None
+    if hit is not None:
+        return hit
+    found = await discovery.NetworkScanner().scan()
+    if scanner is not None:
+        scanner._record(found)
+    return pick(found)
 
 
 def _version_at_least(version: str, wanted: tuple[int, ...]) -> bool:

@@ -400,6 +400,8 @@ const dict: Dict = {
     "Jumeler",
   "Pair Apple TV or Vision Pro":
     "Jumeler une Apple TV ou une Vision Pro",
+  "Pair device":
+    "Jumeler un appareil",
   "Pair {name}":
     "Jumeler {name}",
   "Paired over the network – reachable while the device is on and in the same network.":

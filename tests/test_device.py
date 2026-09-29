@@ -134,3 +134,91 @@ async def test_unexpected_listing_errors_are_logged_not_swallowed(monkeypatch, c
 
     assert await list_devices(posix=False) == []
     assert "boom" in caplog.text
+
+
+class _FakeTunnel:
+    def __init__(self, name, log, fails=False):
+        self.name, self.log, self.fails = name, log, fails
+
+    async def open(self):
+        self.log.append(("open", self.name))
+        if self.fails:
+            from pymobiledevice3.exceptions import ConnectionTerminatedError
+            raise ConnectionTerminatedError()
+        return f"rsd-{self.name}"
+
+    async def close(self):
+        self.log.append(("close", self.name))
+
+
+class _FakeTunnelModule:
+    """Stands in for device.tunnel - records which way was built."""
+
+    def __init__(self, proxy_fails=False, remote_fails=False):
+        self.log = []
+        self.proxy_fails, self.remote_fails = proxy_fails, remote_fails
+
+    def usb_tunnel(self, udid):
+        return _FakeTunnel("usb", self.log)
+
+    def remote_pairing(self, identifier, host, port):
+        return ("remote", identifier, host, port)
+
+    def core_device_proxy(self, lockdown):
+        return ("proxy",)
+
+    def provider_tunnel(self, factory):
+        name = factory[0]
+        fails = self.remote_fails if name == "remote" else self.proxy_fails
+        return _FakeTunnel(name, self.log, fails)
+
+
+class _WifiLockdown:
+    product_version = "27.0.1"
+
+
+def _wifi_sp(monkeypatch, *, remote_seen=True):
+    from modstaller.device import discovery, registry
+    from modstaller.device.discovery import REMOTE, WIFI, DeviceRef
+
+    registry.remember("U1", name="iPhone", wifi_enabled=True, remote_identifier="U1")
+    scanner = discovery.NetworkScanner()
+    if remote_seen:
+        scanner._record([DeviceRef("U1", REMOTE, host="10.0.0.2", port=49152, identifier="U1")])
+    monkeypatch.setattr(discovery, "SCANNER", scanner)
+    sp = ServiceProvider(ref=DeviceRef("U1", WIFI, host="10.0.0.2"))
+    sp.udid = "U1"
+    sp.transport = WIFI
+    sp.lockdown = _WifiLockdown()
+    return sp
+
+
+@pytest.mark.asyncio
+async def test_over_wifi_remotepairing_comes_first(monkeypatch):
+    """iOS drops the CoreDevice proxy tunnel over Wi-Fi (seen on 27) - the
+    RemotePairing tunnel is the way that works there."""
+    fake = _FakeTunnelModule()
+    monkeypatch.setitem(__import__("sys").modules, "modstaller.device.tunnel", fake)
+    monkeypatch.setattr("modstaller.device.tunnel", fake, raising=False)
+    sp = _wifi_sp(monkeypatch)
+    assert await sp.rsd() == "rsd-remote"
+    assert fake.log == [("open", "remote")]
+
+
+@pytest.mark.asyncio
+async def test_a_failing_way_falls_back_and_names_the_error(monkeypatch):
+    from modstaller.errors import DeviceError
+
+    fake = _FakeTunnelModule(remote_fails=True)
+    monkeypatch.setitem(__import__("sys").modules, "modstaller.device.tunnel", fake)
+    monkeypatch.setattr("modstaller.device.tunnel", fake, raising=False)
+    sp = _wifi_sp(monkeypatch)
+    assert await sp.rsd() == "rsd-proxy"
+    assert fake.log == [("open", "remote"), ("close", "remote"), ("open", "proxy")]
+
+    fake2 = _FakeTunnelModule(remote_fails=True, proxy_fails=True)
+    monkeypatch.setitem(__import__("sys").modules, "modstaller.device.tunnel", fake2)
+    monkeypatch.setattr("modstaller.device.tunnel", fake2, raising=False)
+    sp2 = _wifi_sp(monkeypatch)
+    with pytest.raises(DeviceError, match="ConnectionTerminatedError"):
+        await sp2.rsd()

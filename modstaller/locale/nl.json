@@ -68,7 +68,7 @@
   "Developer Mode is off - sideloaded apps will not start.": "Ontwikkelaarsmodus staat uit - gesideloade apps starten zo niet.",
   "Developer Mode is off. Turn it on under Settings > Privacy & Security > Developer Mode on the iPhone.": "De ontwikkelaarsmodus staat uit. Zet hem op de iPhone aan bij Instellingen > Privacy en beveiliging > Ontwikkelaarsmodus.",
   "Developer Mode is on.": "De ontwikkelaarsmodus staat aan.",
-  "Developer services over Wi-Fi need iOS 17.4 or newer - connect the iPhone via USB for this.": "Ontwikkelaarsdiensten via wifi hebben iOS 17.4 of nieuwer nodig - sluit de iPhone hiervoor via USB aan.",
+  "Developer services over Wi-Fi need a developer tunnel, and this iPhone has none yet. Connect it via USB once and switch on Wi-Fi for it again - or use the cable for this.": "Ontwikkelaarsdiensten via wifi hebben een ontwikkelaarstunnel nodig, en deze iPhone heeft er nog geen. Sluit hem één keer via USB aan en zet wifi er opnieuw voor aan - of gebruik hiervoor de kabel.",
   "Developer tunnel over Wi-Fi not available: {error}": "Ontwikkelaarstunnel via wifi niet beschikbaar: {error}",
   "Device connected but not ready: {error}": "Apparaat verbonden maar niet klaar: {error}",
   "Device forgotten.": "Apparaat vergeten.",
