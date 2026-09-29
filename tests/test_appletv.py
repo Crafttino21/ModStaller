@@ -166,7 +166,7 @@ async def test_pairing_asks_the_interface_for_the_pin(monkeypatch):
     """pair.start: the PIN comes from the interface as a prompt.pin request."""
     from modstaller import server as srv
     from modstaller.device import registry, tvpair
-    from tests.test_server import Wire
+    from test_server import Wire
 
     async def fake_pair(identifier, host, port, *, name, ask_pin, on_step):
         pin = await ask_pin(name)
