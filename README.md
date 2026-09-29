@@ -143,13 +143,31 @@ tested yet.
 
 ### Apple TV
 
-| Model | tvOS | Install | JIT |
-|---|---|---|---|
-| Apple TV 4K (all generations) | 17 and newer | 🟡 beta | ❌ not yet |
-| Apple TV HD | 17 and newer | 🟡 beta | ❌ not yet |
+| Model | Chip | Identifier | Install | JIT |
+|---|---|---|---|---|
+| Apple TV 4K (3rd gen, 2022) | A15 | AppleTV14,1 | 🟡 ² | ❌ ³ |
+| Apple TV 4K (2nd gen, 2021) | A12 | AppleTV11,1 | 🟡 ² | ❌ ³ |
+| Apple TV 4K (1st gen, 2017) | A10X | AppleTV6,2 | 🟡 ² | ❌ ³ |
+| Apple TV HD (2015, formerly "Apple TV 4th gen") | A8 | AppleTV5,3 | 🟡 ² | ❌ ³ |
+| Apple TV 3 and older | - | - | ❌ | ❌ |
 
-Apple TVs are reached over the network only - see
-[Wi-Fi and Apple TV](#wi-fi-and-apple-tv).
+² Needs tvOS 17 or newer: pairing works by PIN over the network
+(RemotePairing), which older tvOS versions don't offer. Apple TV support is
+new and still in beta - test reports are especially welcome here.
+
+³ JIT needs a Developer Disk Image for tvOS, which ModStaller cannot bring
+along yet.
+
+Apple TVs are reached over the network only, even models with a USB port -
+see [Wi-Fi and Apple TV](#wi-fi-and-apple-tv). Install the **tvOS** version
+of an app; iPhone IPAs do not run on an Apple TV.
+
+### tvOS versions
+
+| tvOS | Install | JIT | Notes |
+|---|---|---|---|
+| 17.0 and newer | 🟡 | ❌ | pairing by PIN; untested so far |
+| 16.x and older | ❌ | ❌ | no pairing over the network |
 
 ### iOS versions
 
