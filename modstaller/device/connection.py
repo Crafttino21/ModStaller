@@ -34,6 +34,12 @@ from .discovery import REMOTE, USB, USBMUX_NET, WIFI, DeviceRef, usb_service_hin
 
 log = logging.getLogger(__name__)
 
+#: How long lockdown over Wi-Fi may take to answer.
+WIFI_CONNECT_TIMEOUT = 10.0
+#: Tries per tunnel way over the network, and the pause between them.
+NETWORK_TUNNEL_ATTEMPTS = 3
+NETWORK_RETRY_PAUSE = 1.5
+
 __all__ = [
     "DeviceInfo", "Battery", "ServiceProvider", "battery", "connect", "device_info",
     "get_value", "list_devices", "resolve", "usb_service_hint",
@@ -95,6 +101,17 @@ async def resolve(udid: str | None = None) -> DeviceRef:
         for ref in refs:
             if ref.udid == udid:
                 return ref
+        # A known network device the background search just missed (its
+        # adverts come and go with the device's sleep): look once more.
+        known = registry.get(udid)
+        if known is not None and (known.wifi_enabled or known.remote_identifier):
+            found = await discovery.NetworkScanner().scan()
+            if discovery.SCANNER is not None:
+                discovery.SCANNER._record(found)
+            hit = discovery.merge(found)
+            for ref in hit:
+                if ref.udid == udid:
+                    return ref
         raise _not_found()
     if not refs:
         raise _not_found()
@@ -151,8 +168,12 @@ async def _open_lockdown(ref: DeviceRef):
             raise WifiPairingInvalid(_(
                 "ModStaller has no Wi-Fi pairing for this iPhone yet. Connect "
                 "it via USB once and switch on Wi-Fi for it."))
-        lockdown = await create_using_tcp(hostname=ref.host, pair_record=record,
-                                          autopair=False, label="ModStaller")
+        # Bounded: a sleeping iPhone may not answer at all, and TCP would
+        # wait minutes before giving up.
+        lockdown = await asyncio.wait_for(
+            create_using_tcp(hostname=ref.host, pair_record=record,
+                             autopair=False, label="ModStaller"),
+            WIFI_CONNECT_TIMEOUT)
         if not lockdown.paired:
             await lockdown.close()
             raise WifiPairingInvalid(_(
@@ -251,11 +272,30 @@ class ServiceProvider:
     async def __aenter__(self) -> "ServiceProvider":
         self.ref = self.ref or await resolve(self.udid)
         self.transport = self.ref.transport
+        if self.transport == WIFI:
+            try:
+                self.lockdown = await connect(ref=self.ref)
+            except DeviceNotFound as exc:
+                # Lockdown over Wi-Fi does not answer (the iPhone dozes), but
+                # its RemotePairing side may: that tunnel carries every
+                # service lockdown would.
+                known = registry.get(self.ref.udid)
+                remote = (await _remote_ref(self.ref.udid)
+                          if known is not None and known.remote_identifier else None)
+                if remote is None:
+                    raise DeviceNotFound(_(
+                        "The iPhone is known in the network but does not answer "
+                        "right now. Unlock it (or wake it up) and try again - "
+                        "or connect it via USB.")) from exc
+                log.info("Lockdown over Wi-Fi does not answer - using RemotePairing")
+                self.ref = remote
+                self.transport = REMOTE
         if self.transport == REMOTE:
             # Nothing but the tunnel - the RSD stands in for lockdown.
             self.lockdown = await self.rsd()
-        else:
+        elif self.lockdown is None:
             self.lockdown = await connect(ref=self.ref)
+        if self.transport != REMOTE:
             _learn(self.lockdown, self.transport)
         self.udid = getattr(self.lockdown, "udid", None) or self.ref.udid
         return self
@@ -282,21 +322,28 @@ class ServiceProvider:
         from . import tunnel
 
         errors: list[str] = []
+        # A dozing device answers in the network one moment and not the next
+        # (seen with iPhones: timeouts, dropped connections) - so a few quick
+        # retries there. The cable either works or it doesn't.
+        attempts = NETWORK_TUNNEL_ATTEMPTS if self.is_network else 1
         for candidate in await self._tunnel_candidates(tunnel):
-            try:
-                self._rsd = await candidate.open()
-                self._tunnel = candidate
-                return self._rsd
-            except DeviceError:
-                raise
-            except Exception as exc:
-                # Only the log file - the next way may well work.
-                log.debug("RSD tunnel attempt failed: %r", exc)
-                errors.append(_error_text(exc))
+            for attempt in range(attempts):
                 try:
-                    await candidate.close()
-                except Exception:
-                    pass
+                    self._rsd = await candidate.open()
+                    self._tunnel = candidate
+                    return self._rsd
+                except DeviceError:
+                    raise
+                except Exception as exc:
+                    # Only the log file - the next try may well work.
+                    log.debug("RSD tunnel attempt %d failed: %r", attempt + 1, exc)
+                    errors.append(_error_text(exc))
+                    try:
+                        await candidate.close()
+                    except Exception:
+                        pass
+                    if attempt + 1 < attempts:
+                        await asyncio.sleep(NETWORK_RETRY_PAUSE)
         error = "; ".join(dict.fromkeys(errors))
         if self.is_network:
             raise DeviceError(_(

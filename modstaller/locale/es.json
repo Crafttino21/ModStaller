@@ -208,6 +208,7 @@
   "The iPhone did not report back after the restart. Unlock it, confirm the “Turn on Developer Mode?” prompt yourself if needed, and run the check again.": "El iPhone no volvió a responder tras el reinicio. Desbloquéalo, confirma tú mismo el aviso «¿Activar el modo de desarrollador?» si hace falta y repite la comprobación.",
   "The iPhone does not trust this computer yet.": "El iPhone todavía no confía en este ordenador.",
   "The iPhone has reached its limit: with a free Apple account at most three sideloaded apps may be installed at the same time.": "El iPhone ha llegado a su límite: con una cuenta de Apple gratuita puede haber como máximo tres apps con sideload instaladas a la vez.",
+  "The iPhone is known in the network but does not answer right now. Unlock it (or wake it up) and try again - or connect it via USB.": "El iPhone es conocido en la red, pero ahora mismo no responde. Desbloquéalo (o despiértalo) y vuelve a intentarlo, o conéctalo por USB.",
   "The iPhone is locked - please unlock it and try again.": "El iPhone está bloqueado: desbloquéalo e inténtalo de nuevo.",
   "The iPhone is locked.": "El iPhone está bloqueado.",
   "The iPhone is locked. Please unlock it and try again.": "El iPhone está bloqueado. Desbloquéalo e inténtalo de nuevo.",

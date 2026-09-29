@@ -595,7 +595,7 @@ The GUI is a client just like the command line: it starts
 | Command | Builds |
 |---|---|
 | `./buildscripts/build-appimage.sh` | both AppImages (portable and Setup) - only needs Docker; `--run` launches the portable one afterwards |
-| `buildscripts\build-windows.bat` | the Windows installer - needs Python 3.12+, Node 22+ and Visual Studio 2022 with C++ for `zsign.exe`; `--dir` skips the installer, `--run` launches it afterwards |
+| `buildscripts\build-windows.bat` | the Windows installer - needs Python 3.13+, Node 22+ and Visual Studio 2022 with C++ for `zsign.exe`; `--dir` skips the installer, `--run` launches it afterwards |
 
 Both run the same steps as `.github/workflows/release.yml`.
 

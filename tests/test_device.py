@@ -212,9 +212,11 @@ async def test_a_failing_way_falls_back_and_names_the_error(monkeypatch):
     fake = _FakeTunnelModule(remote_fails=True)
     monkeypatch.setitem(__import__("sys").modules, "modstaller.device.tunnel", fake)
     monkeypatch.setattr("modstaller.device.tunnel", fake, raising=False)
+    monkeypatch.setattr("modstaller.device.connection.NETWORK_RETRY_PAUSE", 0)
     sp = _wifi_sp(monkeypatch)
     assert await sp.rsd() == "rsd-proxy"
-    assert fake.log == [("open", "remote"), ("close", "remote"), ("open", "proxy")]
+    # A dozing device gets a few tries per way before the next way.
+    assert fake.log == [("open", "remote"), ("close", "remote")] * 3 + [("open", "proxy")]
 
     fake2 = _FakeTunnelModule(remote_fails=True, proxy_fails=True)
     monkeypatch.setitem(__import__("sys").modules, "modstaller.device.tunnel", fake2)
@@ -222,3 +224,88 @@ async def test_a_failing_way_falls_back_and_names_the_error(monkeypatch):
     sp2 = _wifi_sp(monkeypatch)
     with pytest.raises(DeviceError, match="ConnectionTerminatedError"):
         await sp2.rsd()
+
+
+@pytest.mark.asyncio
+async def test_a_dozing_iphone_is_reached_over_remotepairing(monkeypatch):
+    """Lockdown over Wi-Fi does not answer while the iPhone dozes - its
+    RemotePairing side often still does. No "no device found" then."""
+    from modstaller.device import discovery, registry
+    from modstaller.device.discovery import REMOTE, WIFI, DeviceRef
+    from modstaller.errors import DeviceNotFound
+
+    registry.remember("U1", name="iPhone", wifi_enabled=True, remote_identifier="U1")
+    scanner = discovery.NetworkScanner()
+    scanner._record([DeviceRef("U1", REMOTE, host="10.0.0.2", port=49152, identifier="U1")])
+    monkeypatch.setattr(discovery, "SCANNER", scanner)
+
+    async def silent(udid=None, timeout=0.0, ref=None):
+        raise DeviceNotFound("no answer")
+    monkeypatch.setattr("modstaller.device.connection.connect", silent)
+    fake = _FakeTunnelModule()
+    monkeypatch.setitem(__import__("sys").modules, "modstaller.device.tunnel", fake)
+    monkeypatch.setattr("modstaller.device.tunnel", fake, raising=False)
+
+    async with ServiceProvider(ref=DeviceRef("U1", WIFI, host="10.0.0.2")) as sp:
+        assert sp.transport == REMOTE
+        assert sp.lockdown == "rsd-remote"
+
+
+@pytest.mark.asyncio
+async def test_without_remotepairing_the_message_says_it_does_not_answer(monkeypatch):
+    from modstaller.device import registry
+    from modstaller.device.discovery import WIFI, DeviceRef
+    from modstaller.errors import DeviceNotFound
+
+    registry.remember("U1", name="iPhone", wifi_enabled=True)
+
+    async def silent(udid=None, timeout=0.0, ref=None):
+        raise DeviceNotFound("no answer")
+    monkeypatch.setattr("modstaller.device.connection.connect", silent)
+    with pytest.raises(DeviceNotFound, match="does not answer"):
+        async with ServiceProvider(ref=DeviceRef("U1", WIFI, host="10.0.0.2")):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_a_device_the_search_just_missed_is_looked_for_once_more(monkeypatch):
+    from modstaller.device import connection, discovery, registry
+    from modstaller.device.discovery import REMOTE, DeviceRef
+
+    registry.remember("U1", name="iPhone", wifi_enabled=True, remote_identifier="U1")
+
+    async def nothing(**kw):
+        return []
+    monkeypatch.setattr(discovery, "usbmux_refs", nothing)
+    monkeypatch.setattr(discovery, "SCANNER", discovery.NetworkScanner())
+    searched = []
+
+    async def scan(self):
+        searched.append(True)
+        return [DeviceRef("U1", REMOTE, host="10.0.0.2", port=49152, identifier="U1")]
+    monkeypatch.setattr(discovery.NetworkScanner, "scan", scan)
+
+    ref = await connection.resolve("U1")
+    assert ref.transport == REMOTE and searched == [True]
+    # ... and the background search now knows it too.
+    assert discovery.SCANNER.refs()
+
+
+@pytest.mark.asyncio
+async def test_a_flaky_network_way_is_retried(monkeypatch):
+    fake = _FakeTunnelModule()
+    tries = []
+    orig = _FakeTunnel.open
+
+    async def flaky(self):
+        tries.append(self.name)
+        if len(tries) < 2:
+            raise TimeoutError()
+        return await orig(self)
+    monkeypatch.setattr(_FakeTunnel, "open", flaky)
+    monkeypatch.setattr("modstaller.device.connection.NETWORK_RETRY_PAUSE", 0)
+    monkeypatch.setitem(__import__("sys").modules, "modstaller.device.tunnel", fake)
+    monkeypatch.setattr("modstaller.device.tunnel", fake, raising=False)
+    sp = _wifi_sp(monkeypatch)
+    assert await sp.rsd() == "rsd-remote"
+    assert tries == ["remote", "remote"]

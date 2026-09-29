@@ -6,7 +6,7 @@ rem    buildscripts\build-windows.bat --dir             nur dist\win-unpacked (s
 rem    buildscripts\build-windows.bat --rebuild-zsign   zsign.exe neu bauen statt wiederverwenden
 rem    buildscripts\build-windows.bat --run             danach starten
 rem
-rem  Braucht Python 3.12+, Node 22+ und - nur fuer zsign - Visual Studio 2022
+rem  Braucht Python 3.13+, Node 22+ und - nur fuer zsign - Visual Studio 2022
 rem  mit C++-Werkzeugen. Ein einmal gebautes zsign.exe bleibt liegen und wird
 rem  wiederverwendet; ohne Visual Studio kann man es auch aus der CLI-Zip einer
 rem  Release nach packaging\out\bin\ legen.
@@ -51,12 +51,12 @@ goto args
 
 rem -- Voraussetzungen ---------------------------------------------------------
 
-call :need python "Python 3.12+ von python.org installieren." || goto fail
+call :need python "Python 3.13+ von python.org installieren." || goto fail
 call :need npm "Node 22+ von nodejs.org installieren." || goto fail
 
-python -c "import sys; sys.exit(sys.version_info[:2] < (3, 12))"
+python -c "import sys; sys.exit(sys.version_info[:2] < (3, 13))"
 if errorlevel 1 (
-    echo Das gefundene Python ist zu alt - ModStaller braucht 3.12 oder neuer.
+    echo Das gefundene Python ist zu alt - ModStaller braucht 3.13 oder neuer.
     goto fail
 )
 

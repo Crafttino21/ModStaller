@@ -526,7 +526,10 @@ def _log_device_changes(server, refs: list, cache: dict, errors: dict) -> None:
                     "Developer Mode is off - sideloaded apps will not start."),
                     logging.WARNING)
         else:
-            if before.get("transport") and before.get("transport") != ref.transport:
+            # Only the cable/network switch is news - between the two network
+            # ways (lockdown, RemotePairing) a device changes all the time.
+            was_usb = before.get("transport") == USB
+            if before.get("transport") and was_usb != (ref.transport == USB):
                 logbook.log(logbook.DEVICE, _("{name} is now connected via {via}.",
                                               name=now["name"], via=via))
             if before.get("devMode") != now["devMode"] and not tv:
