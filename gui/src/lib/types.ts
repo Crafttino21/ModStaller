@@ -296,6 +296,29 @@ export interface UpdateState {
   beta?: boolean;
   /** Die angebotene Version ist eine Beta. */
   prerelease?: boolean;
+  /** Von einem Paketmanager installiert ("aur") - der aktualisiert. */
+  managedBy?: string;
+}
+
+/** Hintergrundbetrieb (electron/daemon-prefs.cjs). */
+export interface DaemonPrefs {
+  autostart: boolean;
+  closeToTray: boolean;
+  remind: boolean;
+  remindDaysBefore: number;
+  autoRefresh: boolean;
+  refreshHoursBefore: number;
+  autoUpdate: boolean;
+  language: string | null;
+  /** Kann diese Kopie mit dem System starten (nicht in der Entwicklung,
+   *  nicht aus einer entpackten AppImage)? */
+  autostartAvailable: boolean;
+  trayAvailable: boolean;
+}
+
+/** Was der Hintergrund gerade tut. */
+export interface DaemonState {
+  refreshing: { bundleId: string; name: string } | null;
 }
 
 /** Linux-Setup: was schon installiert ist und wohin. */
@@ -331,6 +354,12 @@ declare global {
       launch(): Promise<void>;
       quit(): Promise<void>;
       onProgress(cb: (p: SetupProgress) => void): () => void;
+    };
+    daemon: {
+      getPrefs(): Promise<DaemonPrefs>;
+      setPrefs(partial: Partial<DaemonPrefs>): Promise<DaemonPrefs>;
+      getState(): Promise<DaemonState>;
+      onState(cb: (s: DaemonState) => void): () => void;
     };
     updates: {
       get(): Promise<UpdateState>;

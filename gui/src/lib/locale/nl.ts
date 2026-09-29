@@ -84,6 +84,8 @@ const dict: Dict = {
     "Terug",
   "Backend not reachable":
     "Achtergronddienst onbereikbaar",
+  "Background":
+    "Achtergrond",
   "Battery {level} %":
     "Batterij {level} %",
   "Beta channel":
@@ -124,6 +126,8 @@ const dict: Dict = {
     "Afbeelding kiezen …",
   "Close":
     "Sluiten",
+  "Closing the window keeps ModStaller in the tray. Quit it from the tray icon.":
+    "Als je het venster sluit, blijft ModStaller in het systeemvak. Afsluiten kan via het pictogram.",
   "Confirm":
     "Bevestigen",
   "Confirmation code":
@@ -166,6 +170,8 @@ const dict: Dict = {
     "Klaar",
   "Download":
     "Downloaden",
+  "Downloads new versions and installs them while ModStaller is not in use. Afterwards it keeps running in the tray.":
+    "Downloadt nieuwe versies en installeert ze terwijl ModStaller niet in gebruik is. Daarna blijft het in het systeemvak.",
   "Drag an IPA here":
     "Sleep hier een IPA naartoe",
   "Drag an IPA into the window or pick one from your Downloads.":
@@ -220,8 +226,12 @@ const dict: Dict = {
     "Installeren",
   "Install app":
     "App installeren",
+  "Install updates automatically":
+    "Updates automatisch installeren",
   "Install {name}":
     "{name} installeren",
+  "Installed through your package manager ({name}) – updates come from there.":
+    "Geïnstalleerd via je pakketbeheerder ({name}) – updates komen daarvandaan.",
   "Installing ModStaller…":
     "ModStaller wordt geïnstalleerd…",
   "Is everything here that ModStaller needs?":
@@ -232,6 +242,8 @@ const dict: Dict = {
     "Hij is geïnstalleerd, maar gestopt. Bij het starten vraagt Windows één keer om bevestiging.",
   "JIT for {name}":
     "JIT voor {name}",
+  "Keep running in the tray when closed":
+    "Bij sluiten in het systeemvak blijven",
   "Keyboard":
     "Toetsenbord",
   "Language":
@@ -262,6 +274,8 @@ const dict: Dict = {
     "Microsoft Store",
   "ModStaller Setup":
     "ModStaller-installatie",
+  "ModStaller can stay in the tray, remind you before apps expire and renew them on its own. Renewing needs your iPhone connected via USB.":
+    "ModStaller kan in het systeemvak blijven, je herinneren voordat apps verlopen en ze zelf vernieuwen. Voor het vernieuwen moet je iPhone via USB zijn aangesloten.",
   "ModStaller is starting …":
     "ModStaller start op …",
   "ModStaller was removed.":
@@ -298,6 +312,8 @@ const dict: Dict = {
     "Nog geen meldingen.",
   "No new App ID needed – the ones this install uses already exist.":
     "Geen nieuwe App-ID nodig – de benodigde bestaan al.",
+  "No tray icon available. Reminders and renewals still work; start ModStaller again to open the window.":
+    "Geen systeemvakpictogram beschikbaar. Herinneringen en vernieuwingen werken toch; start ModStaller opnieuw om het venster te openen.",
   "Not checked yet.":
     "Nog niet gecontroleerd.",
   "Not connected":
@@ -322,6 +338,8 @@ const dict: Dict = {
     "Meldingen",
   "One click fixes it – see above.":
     "Eén klik lost het op – zie hierboven.",
+  "Only for installed copies and the AppImage - not in development builds.":
+    "Alleen voor geïnstalleerde kopieën en de AppImage – niet in ontwikkelbuilds.",
   "Only for your user – no administrator rights needed. Your sign-ins and settings stay where they are.":
     "Alleen voor jouw gebruiker – zonder beheerdersrechten. Je aanmeldingen en instellingen blijven waar ze zijn.",
   "Optional – empty fields keep what the IPA says.":
@@ -362,6 +380,8 @@ const dict: Dict = {
     "Vernieuwen",
   "Registered devices":
     "Geregistreerde apparaten",
+  "Remind me before apps expire":
+    "Herinner me voordat apps verlopen",
   "Remove":
     "Verwijderen",
   "Remove from the iPhone":
@@ -376,6 +396,8 @@ const dict: Dict = {
     "ModStaller wordt verwijderd…",
   "Renew":
     "Vernieuwen",
+  "Renew apps automatically":
+    "Apps automatisch vernieuwen",
   "Renew before it expires, from the overview or under “Apps”.":
     "Vernieuw hem voor hij verloopt, vanuit het overzicht of onder ‘Apps’.",
   "Renew due":
@@ -388,6 +410,8 @@ const dict: Dict = {
     "{name} vernieuwen",
   "Renewed {count} apps.":
     "{count} apps vernieuwd.",
+  "Renewing {name} in the background …":
+    "{name} op de achtergrond vernieuwen …",
   "Repair":
     "Herstellen",
   "Restart":
@@ -464,8 +488,12 @@ const dict: Dict = {
     "Startmenu",
   "Start service":
     "Dienst starten",
+  "Start with the system":
+    "Starten met het systeem",
   "Starting …":
     "Bezig met starten …",
+  "Starts in the tray after you log in, without a window.":
+    "Start na het inloggen in het systeemvak, zonder venster.",
   "Still to do: {what}":
     "Nog te doen: {what}",
   "System":
@@ -590,6 +618,8 @@ const dict: Dict = {
     "Je aanmeldingen en instellingen zijn bewaard.",
   "and {count} more":
     "en nog {count}",
+  "days before expiry":
+    "dagen voor het verlopen",
   "expired":
     "verlopen",
   "expires {date}":
@@ -604,6 +634,8 @@ const dict: Dict = {
     "vrij",
   "has expired":
     "is verlopen",
+  "hours before expiry. If your iPhone is not connected then, ModStaller asks for it and renews as soon as it is.":
+    "uur voor het verlopen. Is je iPhone dan niet aangesloten, dan vraagt ModStaller erom en vernieuwt zodra hij er is.",
   "iPhone, sign-in and what expires soon – at a glance.":
     "iPhone, aanmelding en wat binnenkort verloopt – in één oogopslag.",
   "in use":
@@ -652,6 +684,8 @@ const dict: Dict = {
     "{count} punt(en) op te lossen.",
   "{minutes} min ago":
     "{minutes} min geleden",
+  "{name} is being renewed in the background. Try again in a moment.":
+    "{name} wordt op de achtergrond vernieuwd. Probeer het zo meteen opnieuw.",
   "{name} is installed and runs for {days} days.":
     "{name} is geïnstalleerd en werkt {days} dagen.",
   "{name} was removed from the iPhone.":

@@ -37,6 +37,11 @@ Windows. See [Supported devices](#supported-devices) for the full list.
   including 2FA. Drag and drop in the GUI, or `modstaller install app.ipa`.
 - **Refresh** before the 7-day expiry of free accounts. The original IPA is
   remembered and the bundle ID stays stable, so app data survives.
+- **Runs in the tray** (Linux and Windows, starts with the system): reminds
+  you 3 days before an app expires and renews it on its own on the last
+  day, as soon as the iPhone is connected via USB. Updates are installed in
+  the background while ModStaller is not in use. Everything can be switched
+  off under *Settings > Background*. See [Background](#background).
 - **JIT** through StikDebug's *universal* protocol, including the
   extensions apps send along - works on TXM/SPTM devices (A15 and newer,
   iOS 26/27). See [JIT](#jit).
@@ -166,6 +171,7 @@ Prebuilt binaries are available under
 |---|---|
 | `ModStaller-Setup-X.Y.Z-x86_64.AppImage` | Linux, GUI - **installs** ModStaller for your user (start menu entry, `modstaller` command in the terminal), no root needed, updates itself |
 | `ModStaller-X.Y.Z-x86_64.AppImage` | Linux, GUI - **portable**: runs from wherever you put it, nothing is installed, updates itself |
+| `modstaller-bin` (own pacman repository) | Arch Linux & co: see [Arch Linux](#arch-linux) - GUI (`modstaller-gui`) and CLI (`modstaller`), updates through `pacman -Syu` |
 | `ModStaller-Setup-X.Y.Z.exe` | Windows, GUI - installer without admin rights, updates itself |
 | `ModStaller-CLI-X.Y.Z-windows-x64.zip` | Windows, command line: `modstaller.exe` + `zsign.exe` |
 
@@ -188,6 +194,28 @@ installs to `~/.local/share/modstaller-gui/`, puts `modstaller-gui` and
 Setup AppImage again offers repair and **uninstall**; alternatively run
 `~/.local/share/modstaller-gui/uninstall.sh` (add `--purge` to also delete
 sign-ins and settings). The portable AppImage keeps working side by side.
+
+<a id="arch-linux"></a>**Arch Linux** (and CachyOS, EndeavourOS, Manjaro …): ModStaller has a
+signed pacman repository of its own. It always offers the latest stable
+version, so `pacman -Syu` keeps it up to date. Once:
+
+```bash
+# 1. Trust the repository's signing key
+curl -sLo /tmp/modstaller.asc https://github.com/Crafttino21/ModStaller/releases/latest/download/modstaller-pacman.asc
+sudo pacman-key --add /tmp/modstaller.asc
+sudo pacman-key --lsign-key "$(gpg --show-keys --with-colons /tmp/modstaller.asc | awk -F: '/^fpr/{print $10; exit}')"
+
+# 2. Add the repository at the end of /etc/pacman.conf
+printf '\n[modstaller]\nSigLevel = Required DatabaseRequired\nServer = https://github.com/Crafttino21/ModStaller/releases/latest/download\n' \
+  | sudo tee -a /etc/pacman.conf
+
+# 3. Install
+sudo pacman -Sy modstaller-bin
+```
+
+It installs to `/opt/modstaller` and brings `usbmuxd` along. The
+`PKGBUILD` lives in `packaging/aur/modstaller-bin/` - `makepkg -si` there
+builds the same package by hand.
 
 **Windows:** ModStaller needs Apple's device service (and the USB driver
 that comes with it). Windows Explorer shows an iPhone even without it
@@ -274,6 +302,24 @@ modstaller jit <bundle-id>        # enable JIT (Java/emulator apps)
 With a free account, app extensions are stripped by default: each one costs
 an App ID from a quota of ten per week, and the app itself runs fine without
 them. Use `--keep-extensions` to keep them.
+
+<a id="background"></a>**Background.** Closing the window keeps ModStaller running in the
+tray, and it starts there after you log in (without a window). From there it
+does three things:
+
+* **Reminds** you 3 days before an app expires.
+* **Renews** the app within its last 24 hours. This needs the iPhone
+  connected via USB. If it isn't, ModStaller asks for it and renews as soon
+  as it shows up. It never signs in on its own: if Apple wants a new sign-in
+  or 2FA, you get a notification instead.
+* **Updates itself**: new versions are downloaded and installed while the
+  window has been closed for a while and nothing is running. Afterwards the
+  new version keeps running in the tray.
+
+*Settings > Background* switches each of these off and sets the lead times.
+The tray menu has *Renew now* and *Quit*. On GNOME the tray icon needs the
+AppIndicator extension; reminders and renewals work without it, and
+starting ModStaller again brings up the window.
 
 ## JIT
 

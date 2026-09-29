@@ -48,6 +48,12 @@
     {:else if ui.backend === "starting"}
       <div class="boot"><LoaderCircle size={28} class="spin" /><p class="muted">{t("ModStaller is starting …")}</p></div>
     {:else}
+      {#if ui.daemon.refreshing}
+        <div class="daemon">
+          <LoaderCircle size={15} class="spin" />
+          {t("Renewing {name} in the background …", { name: ui.daemon.refreshing.name })}
+        </div>
+      {/if}
       <div class="page">
         {#key ui.view}<View />{/key}
       </div>
@@ -65,5 +71,8 @@
   main { flex: 1; min-width: 0; overflow: auto; }
   .page { max-width: 1080px; margin: 0 auto; padding: 34px 36px 48px; animation: in 0.2s ease; }
   @keyframes in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .daemon { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 9px;
+            padding: 9px 36px; font-size: 13px; color: var(--accent);
+            background: var(--accent-soft); border-bottom: 1px solid var(--border); }
   .boot { height: 100%; display: grid; place-content: center; justify-items: center; gap: 12px; color: var(--accent); }
 </style>

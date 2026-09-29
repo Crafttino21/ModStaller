@@ -9,6 +9,8 @@ files:
   - "!electron/*.test.cjs"
   - dist/**
   - package.json
+  # buildResources kommt sonst nicht mit - das Tray-Symbol braucht es.
+  - build/icon.png
 # Backend und zsign liegen ausserhalb des asar-Archivs: sie werden als
 # eigene Prozesse gestartet.
 extraResources:

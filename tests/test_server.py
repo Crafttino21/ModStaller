@@ -77,7 +77,51 @@ async def test_user_errors_keep_their_message(monkeypatch):
     w = Wire()
     w.call(7, "boom")
     err = (await w.reply_to(7))["error"]
-    assert err == {"code": srv.USER_ERROR, "message": "No iPhone found."}
+    assert err == {"code": srv.USER_ERROR, "message": "No iPhone found.",
+                   "data": {"kind": "DeviceNotFound", "exitCode": 4}}
+
+
+async def test_errors_say_what_kind_they_are(monkeypatch):
+    """The refresh in the tray has nobody reading the message - it decides
+    by the kind whether to wait for the iPhone or ask for a new sign-in."""
+    from modstaller.errors import AppleRateLimited, InteractionRequired
+
+    errors = iter([InteractionRequired("2FA needed."),
+                   AppleRateLimited("Slow down."), KeyError("x")])
+
+    async def boom(server, job, params):
+        raise next(errors)
+    monkeypatch.setitem(srv.METHODS, "boom", boom)
+
+    w = Wire()
+    w.call(1, "boom")
+    assert (await w.reply_to(1))["error"]["data"] == {
+        "kind": "InteractionRequired", "exitCode": 6}
+    w.call(2, "boom")
+    assert (await w.reply_to(2))["error"]["data"]["kind"] == "AppleRateLimited"
+    w.call(3, "boom")
+    unexpected = (await w.reply_to(3))["error"]
+    assert unexpected["code"] == srv.INTERNAL_ERROR
+    assert "data" not in unexpected
+
+
+def test_an_app_says_whether_it_can_be_renewed_unattended(tmp_path):
+    from modstaller.apple import session as session_mod
+    from modstaller.state import store
+
+    ipa = tmp_path / "a.ipa"
+    ipa.write_bytes(b"")
+    rec = store.InstallRecord(
+        bundle_id="b.X", original_bundle_id="b", name="A", team_id="T",
+        udid="U", source_ipa=str(ipa), app_id_id="1", profile_path="",
+        expires_at=0.0, installed_at=0.0, adsid="a")
+    app = srv._app_dict(rec)
+    assert app["udid"] == "U"
+    assert app["accountReady"] is False and app["sourceMissing"] is False
+
+    session_mod.Session(adsid="a", idms_token="i", identity_token="t",
+                        created_at=0.0, app_token="x").save()
+    assert srv._app_dict(rec)["accountReady"] is True
 
 
 async def test_missing_parameter_is_reported():
@@ -280,6 +324,7 @@ async def test_status_names_a_missing_usb_service_and_logs_it_once(monkeypatch):
     await srv._status(w.server, None, {})
     assert first["usbService"] == "missing"
     assert first["deviceAttached"] is False
+    assert first["attached"] == []
     assert first["error"] == "service missing"
     assert len(logged) == 1
 

@@ -1,0 +1,82 @@
+# Maintainer: Crafttino21 <claude@baurep.de>
+#
+# Packages the released AppImage - the same build everyone else gets, with
+# the Python backend, zsign and QuickJS inside. It is unpacked to
+# /opt/modstaller, so no FUSE is needed. Updates come through pacman; the
+# app's own updater switches itself off (MODSTALLER_PACKAGE, see the
+# launcher below).
+#
+# Kept in the ModStaller repository (packaging/aur/modstaller-bin). The
+# release workflow builds it into the signed pacman repository "modstaller"
+# (packaging/aur/build-pacman-repo.sh) and, once an AUR account exists,
+# pushes it to the AUR as well.
+
+pkgname=modstaller-bin
+_pkgname=modstaller
+pkgver=1.3.1
+pkgrel=1
+pkgdesc="Sideload iOS apps from Linux: signs IPAs with your own Apple account and installs them over USB"
+arch=('x86_64')
+url="https://github.com/Crafttino21/ModStaller"
+license=('GPL-3.0-or-later')
+depends=('usbmuxd' 'gtk3' 'nss' 'alsa-lib' 'libxss' 'libsecret' 'xdg-utils' 'hicolor-icon-theme')
+optdepends=('libnotify: desktop notifications'
+            'libappindicator-gtk3: tray icon on GNOME (with the AppIndicator extension)')
+provides=("${_pkgname}")
+conflicts=("${_pkgname}")
+# Prebuilt binaries: nothing to strip, no debug package.
+options=('!strip' '!debug')
+_appimage="ModStaller-${pkgver}-x86_64.AppImage"
+source=("${_appimage}::${url}/releases/download/v${pkgver}/${_appimage}")
+noextract=("${_appimage}")
+sha512sums=('50d966750a467371cfe4e086e56e1451f87326b831c04679799fd7ab8c39137bf0847b378574946ec39a89523d6d3cb4ad4c53c88127273d06cbd0cfd5bdc482')
+
+prepare() {
+  chmod +x "${_appimage}"
+  rm -rf squashfs-root
+  # --appimage-extract needs no FUSE.
+  "./${_appimage}" --appimage-extract >/dev/null
+}
+
+package() {
+  local app="${pkgdir}/opt/${_pkgname}"
+  install -d "${app}"
+  cp -a squashfs-root/. "${app}/"
+  # AppRun and the AppImage's own .desktop entry are replaced below.
+  rm -f "${app}/AppRun" "${app}/modstaller-gui.desktop" "${app}/.DirIcon" "${app}/modstaller-gui.png"
+
+  # squashfs hands out 0700 folders - readable for everyone in /opt.
+  chmod -R u+rwX,go+rX,go-w "${app}"
+  # Chromium's sandbox helper must be setuid root to work without user
+  # namespaces.
+  chmod 4755 "${app}/chrome-sandbox"
+
+  install -Dm755 /dev/stdin "${pkgdir}/usr/bin/modstaller-gui" <<'EOF'
+#!/bin/sh
+# ModStaller (pacman package): updates come through pacman, not the app itself.
+export MODSTALLER_PACKAGE=pacman
+export LD_LIBRARY_PATH="/opt/modstaller/usr/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+exec /opt/modstaller/modstaller-gui "$@"
+EOF
+
+  # The command line: the bundled backend is the same program as the CLI.
+  install -Dm755 /dev/stdin "${pkgdir}/usr/bin/modstaller" <<'EOF'
+#!/bin/sh
+exec /opt/modstaller/resources/backend/modstaller-backend "$@"
+EOF
+
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/modstaller-gui.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=ModStaller
+Comment=Sign iOS apps with your own Apple account and install them over USB
+Exec=/usr/bin/modstaller-gui %U
+Icon=modstaller-gui
+StartupWMClass=modstaller-gui
+Terminal=false
+Categories=Utility;
+EOF
+
+  install -Dm644 squashfs-root/usr/share/icons/hicolor/512x512/apps/modstaller-gui.png \
+    "${pkgdir}/usr/share/icons/hicolor/512x512/apps/modstaller-gui.png"
+}

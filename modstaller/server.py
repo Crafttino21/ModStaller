@@ -261,6 +261,9 @@ class Server:
             else:
                 code = USER_ERROR
             reply = {"error": {"code": code, "message": text}}
+            kind = _error_kind(exc)
+            if kind is not None:
+                reply["error"]["data"] = kind
             if action is not None:
                 action.log_failure(text, req_id)
         finally:
@@ -321,6 +324,17 @@ class _Action:
 
     def log_failure(self, error: str, job) -> None:
         logbook.log(self.source, self.failed(error), logging.ERROR, job=job)
+
+
+def _error_kind(exc: BaseException) -> dict | None:
+    """What kind of error it was - for clients that act on it without a
+    person reading the message, like the refresh in the tray."""
+    from .errors import ModStallerError
+    if isinstance(exc, ModStallerError):
+        return {"kind": type(exc).__name__, "exitCode": exc.exit_code}
+    if describe(exc) is not None:          # network trouble, see describe()
+        return {"kind": "NetworkError", "exitCode": 1}
+    return None
 
 
 def _log_safely(source: str, build, *args, job=None) -> None:
@@ -512,6 +526,7 @@ def _need(params: dict, key: str) -> str:
 
 
 def _app_dict(rec) -> dict:
+    from .pipeline import account_for
     from .status import URGENT_DAYS
     return {
         "bundleId": rec.bundle_id,
@@ -525,6 +540,9 @@ def _app_dict(rec) -> dict:
         "sourceMissing": not Path(rec.source_ipa).is_file(),
         "teamId": rec.team_id,
         "adsid": rec.adsid,
+        "udid": rec.udid,
+        # Can it be renewed without anyone signing in again?
+        "accountReady": account_for(rec) is not None,
     }
 
 
@@ -598,6 +616,7 @@ async def _status(server: Server, job: Job, params: dict):
     return {
         "device": device,
         "deviceAttached": bool(serials),
+        "attached": serials,
         "loggedIn": st.logged_in,
         "firstName": session.first_name if session else "",
         "accounts": [_account_dict(a, active) for a in accounts],

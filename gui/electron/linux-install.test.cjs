@@ -101,9 +101,11 @@ test("uninstall removes the installation but keeps user data", async () => {
   const { p, appDir, home } = sandbox();
   await inst.install({ appDir, version: "1.0.0", p, home, refresh: noRefresh });
   for (const d of p.userData) fs.mkdirSync(d, { recursive: true });
+  fs.mkdirSync(path.dirname(p.autostart), { recursive: true });
+  fs.writeFileSync(p.autostart, "[Desktop Entry]\n");
 
   inst.uninstall({ p, refresh: noRefresh });
-  for (const f of [p.root, p.launcher, p.cli, p.desktop, p.icon]) {
+  for (const f of [p.root, p.launcher, p.cli, p.desktop, p.icon, p.autostart]) {
     assert.equal(fs.existsSync(f), false, f);
   }
   for (const d of p.userData) assert.equal(fs.existsSync(d), true, d);
@@ -115,9 +117,11 @@ test("uninstall removes the installation but keeps user data", async () => {
 test("the generated uninstall.sh works on its own", async () => {
   const { p, appDir, home } = sandbox();
   await inst.install({ appDir, version: "1.0.0", p, home, refresh: noRefresh });
+  fs.mkdirSync(path.dirname(p.autostart), { recursive: true });
+  fs.writeFileSync(p.autostart, "[Desktop Entry]\n");
   const r = require("node:child_process").spawnSync("sh", [p.uninstaller], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
-  for (const f of [p.root, p.launcher, p.cli, p.desktop, p.icon]) {
+  for (const f of [p.root, p.launcher, p.cli, p.desktop, p.icon, p.autostart]) {
     assert.equal(fs.existsSync(f), false, f);
   }
 });

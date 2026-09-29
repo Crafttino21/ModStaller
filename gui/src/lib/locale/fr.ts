@@ -84,6 +84,8 @@ const dict: Dict = {
     "Retour",
   "Backend not reachable":
     "Service de fond injoignable",
+  "Background":
+    "Arrière-plan",
   "Battery {level} %":
     "Batterie {level} %",
   "Beta channel":
@@ -124,6 +126,8 @@ const dict: Dict = {
     "Choisir une image…",
   "Close":
     "Fermer",
+  "Closing the window keeps ModStaller in the tray. Quit it from the tray icon.":
+    "Fermer la fenêtre laisse ModStaller dans la barre système. Quittez-le depuis l’icône.",
   "Confirm":
     "Confirmer",
   "Confirmation code":
@@ -166,6 +170,8 @@ const dict: Dict = {
     "Terminé",
   "Download":
     "Télécharger",
+  "Downloads new versions and installs them while ModStaller is not in use. Afterwards it keeps running in the tray.":
+    "Télécharge les nouvelles versions et les installe quand ModStaller n’est pas utilisé. Ensuite, il reste dans la barre système.",
   "Drag an IPA here":
     "Glissez un IPA ici",
   "Drag an IPA into the window or pick one from your Downloads.":
@@ -220,8 +226,12 @@ const dict: Dict = {
     "Installer",
   "Install app":
     "Installer une application",
+  "Install updates automatically":
+    "Installer les mises à jour automatiquement",
   "Install {name}":
     "Installer {name}",
+  "Installed through your package manager ({name}) – updates come from there.":
+    "Installé via votre gestionnaire de paquets ({name}) – les mises à jour viennent de là.",
   "Installing ModStaller…":
     "Installation de ModStaller…",
   "Is everything here that ModStaller needs?":
@@ -232,6 +242,8 @@ const dict: Dict = {
     "Il est installé, mais arrêté. Windows demande une confirmation au démarrage.",
   "JIT for {name}":
     "JIT pour {name}",
+  "Keep running in the tray when closed":
+    "Rester dans la barre système à la fermeture",
   "Keyboard":
     "Clavier",
   "Language":
@@ -262,6 +274,8 @@ const dict: Dict = {
     "Microsoft Store",
   "ModStaller Setup":
     "Installation de ModStaller",
+  "ModStaller can stay in the tray, remind you before apps expire and renew them on its own. Renewing needs your iPhone connected via USB.":
+    "ModStaller peut rester dans la barre système, vous rappeler l’expiration des apps et les renouveler tout seul. Le renouvellement nécessite que votre iPhone soit branché en USB.",
   "ModStaller is starting …":
     "ModStaller démarre …",
   "ModStaller was removed.":
@@ -298,6 +312,8 @@ const dict: Dict = {
     "Pas encore de messages.",
   "No new App ID needed – the ones this install uses already exist.":
     "Aucun nouvel App ID nécessaire – ceux utilisés existent déjà.",
+  "No tray icon available. Reminders and renewals still work; start ModStaller again to open the window.":
+    "Aucune icône de barre système disponible. Les rappels et renouvellements fonctionnent quand même ; relancez ModStaller pour ouvrir la fenêtre.",
   "Not checked yet.":
     "Pas encore vérifié.",
   "Not connected":
@@ -322,6 +338,8 @@ const dict: Dict = {
     "Notifications",
   "One click fixes it – see above.":
     "Un clic suffit – voir ci-dessus.",
+  "Only for installed copies and the AppImage - not in development builds.":
+    "Uniquement pour les copies installées et l’AppImage – pas dans les builds de développement.",
   "Only for your user – no administrator rights needed. Your sign-ins and settings stay where they are.":
     "Uniquement pour votre utilisateur – sans droits d’administrateur. Vos connexions et réglages restent où ils sont.",
   "Optional – empty fields keep what the IPA says.":
@@ -362,6 +380,8 @@ const dict: Dict = {
     "Actualiser",
   "Registered devices":
     "Appareils enregistrés",
+  "Remind me before apps expire":
+    "Me rappeler avant l’expiration des apps",
   "Remove":
     "Retirer",
   "Remove from the iPhone":
@@ -376,6 +396,8 @@ const dict: Dict = {
     "Suppression de ModStaller…",
   "Renew":
     "Renouveler",
+  "Renew apps automatically":
+    "Renouveler les apps automatiquement",
   "Renew before it expires, from the overview or under “Apps”.":
     "Renouvelez avant l’expiration, depuis la vue d’ensemble ou sous « Applications ».",
   "Renew due":
@@ -388,6 +410,8 @@ const dict: Dict = {
     "Renouveler {name}",
   "Renewed {count} apps.":
     "{count} applications renouvelées.",
+  "Renewing {name} in the background …":
+    "Renouvellement de {name} en arrière-plan …",
   "Repair":
     "Réparer",
   "Restart":
@@ -464,8 +488,12 @@ const dict: Dict = {
     "Menu",
   "Start service":
     "Démarrer le service",
+  "Start with the system":
+    "Démarrer avec le système",
   "Starting …":
     "Démarrage …",
+  "Starts in the tray after you log in, without a window.":
+    "Démarre dans la barre système après la connexion, sans fenêtre.",
   "Still to do: {what}":
     "Reste à faire : {what}",
   "System":
@@ -590,6 +618,8 @@ const dict: Dict = {
     "Vos connexions et réglages ont été conservés.",
   "and {count} more":
     "et {count} de plus",
+  "days before expiry":
+    "jours avant l’expiration",
   "expired":
     "expiré",
   "expires {date}":
@@ -604,6 +634,8 @@ const dict: Dict = {
     "libre",
   "has expired":
     "a expiré",
+  "hours before expiry. If your iPhone is not connected then, ModStaller asks for it and renews as soon as it is.":
+    "heures avant l’expiration. Si votre iPhone n’est pas branché à ce moment-là, ModStaller le demande et renouvelle dès qu’il l’est.",
   "iPhone, sign-in and what expires soon – at a glance.":
     "iPhone, connexion et ce qui expire bientôt – en un coup d’œil.",
   "in use":
@@ -652,6 +684,8 @@ const dict: Dict = {
     "{count} point(s) à régler.",
   "{minutes} min ago":
     "il y a {minutes} min",
+  "{name} is being renewed in the background. Try again in a moment.":
+    "{name} est en cours de renouvellement en arrière-plan. Réessayez dans un instant.",
   "{name} is installed and runs for {days} days.":
     "{name} est installée et fonctionne {days} jours.",
   "{name} was removed from the iPhone.":

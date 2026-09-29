@@ -9,7 +9,7 @@
 
 import { call, failAll, handle, on, onReady, RpcError, start, type Call } from "./rpc";
 import { locale, t } from "./i18n.svelte";
-import type { BackendExit, DeviceCheck, LogEntry, Status, UpdateState } from "./types";
+import type { BackendExit, DaemonState, DeviceCheck, LogEntry, Status, UpdateState } from "./types";
 
 export type View = "overview" | "install" | "apps" | "account" | "device" | "log" | "system" | "settings";
 export type TaskKind = "install" | "refresh" | "jit" | "uninstall" | "fix";
@@ -66,6 +66,8 @@ export const ui = $state({
   droppedIpa: null as string | null,
   /** Neue Version aus den GitHub-Releases (nur in der AppImage). */
   update: { state: "unsupported" } as UpdateState,
+  /** Was der Hintergrund (Tray) gerade tut - etwa eine App erneuern. */
+  daemon: { refreshing: null } as DaemonState,
   /** iPhone-Check: fuer welches Geraet (key) und mit welchem Ergebnis. */
   checks: {
     key: null as string | null,
@@ -171,7 +173,8 @@ export async function refreshChecks() {
 // -- Aufgaben ----------------------------------------------------------------
 
 export function busy(): boolean {
-  return ui.task?.state === "running";
+  // Auch ein Refresh aus dem Hintergrund belegt das iPhone.
+  return ui.task?.state === "running" || ui.daemon.refreshing !== null;
 }
 
 /**
@@ -186,7 +189,9 @@ export function runTask<T>(
   describe: (result: T) => { message: string; notes?: string[]; tone?: "ok" | "warn" },
 ) {
   if (busy()) {
-    toast(t("Another operation is already running."), "warn");
+    toast(ui.daemon.refreshing
+      ? t("{name} is being renewed in the background. Try again in a moment.", { name: ui.daemon.refreshing.name })
+      : t("Another operation is already running."), "warn");
     return;
   }
   const task: Task = $state({
@@ -342,3 +347,15 @@ export function restartBackend() {
 
 window.updates.get().then((s) => (ui.update = s));
 window.updates.onState((s) => (ui.update = s));
+
+// -- Hintergrund -------------------------------------------------------------
+
+function applyDaemonState(s: DaemonState) {
+  const finished = ui.daemon.refreshing !== null && s.refreshing === null;
+  ui.daemon = s;
+  // Neues Ablaufdatum gleich zeigen.
+  if (finished) refreshStatus(true);
+}
+
+window.daemon.getState().then(applyDaemonState, () => {});
+window.daemon.onState(applyDaemonState);

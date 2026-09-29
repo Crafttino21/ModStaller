@@ -74,7 +74,8 @@
       {#if ui.update.state !== "unsupported"}<span class="chip {ui.update.beta ? 'warn' : ''}">{ui.update.beta ? t("Beta channel") : t("Stable channel")}</span>{/if}
     </div>
     <div class="faint tiny">
-      {#if ui.update.state === "unsupported"}{t("Automatic updates exist only in the AppImage and in the Windows version installed with the setup.")}
+      {#if ui.update.state === "unsupported" && ui.update.managedBy}{t("Installed through your package manager ({name}) – updates come from there.", { name: ui.update.managedBy.toUpperCase() })}
+      {:else if ui.update.state === "unsupported"}{t("Automatic updates exist only in the AppImage and in the Windows version installed with the setup.")}
       {:else if ui.update.state === "checking"}{t("Looking for updates …")}
       {:else if ui.update.state === "none"}{t("Up to date – no newer version on GitHub.")}
       {:else if ui.update.state === "error"}{t("Update check failed: {message}", { message: ui.update.message ?? "" })}

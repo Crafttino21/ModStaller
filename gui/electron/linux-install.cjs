@@ -59,6 +59,8 @@ function paths({ env = process.env, home = os.homedir() } = {}) {
     cli: path.join(bin, "modstaller"),
     desktop: path.join(data, "applications", `${APP_ID}.desktop`),
     icon: path.join(data, "icons", "hicolor", "512x512", "apps", `${APP_ID}.png`),
+    // Legt die App selbst an (autostart.cjs) - weg muss sie trotzdem mit.
+    autostart: path.join(config, "autostart", `${APP_ID}.desktop`),
     // Nutzerdaten - nur beim Deinstallieren mit "auch Daten loeschen".
     userData: [
       path.join(config, "ModStaller"),     // Electron (userData)
@@ -161,6 +163,7 @@ function uninstallScript(p, created) {
     "# mit --purge werden auch sie geloescht.",
     "set -e",
     ...rm,
+    `rm -f -- ${shQuote(p.autostart)}`,
     `rm -rf -- ${shQuote(p.root)}`,
     'if [ "$1" = "--purge" ]; then',
     ...p.userData.map((d) => `  rm -rf -- ${shQuote(d)}`),
@@ -336,6 +339,7 @@ function uninstall({ purge = false, p = paths(), refresh = refreshDesktop } = {}
     if ((f === p.cli || f === p.launcher) && !ours(f)) continue;
     fs.rmSync(f, { force: true });
   }
+  fs.rmSync(p.autostart, { force: true });
   fs.rmSync(p.root, { recursive: true, force: true });
   if (purge) {
     for (const d of p.userData) fs.rmSync(d, { recursive: true, force: true });

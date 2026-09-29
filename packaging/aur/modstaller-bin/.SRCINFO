@@ -1,0 +1,26 @@
+pkgbase = modstaller-bin
+	pkgdesc = Sideload iOS apps from Linux: signs IPAs with your own Apple account and installs them over USB
+	pkgver = 1.3.1
+	pkgrel = 1
+	url = https://github.com/Crafttino21/ModStaller
+	arch = x86_64
+	license = GPL-3.0-or-later
+	depends = usbmuxd
+	depends = gtk3
+	depends = nss
+	depends = alsa-lib
+	depends = libxss
+	depends = libsecret
+	depends = xdg-utils
+	depends = hicolor-icon-theme
+	optdepends = libnotify: desktop notifications
+	optdepends = libappindicator-gtk3: tray icon on GNOME (with the AppIndicator extension)
+	provides = modstaller
+	conflicts = modstaller
+	noextract = ModStaller-1.3.1-x86_64.AppImage
+	options = !strip
+	options = !debug
+	source = ModStaller-1.3.1-x86_64.AppImage::https://github.com/Crafttino21/ModStaller/releases/download/v1.3.1/ModStaller-1.3.1-x86_64.AppImage
+	sha512sums = 50d966750a467371cfe4e086e56e1451f87326b831c04679799fd7ab8c39137bf0847b378574946ec39a89523d6d3cb4ad4c53c88127273d06cbd0cfd5bdc482
+
+pkgname = modstaller-bin

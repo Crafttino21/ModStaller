@@ -109,3 +109,14 @@ LangString msAppleServiceFailed 1043 "De Apple-apparaatdienst kon niet automatis
     ${EndIf}
   ${endIf}
 !macroend
+
+; 3. Autostart: Den Eintrag unter Run legt die App selbst an (Einstellungen >
+;    Hintergrund, app.setLoginItemSettings mit dem Namen "ModStaller"). Beim
+;    Deinstallieren muss er mit weg - sonst startet Windows eine Datei, die es
+;    nicht mehr gibt. Nicht bei Updates: da laeuft das alte Deinstallations-
+;    programm auch, und der Autostart soll bleiben.
+!macro customUnInstall
+  ${ifNot} ${isUpdated}
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ModStaller"
+  ${endIf}
+!macroend

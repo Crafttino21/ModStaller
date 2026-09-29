@@ -290,7 +290,7 @@ async def refresh(
             on_step("\n" + _("{name}: original IPA missing ({path}) - skipped.",
                                    name=rec.name, path=source))
             continue
-        account = _account_for(rec)
+        account = account_for(rec)
         if account is None:
             on_step("\n" + _("{name}: the Apple account of team {team} is not "
                              "signed in - skipped.",
@@ -312,7 +312,7 @@ async def refresh(
     return results
 
 
-def _account_for(rec: "store.InstallRecord") -> str | None:
+def account_for(rec: "store.InstallRecord") -> str | None:
     """The account that renews ``rec``: the one that signed it, else the one
     its team belongs to. Records from before accounts were tracked fall back
     to the active account - as they always did."""

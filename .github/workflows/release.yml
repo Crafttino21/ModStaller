@@ -254,9 +254,83 @@ jobs:
             dist/latest.yml
             dist/*.zip
 
+      # Nur bei stabilen Releases mit Schluessel vorhanden (Job pacman-repo).
+      - name: pacman-Repo an die Release haengen
+        if: hashFiles('dist/modstaller.db') != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ModStaller ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/modstaller-bin-*.pkg.tar.zst
+            dist/modstaller-bin-*.pkg.tar.zst.sig
+            dist/modstaller.db
+            dist/modstaller.db.sig
+            dist/modstaller.files
+            dist/modstaller.files.sig
+            dist/modstaller-pacman.asc
+
+  # Arch Linux: eigenes, signiertes pacman-Repo "modstaller". Es liegt in
+  # jeder stabilen Release neben der AppImage - so ist
+  # releases/latest/download immer das aktuelle Repo (Betas nie).
+  # Gebaut aus der AppImage von build-linux, *vor* der Veroeffentlichung,
+  # damit die Release nie ohne Datenbank dasteht. Braucht das Secret
+  # PACMAN_GPG_PRIVATE_KEY (Schluessel ohne Passphrase); ohne wird nur
+  # uebersprungen. Das PKGBUILD ist das von modstaller-bin (AUR).
+  pacman-repo:
+    name: pacman-Repo (Arch)
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    # Ein Fehler hier haelt die Release nicht auf - sie erscheint dann nur
+    # ohne pacman-Repo (publish haengt es nur an, wenn es da ist).
+    continue-on-error: true
+    env:
+      PACMAN_GPG_PRIVATE_KEY: ${{ secrets.PACMAN_GPG_PRIVATE_KEY }}
+      STABLE: ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Nur stabile Releases, nur mit Schluessel
+        id: go
+        run: |
+          if [ "$STABLE" = "true" ] && [ -n "$PACMAN_GPG_PRIVATE_KEY" ]; then
+            echo "run=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::pacman-Repo uebersprungen (Vorabversion oder Secret PACMAN_GPG_PRIVATE_KEY fehlt)."
+          fi
+
+      - uses: actions/download-artifact@v4
+        if: steps.go.outputs.run == '1'
+        with:
+          name: linux
+          path: linux
+
+      # makepkg laeuft nicht als root - also ein Bau-Nutzer mit dem Schluessel.
+      - name: Paket und Repo bauen
+        if: steps.go.outputs.run == '1'
+        run: |
+          pacman -Syu --noconfirm --needed base-devel
+          useradd -m builder
+          install -d -o builder out
+          chown -R builder packaging linux
+          printf '%s\n' "$PACMAN_GPG_PRIVATE_KEY" | runuser -u builder -- gpg --batch --import
+          KEY=$(runuser -u builder -- gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')
+          APP=$(ls linux/ModStaller-*-x86_64.AppImage | grep -v -- '-Setup-')
+          runuser -u builder -- env VERSION="${GITHUB_REF_NAME#v}" GPG_KEY_ID="$KEY" \
+            bash packaging/aur/build-pacman-repo.sh "$APP" out
+
+      - uses: actions/upload-artifact@v4
+        if: steps.go.outputs.run == '1'
+        with:
+          name: pacman
+          if-no-files-found: error
+          path: out/*
+
   publish:
     name: Release veroeffentlichen
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, pacman-repo]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     steps:
@@ -290,3 +364,44 @@ jobs:
             dist/*.exe.blockmap
             dist/latest.yml
             dist/*.zip
+
+  # Arch Linux: modstaller-bin im AUR nachziehen - nur stabile Versionen
+  # (keine -beta/-rc), erst wenn die Release mit der AppImage online ist.
+  # Braucht die Secrets AUR_SSH_PRIVATE_KEY, AUR_USERNAME und AUR_EMAIL;
+  # ohne Schluessel wird der Schritt nur uebersprungen, die Release bleibt gruen.
+  aur:
+    name: AUR (modstaller-bin)
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+    runs-on: ubuntu-24.04
+    env:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Ohne AUR-Schluessel ueberspringen
+        if: env.AUR_SSH_PRIVATE_KEY == ''
+        run: echo "::notice::Secret AUR_SSH_PRIVATE_KEY fehlt - das AUR wird nicht aktualisiert."
+
+      # pkgver aus dem Tag; die Pruefsumme rechnet updpkgsums neu (unten).
+      - name: Version ins PKGBUILD
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        run: |
+          sed -i -E "s/^pkgver=.*/pkgver=${GITHUB_REF_NAME#v}/; s/^pkgrel=.*/pkgrel=1/" \
+            packaging/aur/modstaller-bin/PKGBUILD
+          grep -E "^(pkgver|pkgrel)=" packaging/aur/modstaller-bin/PKGBUILD
+
+      - name: Ins AUR pushen
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
+        with:
+          pkgname: modstaller-bin
+          pkgbuild: packaging/aur/modstaller-bin/PKGBUILD
+          updpkgsums: true
+          # Baut das Paket einmal zur Probe - ein kaputtes PKGBUILD kommt so
+          # gar nicht erst ins AUR.
+          test: true
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"

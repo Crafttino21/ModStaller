@@ -52,6 +52,18 @@ contextBridge.exposeInMainWorld("updates", {
   setBeta: (on) => ipcRenderer.invoke("update:setBeta", on),
 });
 
+// Hintergrundbetrieb: Tray, Autostart, Erinnerungen, automatischer Refresh.
+contextBridge.exposeInMainWorld("daemon", {
+  getPrefs: () => ipcRenderer.invoke("daemon:getPrefs"),
+  setPrefs: (partial) => ipcRenderer.invoke("daemon:setPrefs", partial),
+  getState: () => ipcRenderer.invoke("daemon:getState"),
+  onState: (cb) => {
+    const listener = (_e, state) => cb(state);
+    ipcRenderer.on("daemon:state", listener);
+    return () => ipcRenderer.off("daemon:state", listener);
+  },
+});
+
 // Nur im Linux-Setup: installieren, deinstallieren, danach starten.
 if (isSetup) {
   contextBridge.exposeInMainWorld("setup", {
