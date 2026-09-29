@@ -20,6 +20,7 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 [Features](#features) ·
 [Roadmap](#roadmap) ·
 [Supported devices](#supported-devices) ·
+[Wi-Fi and Apple TV](#wi-fi-and-apple-tv) ·
 [Installation](#installation) ·
 [Usage](#usage) ·
 [JIT](#jit) ·
@@ -37,6 +38,11 @@ Windows. See [Supported devices](#supported-devices) for the full list.
   including 2FA. Drag and drop in the GUI, or `modstaller install app.ipa`.
 - **Refresh** before the 7-day expiry of free accounts. The original IPA is
   remembered and the bundle ID stays stable, so app data survives.
+- **Wi-Fi**: pair an iPhone over USB once, then install, renew and list
+  apps without the cable - the automatic renewal in the tray included.
+  See [Wi-Fi and Apple TV](#wi-fi-and-apple-tv).
+- **Apple TV** (tvOS 17+, beta): pair it by PIN over the network, then sign
+  and install tvOS apps and renew them like iPhone apps.
 - **Runs in the tray** (Linux and Windows, starts with the system): reminds
   you 3 days before an app expires and renews it on its own on the last
   day, as soon as the iPhone is connected via USB. Updates are installed in
@@ -70,6 +76,10 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 - [x] JIT ported to StikDebug's universal protocol (app extensions run)
 - [x] iOS 27: Developer Disk Image installed as a cryptex over the RSD tunnel
 - [x] Multiple Apple accounts and multiple devices
+- [x] Wi-Fi: iPhones reachable without the cable after pairing once over
+      USB (install, renew, app list, automatic renewal in the tray)
+- [x] Apple TV (tvOS 17+): pairing by PIN, installing and renewing tvOS apps
+      (beta)
 - [x] **IPA editor** - change display name, bundle ID, version, icon and
       entitlements before installing, and choose which extensions to keep
 
@@ -79,7 +89,8 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 - [ ] Automatic refresh: systemd timer (Linux) and Task Scheduler (Windows)
 - [ ] Test more devices, especially an A13/A14 iPhone without TXM and older
       iOS versions (see [Supported devices](#supported-devices))
-- [ ] Support for other Apple devices (iPad test pass, Apple TV)
+- [ ] iPad test pass; Apple TV test pass on more models
+- [ ] JIT on Apple TV (needs a tvOS Developer Disk Image)
 
 **Android**
 
@@ -99,7 +110,6 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 
 - [ ] A small built-in IPA market: curated sources for sideloadable apps,
       installable with one click
-- [ ] Wireless refresh over Wi-Fi once the device is paired
 
 ## Supported devices
 
@@ -130,6 +140,16 @@ From iOS 27 on, iOS treats every supported device like a TXM device.
 
 iPads use the same mechanism and should work in principle, but have not been
 tested yet.
+
+### Apple TV
+
+| Model | tvOS | Install | JIT |
+|---|---|---|---|
+| Apple TV 4K (all generations) | 17 and newer | 🟡 beta | ❌ not yet |
+| Apple TV HD | 17 and newer | 🟡 beta | ❌ not yet |
+
+Apple TVs are reached over the network only - see
+[Wi-Fi and Apple TV](#wi-fi-and-apple-tv).
 
 ### iOS versions
 
@@ -297,6 +317,11 @@ modstaller refresh                # renew before the 7-day expiry
 modstaller uninstall <bundle-id>  # remove an app, frees a slot
 modstaller certs                  # show/revoke certificates
 modstaller jit <bundle-id>        # enable JIT (Java/emulator apps)
+
+modstaller devices                # everything on USB and in the network
+modstaller device wifi on         # iPhone on the cable: reach it over Wi-Fi too
+modstaller pair-tv                # pair an Apple TV by PIN
+modstaller -u <udid> install app.ipa   # pick a device when there are several
 ```
 
 With a free account, app extensions are stripped by default: each one costs
@@ -320,6 +345,37 @@ does three things:
 The tray menu has *Renew now* and *Quit*. On GNOME the tray icon needs the
 AppIndicator extension; reminders and renewals work without it, and
 starting ModStaller again brings up the window.
+
+## Wi-Fi and Apple TV
+
+**iPhone over Wi-Fi.** Apple only lets a computer become "trusted" over the
+cable. So Wi-Fi is switched on once while the iPhone is plugged in -
+*Device › Connection › Switch on Wi-Fi*, or `modstaller device wifi on`.
+ModStaller keeps the pairing and, from then on, finds the iPhone in the same
+network by itself (Bonjour). Installing, renewing, the app list and the
+automatic renewal in the tray then work without the cable. JIT and the
+Developer Disk Image need iOS 17.4 or newer over Wi-Fi; below that they keep
+needing the cable. The iPhone has to be awake enough to answer - if it is
+not found, unlocking it usually helps.
+
+**Apple TV.** An Apple TV 4K has no USB port; it is paired by PIN, the way
+Xcode does it:
+
+1. On the Apple TV: *Settings › Remotes and Devices › Remote App and
+   Devices*, and keep that screen open.
+2. In ModStaller: *Pair Apple TV* (bottom left), or `modstaller pair-tv`.
+3. Type in the PIN the Apple TV shows.
+
+Then pick the Apple TV as the device and install the **tvOS** version of an
+app - an iPhone IPA is refused with a clear message. Developer Mode has to
+be on (*Settings › Privacy & Security › Developer Mode* on the Apple TV).
+JIT is not available on Apple TV yet.
+
+Everything here runs without root or admin rights: the developer tunnel is a
+userspace TCP stack inside ModStaller. The search uses Bonjour (mDNS, UDP
+port 5353) - a firewall has to let it through, Windows asks once, and guest
+networks with client isolation block it. `modstaller doctor` checks whether
+the known devices are found.
 
 ## JIT
 

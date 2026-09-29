@@ -308,7 +308,7 @@ async def _certs(args) -> int:
 async def _device_info(args) -> int:
     from .device.connection import ServiceProvider, device_info
     async with ServiceProvider(args.udid) as sp:
-        info = await device_info(sp.lockdown)
+        info = await device_info(sp.lockdown, sp.transport)
         print(info)
         if not info.developer_mode:
             print("\n  Developer Mode is off. Turn it on on the iPhone under\n"
@@ -454,6 +454,84 @@ async def _list(args) -> int:
     return 0
 
 
+async def _device_wifi(args) -> int:
+    from .device import wifi
+    if args.state == "on":
+        await wifi.enable(args.udid, on_step=print)
+        print("Wi-Fi is on. The iPhone can be unplugged - ModStaller finds it "
+              "in the same network (see `modstaller devices`).")
+        return 0
+    if not args.udid:
+        print("Which device? Pass it with -u (see `modstaller devices`).")
+        return 2
+    await wifi.disable(args.udid, on_step=print)
+    print("Wi-Fi is off.")
+    return 0
+
+
+def _device_forget(args) -> int:
+    from .device import registry
+    if not args.udid:
+        print("Which device? Pass it with -u (see `modstaller devices`).")
+        return 2
+    if not registry.forget(args.udid):
+        print("ModStaller does not know this device.")
+        return 1
+    print("Forgotten.")
+    return 0
+
+
+async def _pair_tv(args) -> int:
+    from .device import tvpair
+    print("Looking for Apple TVs … (on the Apple TV: Settings > Remotes and "
+          "Devices > Remote App and Devices)")
+    found = await tvpair.browse()
+    if not found:
+        print("None found. Open that screen on the Apple TV and make sure it is "
+              "in the same network.")
+        return 1
+    for i, tv in enumerate(found, 1):
+        print(f"  {i}) {tv['name']}  {tv['host']}")
+    pick = found[0]
+    if len(found) > 1:
+        choice = input("Which one? ").strip()
+        try:
+            pick = found[int(choice) - 1]
+        except (ValueError, IndexError):
+            print("Nothing chosen.")
+            return 1
+
+    async def ask_pin(name: str) -> str | None:
+        return (await asyncio.to_thread(input, f"PIN shown on {name}: ")).strip() or None
+
+    dev = await tvpair.pair(pick["identifier"], pick["host"], pick["port"], name=pick["name"],
+                            ask_pin=ask_pin, on_step=print)
+    print(f"Paired: {dev.name} ({dev.product_type}, tvOS {dev.os_version}) - {dev.udid}")
+    return 0
+
+
+async def _devices(args) -> int:
+    from .device import discovery, registry
+    refs = await discovery.attached()
+    known = {d.udid: d for d in registry.all_devices()}
+    if not refs and not known:
+        print("No devices. Connect an iPhone via USB (and unlock it).")
+        return 0
+    labels = {discovery.USB: "USB", discovery.USBMUX_NET: "Wi-Fi (usbmuxd)",
+              discovery.WIFI: "Wi-Fi", discovery.REMOTE: "network (paired)"}
+    for ref in refs:
+        dev = known.pop(ref.udid, None)
+        name = (dev.name if dev else "") or "?"
+        where = labels.get(ref.transport, ref.transport)
+        if ref.host:
+            where += f" {ref.host}"
+        print(f"  {name:<26} {ref.udid}  {where}")
+    for dev in known.values():
+        extra = " - Wi-Fi on" if dev.wifi_enabled else ""
+        print(f"  {dev.name or '?':<26} {dev.udid}  not reachable{extra}")
+    return 0
+
+
 # --------------------------------------------------------------------------
 
 
@@ -461,7 +539,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="modstaller",
         description="iOS sideloader for Linux: sign and install IPAs.")
-    p.add_argument("-u", "--udid", help="target device (default: the only one)")
+    p.add_argument("-u", "--udid", help="target device (default: the first one, "
+                                        "see `modstaller devices`)")
     p.add_argument("-a", "--account", metavar="APPLE_ID",
                    help="Apple account to use (default: the active one)")
     p.add_argument("--debug", action="store_true",
@@ -501,12 +580,24 @@ def build_parser() -> argparse.ArgumentParser:
                      help="make this account the active one")
     acc.set_defaults(func=_accounts)
 
+    sub.add_parser("devices", help="Devices on USB and in the network"
+                   ).set_defaults(afunc=_devices)
+    sub.add_parser("pair-tv", help="Pair an Apple TV by PIN (same network)"
+                   ).set_defaults(afunc=_pair_tv)
+
     dev = sub.add_parser("device", help="Device info")
     devsub = dev.add_subparsers(dest="subcmd", required=True)
     devsub.add_parser("info", help="Model, iOS version, Developer Mode"
                       ).set_defaults(afunc=_device_info)
     devsub.add_parser("apps", help="Installed user apps"
                       ).set_defaults(afunc=_device_apps)
+    wif = devsub.add_parser("wifi", help="Reach the iPhone over Wi-Fi too "
+                                         "(switching on needs the USB cable once)")
+    wif.add_argument("state", choices=["on", "off"])
+    wif.set_defaults(afunc=_device_wifi)
+    devsub.add_parser("forget", help="Forget a device (-u UDID): its Wi-Fi "
+                                     "pairing and everything ModStaller knows"
+                      ).set_defaults(func=_device_forget)
 
     ins = sub.add_parser("install", help="Sign and install an IPA")
     ins.add_argument("ipa", help="path to the IPA")

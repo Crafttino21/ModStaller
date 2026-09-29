@@ -47,6 +47,8 @@ export interface Toast {
 
 const POLL_MS = 3000;
 
+const DEVICE_KEY = "modstaller.device";
+
 /** So viele Protokolleintraege haelt die Oberflaeche - wie das Backend. */
 const LOG_KEEP = 1000;
 
@@ -60,6 +62,12 @@ export const ui = $state({
   twoFactor: null as null | ((code: string | null) => void),
   /** Fuer welche Apple-ID der Code gebraucht wird. */
   twoFactorFor: "",
+  /** Offene PIN-Rueckfrage beim Koppeln eines Apple TV. */
+  pin: null as null | ((pin: string | null) => void),
+  /** Welches Apple TV die PIN zeigt. */
+  pinFor: "",
+  /** Der Dialog "Apple TV koppeln" ist offen. */
+  pairingOpen: false,
   toasts: [] as Toast[],
   confirm: null as Confirm | null,
   /** Per Drag & Drop irgendwo ins Fenster gezogene IPA. */
@@ -77,7 +85,48 @@ export const ui = $state({
   },
   /** Das Protokoll: Verlauf beim Verbinden, danach live vom Backend. */
   log: { entries: [] as LogEntry[] },
+  /** Das Geraet, das der Nutzer gewaehlt hat - null: das erste. */
+  selectedUdid: savedDevice(),
 });
+
+// -- Geraetewahl ---------------------------------------------------------------
+
+function savedDevice(): string | null {
+  try {
+    return localStorage.getItem(DEVICE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Haengt das gewaehlte Geraet an die Parameter eines Aufrufs. Ohne Wahl
+ *  entscheidet das Backend (das erste Geraet). */
+export function onDevice<T extends object>(params: T): T & { udid?: string } {
+  const udid = ui.status?.selectedUdid ?? ui.selectedUdid;
+  return udid ? { ...params, udid } : params;
+}
+
+export function selectDevice(udid: string) {
+  if (busy()) {
+    toast(t("Another operation is already running."), "warn");
+    return;
+  }
+  chooseDevice(udid);
+  refreshStatus(true);
+}
+
+/** Merkt sich die Wahl, ohne nachzufragen - fuer das Ende eines Vorgangs,
+ *  der danach den Status ohnehin neu holt (etwa das Koppeln). */
+export function chooseDevice(udid: string) {
+  ui.selectedUdid = udid;
+  try {
+    localStorage.setItem(DEVICE_KEY, udid);
+  } catch {
+    // Nicht speicherbar: gilt dann nur fuer diese Sitzung.
+  }
+  ui.checks.key = null;
+  ui.checks.list = null;
+}
 
 export function go(view: View) {
   ui.view = view;
@@ -123,7 +172,7 @@ export async function refreshStatus(force = false) {
   if (ui.backend !== "ready" || (polling && !force)) return;
   polling = true;
   try {
-    ui.status = await call<Status>("status", { refresh: force });
+    ui.status = await call<Status>("status", { refresh: force, udid: ui.selectedUdid ?? undefined });
     autoCheck();
   } catch {
     // Beim naechsten Durchlauf erneut - ein einzelner Aussetzer ist kein Zustand.
@@ -162,7 +211,7 @@ export async function refreshChecks() {
   ui.checks.error = "";
   ui.checks.key = deviceKey(ui.status);
   try {
-    ui.checks.list = await call<DeviceCheck[]>("device.checks");
+    ui.checks.list = await call<DeviceCheck[]>("device.checks", onDevice({}));
   } catch (err) {
     ui.checks.error = errorText(err);
   } finally {
@@ -242,6 +291,14 @@ handle("prompt.2fa", (params) => new Promise((resolve) => {
   };
 }));
 
+handle("prompt.pin", (params) => new Promise((resolve) => {
+  ui.pinFor = String((params as { name?: string } | undefined)?.name ?? "");
+  ui.pin = (pin) => {
+    ui.pin = null;
+    resolve(pin);
+  };
+}));
+
 /** Wie lange die Oberflaeche auf das erste Lebenszeichen wartet. Grosszuegig:
  *  das gepackte Backend muss beim ersten Start seine Bibliotheken auspacken. */
 const BOOT_TIMEOUT_MS = 20_000;
@@ -317,6 +374,7 @@ function markDown(info: BackendExit) {
   ui.backend = "down";
   ui.exit = info;
   ui.twoFactor = null;
+  ui.pin = null;
   failAll(t("The backend has stopped."));
 }
 

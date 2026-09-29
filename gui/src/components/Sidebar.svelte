@@ -1,12 +1,14 @@
 <script lang="ts">
   import {
     LayoutGrid, Download, Package, UserRound, Smartphone, ScrollText, Stethoscope, SlidersHorizontal, LoaderCircle,
+    Wifi, Usb, Tv, Plus,
   } from "@lucide/svelte";
   import PhoneMockup from "./PhoneMockup.svelte";
   import BatteryLevel from "./BatteryLevel.svelte";
   import UpdateNotice from "./UpdateNotice.svelte";
-  import { go, ui, type View } from "../lib/state.svelte";
+  import { go, selectDevice, ui, type View } from "../lib/state.svelte";
   import { t } from "../lib/i18n.svelte";
+  import { deviceKind, osName, overNetwork, transportLabel } from "../lib/device";
 
   // $derived, damit ein Sprachwechsel die Beschriftungen sofort mitnimmt.
   const items = $derived<{ view: View; label: string; icon: typeof LayoutGrid }[]>([
@@ -22,6 +24,8 @@
 
   const urgentCount = $derived(ui.status?.urgent.length ?? 0);
   const device = $derived(ui.status?.device);
+  /** Die anderen erreichbaren Geraete - zum Umschalten. */
+  const others = $derived((ui.status?.devices ?? []).filter((d) => d.udid !== ui.status?.selectedUdid));
   const checkProblems = $derived(ui.checks.list?.filter((c) => c.state === "bad").length ?? 0);
 </script>
 
@@ -74,12 +78,15 @@
     {/if}
     {#if device}
       <button class="device" onclick={() => go("device")} title={t("Go to device")}>
-        <PhoneMockup form={device.formFactor} height={58} />
+        <PhoneMockup form={device.formFactor} height={device.platform === "tvos" ? 40 : 58} />
         <div class="dev-info">
           <div class="dev-name">{device.name}</div>
-          <div class="dev-model">{device.model}</div>
+          <div class="dev-model">{device.model || deviceKind(device)}</div>
           <div class="dev-meta">
-            <span>iOS {device.iosVersion}</span>
+            <span>{osName(device)} {device.iosVersion}</span>
+            <span class="via" title={transportLabel(device)}>
+              {#if overNetwork(device)}<Wifi size={13} />{:else}<Usb size={13} />{/if}
+            </span>
             {#if device.battery}<BatteryLevel level={device.battery.level} charging={device.battery.charging} />{/if}
           </div>
         </div>
@@ -88,13 +95,27 @@
       <div class="conn">
         {#if ui.status?.deviceAttached}
           <span class="dot" style:color="var(--warn)"></span>
-          <span>iPhone gesperrt?</span>
+          <span>{t("Connected but not ready")}</span>
         {:else}
           <span class="dot" style:color="var(--text-3)"></span>
-          <span class="faint">{t("No iPhone")}</span>
+          <span class="faint">{t("No device")}</span>
         {/if}
       </div>
     {/if}
+    {#if others.length}
+      <div class="others">
+        {#each others as d (d.udid)}
+          <button class="other" onclick={() => selectDevice(d.udid)} title={t("Switch to this device")}>
+            {#if d.platform === "tvos"}<Tv size={15} />{:else}<Smartphone size={15} />{/if}
+            <span class="other-name">{d.name}</span>
+            {#if overNetwork(d)}<Wifi size={13} class="faint" />{:else}<Usb size={13} class="faint" />{/if}
+          </button>
+        {/each}
+      </div>
+    {/if}
+    <button class="other add" onclick={() => (ui.pairingOpen = true)} title={t("Pair Apple TV")}>
+      <Plus size={15} /><span class="other-name">{t("Pair Apple TV")}</span>
+    </button>
   </div>
 </aside>
 
@@ -171,4 +192,15 @@
   .dev-model { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dev-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 3px;
               font-size: 12px; color: var(--text-3); }
+  .via { display: inline-flex; color: var(--text-3); }
+  .others { display: grid; gap: 2px; }
+  .other {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 7px 12px; border-radius: 9px; border: 1px solid transparent;
+    background: transparent; color: var(--text-2); font: inherit; font-size: 12.5px;
+    text-align: left; cursor: pointer;
+  }
+  .other:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+  .add { color: var(--text-3); }
+  .other-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

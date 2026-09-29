@@ -29,6 +29,11 @@ class NotPaired(DeviceError):
     pass
 
 
+class WifiPairingInvalid(NotPaired):
+    """The Wi-Fi pairing no longer works (or never existed) - only the cable
+    can renew it."""
+
+
 class UsbServiceUnavailable(DeviceError):
     """Windows: the Apple device service (usbmuxd replacement) is missing.
 

@@ -3,6 +3,8 @@
   import Sidebar from "./components/Sidebar.svelte";
   import TaskPanel from "./components/TaskPanel.svelte";
   import TwoFactor from "./components/TwoFactor.svelte";
+  import PinDialog from "./components/PinDialog.svelte";
+  import PairTvDialog from "./components/PairTvDialog.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import Toasts from "./components/Toasts.svelte";
   import BackendDown from "./components/BackendDown.svelte";
@@ -63,6 +65,8 @@
 
 {#if ui.task?.open}<TaskPanel />{/if}
 {#if ui.twoFactor}<TwoFactor />{/if}
+{#if ui.pin}<PinDialog />{/if}
+{#if ui.pairingOpen}<PairTvDialog />{/if}
 {#if ui.confirm}<ConfirmDialog />{/if}
 <Toasts />
 

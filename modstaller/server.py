@@ -423,6 +423,22 @@ _ACTIONS: dict[str, _Action] = {
         logbook.DEVICE, None,
         lambda p, r: (SUCCESS, r["message"]),
         lambda e: _("Fix failed: {error}", error=e)),
+    "device.wifi": _Action(
+        logbook.DEVICE,
+        lambda p: (_("Switching on Wi-Fi") if p.get("enable")
+                   else _("Switching off Wi-Fi")),
+        lambda p, r: (SUCCESS, _("Wi-Fi is on.") if p.get("enable")
+                      else _("Wi-Fi is off.")),
+        lambda e: _("Wi-Fi could not be switched: {error}", error=e)),
+    "pair.start": _Action(
+        logbook.DEVICE,
+        lambda p: _("Pairing {name}", name=p.get("name") or p.get("host", "")),
+        lambda p, r: (SUCCESS, _("{name} is paired.", name=r.get("name", ""))),
+        lambda e: _("Pairing failed: {error}", error=e)),
+    "device.forget": _Action(
+        logbook.DEVICE, None,
+        lambda p, r: (SUCCESS, _("Device forgotten.")),
+        lambda e: _("Forgetting the device failed: {error}", error=e)),
 }
 
 
@@ -456,50 +472,66 @@ def _log_usb_service(server, missing: bool) -> None:
                     SUCCESS)
 
 
-def _log_device_changes(server, serials: list[str], device: dict | None,
-                        error: str) -> None:
-    """Plugging in, unplugging and Developer Mode - once per change.
+def _device_kind(platform: str | None) -> str:
+    return "Apple TV" if platform == "tvos" else "iPhone"
+
+
+def _log_device_changes(server, refs: list, cache: dict, errors: dict) -> None:
+    """Connecting, disconnecting and Developer Mode - once per change.
 
     Called on every status poll, so it only speaks when something is
     different from what it said last time.
     """
+    from .device.discovery import USB, USBMUX_NET
     seen = server.seen_devices
-    for gone in set(seen) - set(serials):
+    present = {r.udid for r in refs}
+    for gone in set(seen) - present:
         name = seen.pop(gone).get("name") or "iPhone"
         logbook.log(logbook.DEVICE, _("{name} disconnected", name=name))
-    if not serials:
-        return
 
-    serial = serials[0]
-    before = seen.get(serial)
-    if device is None:
-        if error and (before is None or before.get("error") != error):
-            logbook.log(logbook.DEVICE,
-                        _("iPhone plugged in but not ready: {error}",
-                          error=error), logging.WARNING)
-            seen[serial] = {**(before or {}), "error": error}
-        return
+    for ref in refs:
+        udid = ref.udid
+        before = seen.get(udid)
+        device = cache.get(udid)
+        error = errors.get(udid, "")
+        if device is None:
+            if error and (before is None or before.get("error") != error):
+                logbook.log(logbook.DEVICE,
+                            _("Device connected but not ready: {error}",
+                              error=error), logging.WARNING)
+                seen[udid] = {**(before or {}), "error": error}
+            continue
 
-    now = {"name": device.get("name") or "iPhone",
-           "devMode": device.get("developerMode"), "error": ""}
-    if before is None or not before.get("name"):
-        logbook.log(logbook.DEVICE, _(
-            "iPhone connected: {name} · {model} · iOS {version}",
-            name=now["name"], model=device.get("model", ""),
-            version=device.get("iosVersion", "")))
-        if now["devMode"] is False:
+        via = _("USB") if ref.transport in (USB,) else _("Wi-Fi")
+        if ref.transport == USBMUX_NET:
+            via = _("Wi-Fi")
+        now = {"name": device.get("name") or _device_kind(device.get("platform")),
+               "devMode": device.get("developerMode"), "error": "",
+               "transport": ref.transport}
+        tv = device.get("platform") == "tvos"
+        if before is None or not before.get("name"):
             logbook.log(logbook.DEVICE, _(
-                "Developer Mode is off - sideloaded apps will not start."),
-                logging.WARNING)
-    elif before.get("devMode") != now["devMode"]:
-        if now["devMode"]:
-            logbook.log(logbook.DEVICE, _("Developer Mode is now on."),
-                        SUCCESS)
+                "Connected: {name} · {model} · {os} {version} · {via}",
+                name=now["name"], model=device.get("model", ""),
+                os="tvOS" if tv else "iOS",
+                version=device.get("iosVersion", ""), via=via))
+            if now["devMode"] is False:
+                logbook.log(logbook.DEVICE, _(
+                    "Developer Mode is off - sideloaded apps will not start."),
+                    logging.WARNING)
         else:
-            logbook.log(logbook.DEVICE, _(
-                "Developer Mode is off - sideloaded apps will not start."),
-                logging.WARNING)
-    seen[serial] = now
+            if before.get("transport") and before.get("transport") != ref.transport:
+                logbook.log(logbook.DEVICE, _("{name} is now connected via {via}.",
+                                              name=now["name"], via=via))
+            if before.get("devMode") != now["devMode"] and not tv:
+                if now["devMode"]:
+                    logbook.log(logbook.DEVICE, _("Developer Mode is now on."),
+                                SUCCESS)
+                else:
+                    logbook.log(logbook.DEVICE, _(
+                        "Developer Mode is off - sideloaded apps will not start."),
+                        logging.WARNING)
+        seen[udid] = now
 
 
 def _jsonable(obj):
@@ -554,11 +586,71 @@ def _outcome_dict(o) -> dict:
             "newAppIds": o.new_app_ids}
 
 
+def _udid_param(params: dict) -> str | None:
+    """The optional ``udid`` a call is about - else the default device."""
+    value = params.get("udid")
+    return value if isinstance(value, str) and value else None
+
+
+def _device_entry(st, ref) -> dict:
+    """What the status says about one device (cached, see BATTERY_TTL)."""
+    from .device.models import form_factor, marketing_name
+    return {
+        "_at": time.monotonic(),
+        "name": st.device_name, "udid": st.udid,
+        "iosVersion": st.ios_version,
+        "developerMode": st.developer_mode,
+        "productType": st.product_type,
+        "model": marketing_name(st.product_type),
+        "formFactor": form_factor(st.product_type),
+        "platform": st.platform,
+        "battery": ({"level": st.battery.level,
+                     "charging": st.battery.charging}
+                    if st.battery else None),
+    }
+
+
+def _device_summary(ref, entry: dict | None) -> dict:
+    """One line of the device list - from the cache, else from what
+    ModStaller remembers about the device, else just its UDID."""
+    from .device import registry
+    from .device.models import form_factor, marketing_name
+    known = registry.get(ref.udid)
+    if entry is not None:
+        out = {k: v for k, v in entry.items() if not k.startswith("_")}
+    else:
+        product = known.product_type if known else ""
+        out = {"name": (known.name if known else "") or ref.udid[:8],
+               "udid": ref.udid,
+               "iosVersion": known.os_version if known else "",
+               "developerMode": None,
+               "productType": product,
+               "model": marketing_name(product) if product else "",
+               "formFactor": form_factor(product) if product else "island",
+               "platform": known.platform if known else registry.IOS,
+               "battery": None}
+    out["transport"] = ref.transport
+    out["wifiEnabled"] = bool(known and known.wifi_enabled)
+    return out
+
+
+def _pick_selected(refs, wanted: str | None):
+    if wanted:
+        hit = next((r for r in refs if r.udid == wanted), None)
+        if hit is not None:
+            return hit
+    preferred = config.Settings.load().default_udid
+    if preferred:
+        hit = next((r for r in refs if r.udid == preferred), None)
+        if hit is not None:
+            return hit
+    return refs[0] if refs else None
+
+
 @method("status")
 async def _status(server: Server, job: Job, params: dict):
     from .apple.session import active_adsid, list_accounts
-    from .device.connection import list_devices
-    from .device.models import form_factor, marketing_name
+    from .device import discovery
     from .errors import UsbServiceUnavailable
     from .state import store
     from .status import URGENT_DAYS, Status, device_status
@@ -571,52 +663,58 @@ async def _status(server: Server, job: Job, params: dict):
             _look_up_first_name(server, account.adsid)
     st = Status(apps=store.all_installs(), logged_in=session is not None)
     try:
-        serials = await list_devices()
+        local = await discovery.usbmux_refs()
         usb_service = "ok"
     except UsbServiceUnavailable as exc:
         # Windows without Apple Devices/iTunes: Explorer shows the iPhone,
-        # we never will - say so instead of "not connected".
-        serials, usb_service = [], "missing"
+        # we never will over the cable - say so instead of "not connected".
+        local, usb_service = [], "missing"
         st.error = str(exc)
         if await _usb_service_stopped(server):
             usb_service = "stopped"
             st.error = _("The Apple device service is installed but not "
                          "running.")
     _log_usb_service(server, usb_service == "missing")
+    # The network search runs in the background - here only what it saw.
+    network = discovery.SCANNER.refs() if discovery.SCANNER is not None else []
+    refs = discovery.merge(local, network)
+
     cache = server.device_cache
-    for gone in set(cache) - set(serials):
+    for gone in set(cache) - {r.udid for r in refs}:
         del cache[gone]
 
-    device = None
-    if serials:
-        entry = cache.get(serials[0])
+    errors: dict[str, str] = {}
+    for ref in refs:
+        entry = cache.get(ref.udid)
         # The battery changes - after BATTERY_TTL the entry counts as stale.
-        stale = entry is None or time.monotonic() - entry["_at"] > BATTERY_TTL
-        if stale or params.get("refresh"):
-            cache.pop(serials[0], None)
-            await device_status(st)
-            if st.has_device and not st.error:
-                cache[serials[0]] = {
-                    "_at": time.monotonic(),
-                    "name": st.device_name, "udid": st.udid,
-                    "iosVersion": st.ios_version,
-                    "developerMode": st.developer_mode,
-                    "productType": st.product_type,
-                    "model": marketing_name(st.product_type),
-                    "formFactor": form_factor(st.product_type),
-                    "battery": ({"level": st.battery.level,
-                                 "charging": st.battery.charging}
-                                if st.battery else None),
-                }
-        if serials[0] in cache:
-            device = {k: v for k, v in cache[serials[0]].items()
-                      if not k.startswith("_")}
+        # A new way to the device (cable pulled, now Wi-Fi) is asked anew.
+        stale = (entry is None or time.monotonic() - entry["_at"] > BATTERY_TTL
+                 or entry.get("_transport") != ref.transport)
+        if not (stale or params.get("refresh")):
+            continue
+        cache.pop(ref.udid, None)
+        one = Status()
+        await device_status(one, ref)
+        if one.has_device and not one.error:
+            cache[ref.udid] = {**_device_entry(one, ref), "_transport": ref.transport}
+        elif one.error:
+            errors[ref.udid] = one.error
 
-    _log_device_changes(server, serials, device, st.error or "")
+    selected = _pick_selected(refs, _udid_param(params))
+    devices = [_device_summary(r, cache.get(r.udid)) for r in refs]
+    device = None
+    if selected is not None and selected.udid in cache:
+        device = _device_summary(selected, cache[selected.udid])
+    if selected is not None and not st.error:
+        st.error = errors.get(selected.udid, "")
+
+    _log_device_changes(server, refs, cache, errors)
     return {
         "device": device,
-        "deviceAttached": bool(serials),
-        "attached": serials,
+        "devices": devices,
+        "selectedUdid": selected.udid if selected else None,
+        "deviceAttached": bool(refs),
+        "attached": [r.udid for r in refs],
         "loggedIn": st.logged_in,
         "firstName": session.first_name if session else "",
         "accounts": [_account_dict(a, active) for a in accounts],
@@ -656,7 +754,8 @@ async def _ipa_inspect(server: Server, job: Job, params: dict):
     can_keep = movable(info)
     return {"path": str(info.path), "bundleId": info.bundle_id,
             "name": info.name, "version": info.version,
-            "minimumOs": info.minimum_os, "extensions": info.extensions,
+            "minimumOs": info.minimum_os, "platform": info.platform,
+            "extensions": info.extensions,
             "extensionDetails": [
                 {"path": e.path, "bundleId": e.bundle_id, "name": e.name,
                  "point": e.point, "movable": e.path in can_keep}
@@ -721,6 +820,7 @@ async def _install(server: Server, job: Job, params: dict):
             bundle_id=_text_param(params, "bundleId"),
             icon=icon, keep_extensions=_keep_param(params),
             spare_app_id=_text_param(params, "spareAppId"),
+            udid=_udid_param(params),
             progress=job.progress, on_step=job.log))
     finally:
         if icon is not None:
@@ -758,13 +858,13 @@ def _apple_view(server, adsid: str | None, team_id: str | None = None,
     return adsid, team, Capabilities.for_team(team), ids, quota
 
 
-async def _read_device_apps(job) -> dict | None:
-    """Installed user apps with their metadata - None without an iPhone."""
+async def _read_device_apps(job, udid: str | None = None) -> dict | None:
+    """Installed user apps with their metadata - None without a device."""
     from .device.connection import ServiceProvider
     from .device.install import list_apps
 
     async def read():
-        async with ServiceProvider() as sp:
+        async with ServiceProvider(udid) as sp:
             return await list_apps(sp)
     try:
         return await job.isolated(read)
@@ -802,7 +902,7 @@ async def _install_plan(server: Server, job: Job, params: dict):
     from .state import appid_log, store
 
     info = await asyncio.to_thread(inspect, Path(_need(params, "path")))
-    apps = await _read_device_apps(job)
+    apps = await _read_device_apps(job, _udid_param(params))
     protected = {r.bundle_id for r in store.all_installs()} | set(apps or {})
 
     def run():
@@ -857,9 +957,10 @@ async def _uninstall(server: Server, job: Job, params: dict):
     from .state import store
 
     bundle_id = _need(params, "bundleId")
+    udid = _udid_param(params)
 
     async def run():
-        async with ServiceProvider() as sp:
+        async with ServiceProvider(udid) as sp:
             return await uninstall_app(sp, bundle_id)
 
     transport = await job.isolated(run)
@@ -872,9 +973,10 @@ async def _jit(server: Server, job: Job, params: dict):
     from .device.jit import enable_jit
 
     bundle_id = _need(params, "bundleId")
+    udid = _udid_param(params)
 
     async def run():
-        async with ServiceProvider() as sp:
+        async with ServiceProvider(udid) as sp:
             return await enable_jit(sp, bundle_id, on_step=job.log)
 
     r = await job.isolated(run)
@@ -1014,7 +1116,7 @@ async def _account(server: Server, job: Job, params: dict):
     usage_known = False
     try:
         async def read():
-            async with ServiceProvider() as sp:
+            async with ServiceProvider(_udid_param(params)) as sp:
                 return await list_apps(sp)
 
         apps = await job.isolated(read)
@@ -1119,11 +1221,18 @@ async def _certs_revoke(server: Server, job: Job, params: dict):
 @method("device.info")
 async def _device_info(server: Server, job: Job, params: dict):
     from .device.connection import ServiceProvider, device_info
-    async with ServiceProvider() as sp:
-        info = await device_info(sp.lockdown)
+    udid = _udid_param(params)
+
+    async def run():
+        # Isolated: for an Apple TV this builds a tunnel, which takes a while.
+        async with ServiceProvider(udid) as sp:
+            return await device_info(sp.lockdown, sp.transport)
+
+    info = await job.isolated(run)
     return {"udid": info.udid, "name": info.name,
             "productType": info.product_type, "iosVersion": info.ios_version,
-            "build": info.build, "developerMode": info.developer_mode}
+            "build": info.build, "developerMode": info.developer_mode,
+            "platform": info.platform, "transport": info.transport}
 
 
 @method("device.apps")
@@ -1132,7 +1241,7 @@ async def _device_apps(server: Server, job: Job, params: dict):
     from .device.install import app_origin, list_apps
 
     async def run():
-        async with ServiceProvider() as sp:
+        async with ServiceProvider(_udid_param(params)) as sp:
             return await list_apps(sp)
 
     apps = await job.isolated(run)
@@ -1187,8 +1296,10 @@ async def _apps_overview(server: Server, job: Job, params: dict):
     from .device.install import app_origin, list_apps
     from .state import store
 
+    udid = _udid_param(params)
+
     async def run():
-        async with ServiceProvider() as sp:
+        async with ServiceProvider(udid) as sp:
             return await list_apps(sp)
 
     apps = await job.isolated(run)
@@ -1218,17 +1329,98 @@ async def _apps_overview(server: Server, job: Job, params: dict):
 @method("device.checks")
 async def _device_checks(server: Server, job: Job, params: dict):
     from .device.readiness import run_checks
-    return [asdict(c) for c in await job.isolated(run_checks)]
+    udid = _udid_param(params)
+    return [asdict(c) for c in await job.isolated(lambda: run_checks(udid))]
 
 
 @method("device.fix")
 async def _device_fix(server: Server, job: Job, params: dict):
     from .device.readiness import run_fix
     fix = _need(params, "fix")
-    result = await job.isolated(lambda: run_fix(fix, on_step=job.log))
+    udid = _udid_param(params)
+    result = await job.isolated(lambda: run_fix(fix, udid, on_step=job.log))
     # Developer Mode & co. live in the status cache - it is now outdated.
     server.device_cache.clear()
     return asdict(result)
+
+
+@method("device.wifi")
+async def _device_wifi(server: Server, job: Job, params: dict):
+    """Switches Wi-Fi for an iPhone on (needs the cable once) or off."""
+    from .device import wifi
+    udid = _udid_param(params)
+    if params.get("enable"):
+        result = await job.isolated(lambda: wifi.enable(udid, on_step=job.log))
+    else:
+        if udid is None:
+            raise RpcError(INVALID_PARAMS, _("Parameter {key!r} is missing", key="udid"))
+        result = await job.isolated(lambda: wifi.disable(udid, on_step=job.log))
+    server.device_cache.clear()
+    return result
+
+
+@method("pair.browse")
+async def _pair_browse(server: Server, job: Job, params: dict):
+    """Apple TVs showing the pairing screen right now."""
+    from .device import tvpair
+    return await job.isolated(tvpair.browse)
+
+
+@method("pair.start")
+async def _pair_start(server: Server, job: Job, params: dict):
+    """Pairs an Apple TV. The PIN it shows comes from the interface
+    (``prompt.pin``)."""
+    from .device import tvpair
+    identifier = _need(params, "identifier")
+    host = _need(params, "host")
+    port = params.get("port")
+    if not isinstance(port, int) or not 0 < port < 65536:
+        raise RpcError(INVALID_PARAMS, _("Parameter {key!r} is missing", key="port"))
+    name = _text_param(params, "name") or ""
+
+    async def ask_pin(device_name: str) -> str | None:
+        answer = await asyncio.to_thread(
+            server.ask_blocking, "prompt.pin", {"name": device_name})
+        return str(answer).strip() if answer else None
+
+    dev = await job.isolated(lambda: tvpair.pair(
+        identifier, host, port, name=name, ask_pin=ask_pin, on_step=job.log))
+    server.device_cache.clear()
+    return {"udid": dev.udid, "name": dev.name, "productType": dev.product_type,
+            "osVersion": dev.os_version}
+
+
+@method("devices.known")
+async def _devices_known(server: Server, job: Job, params: dict):
+    """Every device ModStaller remembers - also those not reachable now."""
+    from .device import registry
+    from .device.models import form_factor, marketing_name
+    return [{"udid": d.udid, "name": d.name, "productType": d.product_type,
+             "model": marketing_name(d.product_type) if d.product_type else "",
+             "formFactor": form_factor(d.product_type) if d.product_type else "island",
+             "platform": d.platform, "osVersion": d.os_version,
+             "wifiEnabled": d.wifi_enabled, "paired": bool(d.remote_identifier),
+             "lastSeen": d.last_seen}
+            for d in registry.all_devices()]
+
+
+@method("device.forget")
+async def _device_forget(server: Server, job: Job, params: dict):
+    """Forgets a device: Wi-Fi pairing, RemotePairing record, the entry."""
+    from .device import discovery, registry
+    udid = _need(params, "udid")
+    known = registry.get(udid)
+    if known is not None and known.remote_identifier:
+        from pymobiledevice3.common import get_home_folder
+        from pymobiledevice3.pair_records import get_remote_pairing_record_filename
+        name = get_remote_pairing_record_filename(known.remote_identifier)
+        for path in get_home_folder().glob(f"{name}.*"):
+            path.unlink(missing_ok=True)
+    forgotten = registry.forget(udid)
+    if discovery.SCANNER is not None:
+        discovery.SCANNER.forget(udid)
+    server.device_cache.pop(udid, None)
+    return {"forgotten": forgotten}
 
 
 def _usb_setup_message(how: str) -> str:
@@ -1324,6 +1516,11 @@ def take_stdout() -> int:
 async def _run() -> int:
     out = take_stdout()
     logbook.setup(file=config.LOG_FILE)
+    # Devices in the network are looked for in the background - the status
+    # must never wait for a Bonjour browse.
+    from .device import discovery
+    discovery.SCANNER = discovery.NetworkScanner()
+    discovery.SCANNER.start()
     server = Server(out)
     server.notify("ready", {})
     await server.serve(sys.stdin.buffer)

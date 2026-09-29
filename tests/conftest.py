@@ -1,10 +1,12 @@
-"""Keeps every test away from the real sign-ins in the user's data dir."""
+"""Keeps every test away from the real sign-ins and devices in the user's
+data dir."""
 
 from __future__ import annotations
 
 import pytest
 
 from modstaller.apple import session as session_mod
+from modstaller.device import discovery, registry
 
 
 @pytest.fixture(autouse=True)
@@ -14,3 +16,11 @@ def _private_accounts(tmp_path, monkeypatch):
     monkeypatch.setattr(session_mod, "ACCOUNTS_DIR", secrets / "accounts")
     monkeypatch.setattr(session_mod, "ACCOUNTS_INDEX",
                         secrets / "accounts.json")
+
+
+@pytest.fixture(autouse=True)
+def _private_devices(tmp_path, monkeypatch):
+    """Known devices and their pair records - and no background search."""
+    monkeypatch.setattr(registry, "DEVICES_FILE", tmp_path / "devices.json")
+    monkeypatch.setattr(registry, "PAIRING_DIR", tmp_path / "secrets" / "pairing")
+    monkeypatch.setattr(discovery, "SCANNER", None)

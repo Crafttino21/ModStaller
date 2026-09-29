@@ -42,6 +42,8 @@ class InstallRecord:
     #: Which extensions stay ("PlugIns/Foo.appex"). None: older record -
     #: then ``strip_extensions`` decides, all or nothing.
     kept_extensions: list[str] | None = None
+    #: "ios" or "tvos" - older records are all iOS.
+    platform: str = "ios"
 
     @property
     def days_left(self) -> float:

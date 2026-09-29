@@ -6,7 +6,7 @@ import pytest
 
 from modstaller.device.connection import Battery, battery
 from modstaller.device.models import (
-    HOME_BUTTON, IPAD, ISLAND, NOTCH, form_factor, marketing_name,
+    HOME_BUTTON, IPAD, ISLAND, NOTCH, TV, form_factor, marketing_name,
 )
 
 
@@ -14,6 +14,7 @@ from modstaller.device.models import (
     ("iPhone17,2", "iPhone 16 Pro Max"),
     ("iPhone9,3", "iPhone 7"),            # "(GSM)" isn't shown to users
     ("iPhone99,1", "iPhone99,1"),         # unknown: better raw than wrong
+    ("AppleTV14,1", "Apple TV 4K (3rd gen)"),
 ])
 def test_marketing_name(product, name):
     assert marketing_name(product) == name
@@ -28,6 +29,7 @@ def test_marketing_name(product, name):
     ("iPhone17,5", NOTCH),         # iPhone 16e
     ("iPhone18,4", ISLAND),        # iPhone Air
     ("iPad13,1", IPAD),
+    ("AppleTV14,1", TV),           # Apple TV 4K (3rd gen)
 ])
 def test_form_factor(product, form):
     assert form_factor(product) == form

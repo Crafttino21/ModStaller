@@ -28,6 +28,8 @@ class Status:
     product_type: str = ""
     developer_mode: bool = True
     battery: object = None      # device.connection.Battery
+    platform: str = "ios"
+    transport: str = "usb"
     logged_in: bool = False
     apps: list = field(default_factory=list)
     error: str = ""
@@ -41,17 +43,39 @@ class Status:
         return [a for a in self.apps if a.days_left <= URGENT_DAYS]
 
 
-async def device_status(st: Status) -> None:
-    """Records what the iPhone says about itself - or that there is none."""
+async def device_status(st: Status, ref=None) -> None:
+    """Records what the device says about itself - or that there is none.
+
+    ``ref`` (a :class:`device.discovery.DeviceRef`) picks the device and the
+    way to it; without one the default device.
+
+    A device reached only by its RemotePairing tunnel (Apple TV) is not
+    asked: that would mean building a tunnel every few seconds. What
+    ModStaller learned when pairing it has to do (see ``registry``)."""
+    from .device import registry
+    from .device.discovery import REMOTE
+    if ref is not None and ref.transport == REMOTE:
+        known = registry.get(ref.udid)
+        if known is not None:
+            st.device_name = known.name or known.product_type
+            st.udid = known.udid
+            st.ios_version = known.os_version
+            st.product_type = known.product_type
+            st.platform = known.platform
+            st.transport = REMOTE
+            st.developer_mode = True     # unknown - the checks say more
+            return
     try:
         from .device.connection import ServiceProvider, battery, device_info
-        async with ServiceProvider() as sp:
-            info = await device_info(sp.lockdown)
+        async with ServiceProvider(ref=ref) as sp:
+            info = await device_info(sp.lockdown, sp.transport)
             st.device_name = info.name
             st.udid = info.udid
             st.ios_version = info.ios_version
             st.product_type = info.product_type
             st.developer_mode = info.developer_mode
+            st.platform = info.platform
+            st.transport = info.transport
             st.battery = await battery(sp.lockdown)
     except ModStallerError as exc:
         # No device is a state, not an error. A locked or unpaired one is -
@@ -64,7 +88,7 @@ async def device_status(st: Status) -> None:
 
 
 async def gather_status() -> Status:
-    """Only local and over USB - no Apple request.
+    """Only local and over the device's own connection - no Apple request.
 
     The state should be ready immediately. Quotas cost a network call and
     are therefore only fetched on demand.

@@ -165,7 +165,33 @@ async def run_checks() -> list[Check]:
         ", ".join(serials) if serials else _("none connected"),
         hint=_("Connect the iPhone via USB and unlock it"), kind=TODO))
 
+    checks.extend(await _network_check())
     return checks
+
+
+async def _network_check() -> list[Check]:
+    """Known devices in the network (Wi-Fi iPhones, Apple TVs) - found by
+    Bonjour, which a firewall or a guest network may well block."""
+    from .device import discovery, registry
+    wanted = [d for d in registry.all_devices() if d.wifi_enabled or d.remote_identifier]
+    if not wanted:
+        return []
+    try:
+        found = {r.udid for r in await discovery.NetworkScanner().scan()}
+    except Exception as exc:
+        found, error = set(), str(exc)
+    else:
+        error = ""
+    seen = [d for d in wanted if d.udid in found]
+    detail = error or _("{found} of {total} found: {names}", found=len(seen), total=len(wanted),
+                        names=", ".join(d.name or d.udid[:8] for d in seen) or "-")
+    return [Check(
+        _("Devices in the network"), len(seen) == len(wanted) and not error, detail,
+        hint=_("Same network and switched on? The search uses Bonjour (mDNS, UDP "
+               "port 5353): a firewall must let it through - on Windows allow "
+               "ModStaller when asked - and guest networks with client "
+               "isolation block it."),
+        kind=TODO)]
 
 
 def problems(checks: list[Check]) -> list[Check]:

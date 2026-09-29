@@ -25,6 +25,9 @@ class FakeLockdown:
 
 
 class FakeSP:
+    transport = "usb"
+    is_network = False
+
     def __init__(self, lockdown=None):
         self.lockdown = lockdown or FakeLockdown()
 
@@ -52,7 +55,7 @@ def phone(monkeypatch):
     """An iPhone with configurable iOS, Developer Mode and profiles."""
     state = {"info": _device("27.0", True), "profiles": [], "sp": FakeSP()}
 
-    async def info(lockdown):
+    async def info(lockdown, transport="usb"):
         return state["info"]
 
     async def profiles(sp):
@@ -287,3 +290,56 @@ async def test_old_ios_mounts_over_lockdown(monkeypatch):
     provider = _Provider("16.7")
     await mount_developer_image(provider)
     assert calls == [provider.lockdown]
+
+
+async def test_wifi_can_be_switched_on_while_on_the_cable(phone):
+    checks = _by_id(await rd.run_checks())
+    assert checks["wifi"].state == rd.INFO
+    assert checks["wifi"].fix == rd.FIX_WIFI
+
+    from modstaller.device import registry
+    registry.remember("X", wifi_enabled=True)
+    checks = _by_id(await rd.run_checks())
+    assert checks["wifi"].state == rd.OK and checks["wifi"].fix is None
+
+
+async def test_over_wifi_there_is_nothing_to_switch_on(phone):
+    phone["sp"].transport = "wifi"
+    phone["sp"].is_network = True
+    checks = _by_id(await rd.run_checks())
+    assert checks["wifi"].state == rd.OK
+    assert checks["wifi"].fix is None
+
+
+async def test_a_broken_wifi_pairing_asks_for_the_cable(monkeypatch):
+    from modstaller.errors import WifiPairingInvalid
+
+    class Broken:
+        async def __aenter__(self):
+            raise WifiPairingInvalid("no longer accepted")
+
+        async def __aexit__(self, *exc):
+            pass
+    monkeypatch.setattr(rd, "ServiceProvider", lambda udid=None: Broken())
+    [check] = await rd.run_checks()
+    assert check.state == rd.BAD and check.fix is None
+    assert "USB" in check.manual
+
+
+async def test_apple_tv_skips_what_it_does_not_have(phone):
+    phone["info"] = DeviceInfo(udid="TV", name="Living room", product_type="AppleTV14,1",
+                               ios_version="18.1", build="B", developer_mode=True,
+                               platform="tvos", transport="remote")
+    checks = _by_id(await rd.run_checks())
+    assert "ddi" not in checks and "wifi" not in checks and "trust" not in checks
+    assert checks["ios"].state == rd.OK
+    assert checks["developer-mode"].state == rd.OK
+
+
+async def test_apple_tv_without_developer_mode_says_where_to_turn_it_on(phone):
+    phone["info"] = DeviceInfo(udid="TV", name="Living room", product_type="AppleTV14,1",
+                               ios_version="17.0", build="B", developer_mode=False,
+                               platform="tvos", transport="remote")
+    check = _by_id(await rd.run_checks())["developer-mode"]
+    assert check.state == rd.WARN and check.fix is None
+    assert "Apple TV" in check.manual

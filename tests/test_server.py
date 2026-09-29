@@ -314,7 +314,7 @@ async def test_status_names_a_missing_usb_service_and_logs_it_once(monkeypatch):
         if missing:
             raise UsbServiceUnavailable("service missing")
         return []
-    monkeypatch.setattr("modstaller.device.connection.list_devices", devices)
+    monkeypatch.setattr("modstaller.device.discovery.usbmux_refs", devices)
     logged = []
     monkeypatch.setattr(srv.logbook, "log",
                         lambda source, message, *a, **k: logged.append(message))
@@ -332,3 +332,40 @@ async def test_status_names_a_missing_usb_service_and_logs_it_once(monkeypatch):
     back = await srv._status(w.server, None, {})
     assert back["usbService"] == "ok" and not back["error"]
     assert len(logged) == 2
+
+
+async def test_status_lists_every_device_and_follows_the_selection(monkeypatch):
+    """Two devices - one on the cable, one in the Wi-Fi. The status names
+    both and details the one the interface picked."""
+    from modstaller.device import discovery
+    from modstaller.device.discovery import USB, WIFI, DeviceRef
+
+    async def usb(**kw):
+        return [DeviceRef("PHONE", USB)]
+    monkeypatch.setattr(discovery, "usbmux_refs", usb)
+    scanner = discovery.NetworkScanner()
+    scanner._record([DeviceRef("PAD", WIFI, host="10.0.0.9")])
+    monkeypatch.setattr(discovery, "SCANNER", scanner)
+
+    async def fake_status(st, ref=None):
+        st.device_name = {"PHONE": "iPhone of S", "PAD": "iPhone of K"}[ref.udid]
+        st.udid = ref.udid
+        st.ios_version = "27.0"
+        st.product_type = "iPhone17,2"
+        st.transport = ref.transport
+    monkeypatch.setattr("modstaller.status.device_status", fake_status)
+
+    w = Wire()
+    first = await srv._status(w.server, None, {})
+    assert [d["udid"] for d in first["devices"]] == ["PHONE", "PAD"]
+    assert [d["transport"] for d in first["devices"]] == ["usb", "wifi"]
+    assert first["selectedUdid"] == "PHONE"
+    assert first["attached"] == ["PHONE", "PAD"]
+
+    picked = await srv._status(w.server, None, {"udid": "PAD"})
+    assert picked["selectedUdid"] == "PAD"
+    assert picked["device"]["name"] == "iPhone of K"
+    assert picked["device"]["transport"] == "wifi"
+
+    gone = await srv._status(w.server, None, {"udid": "NOPE"})
+    assert gone["selectedUdid"] == "PHONE", "an unknown choice falls back"

@@ -5,7 +5,7 @@
   } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import QuotaMeter from "../components/QuotaMeter.svelte";
-  import { busy, errorText, go, ui } from "../lib/state.svelte";
+  import { busy, errorText, go, onDevice, ui } from "../lib/state.svelte";
   import { t } from "../lib/i18n.svelte";
   import { call } from "../lib/rpc";
   import { mb, relative } from "../lib/format";
@@ -105,7 +105,7 @@
     const timer = setTimeout(async () => {
       planning = true;
       try {
-        const p = await call<InstallPlan>("install.plan", params);
+        const p = await call<InstallPlan>("install.plan", onDevice(params));
         if (seq !== planSeq) return;
         plan = p;
         planError = "";
@@ -178,6 +178,8 @@
   }
 
   const st = $derived(ui.status);
+  /** Apple-TV-Apps haben geschichtete Icons - ein PNG ersetzt sie nicht. */
+  const tvApp = $derived(info?.platform === "tvos");
   const slotsFull = $derived(!!plan?.isFree && !!plan.slots?.max && plan.slots.used >= plan.slots.max);
   const blockers = $derived.by(() => {
     const out: { text: string; action?: () => void; label?: string }[] = [];
@@ -185,9 +187,13 @@
     if (!st.loggedIn) out.push({ text: t("Not signed in with Apple."), action: () => go("account"), label: t("Sign in") });
     if (!st.device && st.deviceAttached)
       out.push({ text: t("The iPhone is plugged in but locked or not paired."), action: () => go("device"), label: t("Fix") });
-    else if (!st.device) out.push({ text: t("No iPhone connected – plug it in via USB and unlock it.") });
-    else if (!st.device.developerMode)
+    else if (!st.device) out.push({ text: t("No device connected – plug the iPhone in via USB and unlock it, or bring it into the same Wi-Fi.") });
+    else if (st.device.developerMode === false && st.device.platform !== "tvos")
       out.push({ text: t("Developer Mode is off."), action: () => go("device"), label: t("Turn on") });
+    if (info && st.device && info.platform !== st.device.platform)
+      out.push({ text: info.platform === "tvos"
+        ? t("This IPA is an Apple TV app – pick the Apple TV as the device.")
+        : t("This IPA is for iPhone and iPad – an Apple TV needs the app's tvOS version.") });
     if (info?.encrypted) out.push({ text: t("This IPA is App Store encrypted (FairPlay) and cannot be re-signed.") });
     if (!bundleIdValid) out.push({ text: t("The bundle ID is not valid – letters, digits and hyphens, separated by dots.") });
     return out;
@@ -247,7 +253,7 @@
   <div class="card detail">
     <div class="detail-head">
       <button class="app-icon" class:custom={icon || info.icon} title={t("Change icon")}
-              onclick={() => iconInput?.click()}>
+              disabled={tvApp} onclick={() => iconInput?.click()}>
         {#if icon || info.icon}
           <img src={icon ?? info.icon} alt="" />
         {:else}
@@ -258,7 +264,9 @@
       <input type="file" accept="image/png,image/jpeg,image/webp" hidden bind:this={iconInput} onchange={pickIcon} />
       <div class="grow">
         <h2>{displayName.trim() || info.name}</h2>
-        <p class="muted">{t("Version {version} · from iOS {ios}", { version: info.version || "?", ios: info.minimumOs || "?" })} · {mb(info.size)}</p>
+        <p class="muted">{tvApp
+          ? t("Version {version} · Apple TV · from tvOS {os}", { version: info.version || "?", os: info.minimumOs || "?" })
+          : t("Version {version} · from iOS {ios}", { version: info.version || "?", ios: info.minimumOs || "?" })} · {mb(info.size)}</p>
         <p class="faint mono small selectable">{info.bundleId}</p>
       </div>
       <button class="btn icon ghost" title={t("Different IPA")} onclick={() => (info = null)}><X size={18} /></button>
@@ -277,6 +285,7 @@
         <span class="faint tiny">{t("Optional – empty fields keep what the IPA says.")}</span>
       </div>
 
+      {#if !tvApp}
       <div class="icon-row">
         <div class="icon-preview">
           {#if icon || info.icon}<img src={icon ?? info.icon} alt="" />{:else}<Box size={22} />{/if}
@@ -290,6 +299,7 @@
           <button class="btn sm ghost" onclick={() => (icon = null)}><RotateCcw size={14} /> {t("Original icon")}</button>
         {/if}
       </div>
+      {/if}
 
       <div class="fields">
         <div class="field">

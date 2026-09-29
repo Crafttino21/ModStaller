@@ -825,12 +825,12 @@ function announce(res, now) {
     const left = i18n.left(lang, a.expiresAt * 1000 - now);
     const auto = p.autoRefresh && !a.sourceMissing && a.accountReady !== false;
     notify(tr("{name} expires soon", { name: a.name }), auto
-      ? tr("Valid for {left}. ModStaller renews it on the last day - connect your iPhone via USB then.", { left })
+      ? tr("Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.", { left })
       : tr("Valid for {left}. Open ModStaller to renew it.", { left }));
   }
   if (res.notifyDevice) {
-    notify(tr("Connect your iPhone"), tr(
-      "{names} must be renewed. Connect your iPhone via USB and ModStaller does the rest.",
+    notify(tr("Device not reachable"), tr(
+      "{names} must be renewed. Connect the device via USB or bring it into the same Wi-Fi - ModStaller does the rest.",
       { names: res.waitingForDevice.map((a) => a.name).join(", ") }));
   }
   for (const { app: a, reason } of res.blocked) {
@@ -896,7 +896,7 @@ async function renewNow() {
     lastStatus = st;
     const apps = scheduler.manualPlan({ apps: st.apps ?? [], attached: st.attached ?? [], now: Date.now() });
     if (!apps.length) {
-      notify(tr("Nothing to renew"), tr("No app can be renewed right now. Is your iPhone connected via USB?"));
+      notify(tr("Nothing to renew"), tr("No app can be renewed right now. Is the device connected via USB or in the same Wi-Fi?"));
       return;
     }
     await runRefreshes(apps);

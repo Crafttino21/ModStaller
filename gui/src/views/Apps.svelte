@@ -2,7 +2,7 @@
   import { Zap, RefreshCw, Trash2, Download, TriangleAlert, Package, LoaderCircle } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import ExpiryRing from "../components/ExpiryRing.svelte";
-  import { busy, errorText, go, ui } from "../lib/state.svelte";
+  import { busy, errorText, go, onDevice, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import { basename, date, days } from "../lib/format";
   import { enableJit, refreshApps, uninstallApp } from "../lib/actions";
@@ -11,6 +11,8 @@
 
   const st = $derived(ui.status);
   const noDevice = $derived(!st?.device);
+  /** JIT gibt es fuers Apple TV noch nicht (kein tvOS-Developer-Disk-Image). */
+  const jit = $derived(st?.device?.platform !== "tvos");
   /** Mit mehreren Accounts: welcher eine App signiert hat. */
   const signedBy = (adsid: string) =>
     (st?.accounts.length ?? 0) > 1 ? st?.accounts.find((a) => a.adsid === adsid)?.label ?? "" : "";
@@ -31,7 +33,7 @@
     loading = true;
     error = "";
     try {
-      const all = await call<SideloadedApp[]>("apps.overview");
+      const all = await call<SideloadedApp[]>("apps.overview", onDevice({}));
       foreign = all.filter((a) => !a.managed);
     } catch (err) {
       error = errorText(err);
@@ -105,13 +107,15 @@
           {/if}
         </div>
         <div class="acts">
-          <button class="btn sm" disabled={busy() || noDevice} onclick={() => enableJit(app)}>
-            <Zap size={15} /> JIT
-          </button>
+          {#if jit}
+            <button class="btn sm" disabled={busy() || noDevice} onclick={() => enableJit(app)}>
+              <Zap size={15} /> JIT
+            </button>
+          {/if}
           <button class="btn sm" disabled={busy() || noDevice || app.sourceMissing} onclick={() => refreshApps(app)}>
             <RefreshCw size={15} /> {t("Renew")}
           </button>
-          <button class="btn sm icon danger" title={t("Remove from the iPhone")} disabled={busy() || noDevice}
+          <button class="btn sm icon danger" title={t("Remove from the device")} disabled={busy() || noDevice}
                   onclick={() => uninstallApp(app)}>
             <Trash2 size={15} />
           </button>
@@ -155,10 +159,10 @@
               </div>
             </div>
             <div class="acts">
-              {#if app.developerSigned}
+              {#if app.developerSigned && jit}
                 <button class="btn sm" disabled={busy()} onclick={() => enableJit(app)}><Zap size={15} /> JIT</button>
               {/if}
-              <button class="btn sm icon danger" title={t("Remove from the iPhone")} disabled={busy()}
+              <button class="btn sm icon danger" title={t("Remove from the device")} disabled={busy()}
                       onclick={() => uninstallApp(app, true)}>
                 <Trash2 size={15} />
               </button>

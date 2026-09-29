@@ -6,7 +6,7 @@
   import PageHeader from "../components/PageHeader.svelte";
   import QuotaMeter from "../components/QuotaMeter.svelte";
   import { date } from "../lib/format";
-  import { ask, errorText, refreshStatus, toast, ui } from "../lib/state.svelte";
+  import { ask, errorText, onDevice, refreshStatus, toast, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import { logout } from "../lib/actions";
   import { locale, t } from "../lib/i18n.svelte";
@@ -87,7 +87,7 @@
     loadError = "";
     try {
       const [tm, cs] = await Promise.all([
-        call<Team[]>("account", { account }),
+        call<Team[]>("account", onDevice({ account })),
         call<{ teamId: string; certs: Cert[] }>("certs.list", { account }),
       ]);
       // Inzwischen auf einen anderen Account gewechselt? Dann gehoert das

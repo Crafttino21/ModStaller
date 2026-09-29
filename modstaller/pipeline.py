@@ -37,6 +37,14 @@ class InstallOutcome:
     new_app_ids: int = 0
 
 
+def _ipa_mismatch(ipa_platform: str, device_platform: str) -> str:
+    if ipa_platform == "tvos":
+        return _("This IPA is an Apple TV app - it cannot be installed on an "
+                 "iPhone. Pick the Apple TV as the device.")
+    return _("This IPA is for iPhone and iPad - an Apple TV needs the app's "
+             "tvOS version.")
+
+
 def _say(msg: str) -> None:
     print(msg, flush=True)
 
@@ -88,10 +96,17 @@ async def install(
 
     # 2. Device - likewise before any contact with Apple.
     async with ServiceProvider(udid) as sp:
-        dev = await device_info(sp.lockdown)
-        on_step("\n" + _("Device: {name}, iOS {version}",
-                              name=dev.name, version=dev.ios_version))
-        if not dev.developer_mode:
+        dev = await device_info(sp.lockdown, sp.transport)
+        on_step("\n" + _("Device: {name}, {os} {version}",
+                              name=dev.name, os=dev.os_name, version=dev.ios_version))
+        if info.platform != dev.platform:
+            raise SigningError(_ipa_mismatch(info.platform, dev.platform))
+        if icon is not None and dev.platform == "tvos":
+            # tvOS icons are layered image stacks - a PNG does not replace them.
+            on_step("  " + _("A new icon is not possible for Apple TV apps - "
+                             "the app keeps its own."))
+            icon = None
+        if not dev.developer_mode and dev.platform != "tvos":
             raise SigningError(_(
                 "Developer Mode is off. Turn it on under Settings > Privacy & "
                 "Security > Developer Mode on the iPhone."))
@@ -102,7 +117,7 @@ async def install(
             raise AppleError("Not signed in. First run: modstaller login")
         ani = anisette_mod.build(settings.anisette_provider,
                                  settings.anisette_server)
-        api = DeveloperServices(session, ani)
+        api = DeveloperServices(session, ani, platform=dev.platform)
 
         teams = api.list_teams()
         remember_teams(session.adsid, teams)
@@ -227,6 +242,7 @@ async def install(
             name=display_name or info.name,
             team_id=team.team_id,
             udid=dev.udid,
+            platform=dev.platform,
             source_ipa=str(info.path.resolve()),
             app_id_id=app_id.app_id_id,
             profile_path=str(profile_path),

@@ -274,7 +274,10 @@ async def enable_jit(sp, bundle_id: str, *,
     from .connection import device_info
     from .readiness import mount_developer_image
 
-    info = await device_info(sp.lockdown)
+    info = await device_info(sp.lockdown, sp.transport)
+    if info.platform == "tvos":
+        # Needs a tvOS Developer Disk Image - pymobiledevice3 has none.
+        raise DeviceError(_("JIT is not available for Apple TV yet."))
     txm = has_txm(info.product_type, info.ios_version)
 
     await mount_developer_image(sp, on_step)

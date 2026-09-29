@@ -136,6 +136,14 @@ const dict: Dict = {
     "Connecté mais pas prêt",
   "Connected but not ready – unlock the iPhone and confirm “Trust”.":
     "Connecté mais pas prêt – déverrouillez l’iPhone et confirmez « Se fier ».",
+  "Connected via USB. Wi-Fi is on – without the cable ModStaller finds the iPhone in the same network.":
+    "Connecté en USB. Le Wi-Fi est activé – sans câble, ModStaller trouve l’iPhone sur le même réseau.",
+  "Connected via USB. With Wi-Fi switched on, ModStaller also reaches the iPhone without the cable – for installing, renewing and the automatic renewal in the tray.":
+    "Connecté en USB. Avec le Wi-Fi activé, ModStaller joint aussi l’iPhone sans câble – pour installer, renouveler et pour le renouvellement automatique depuis la barre système.",
+  "Connected via Wi-Fi. For JIT below iOS 17.4 the cable is still needed.":
+    "Connecté en Wi-Fi. Pour le JIT sous iOS 17.4, le câble reste nécessaire.",
+  "Connection":
+    "Connexion",
   "Copy":
     "Copier",
   "Copying is not possible.":
@@ -152,6 +160,8 @@ const dict: Dict = {
     "Supprimer l’identifiant d’app",
   "Delete App ID?":
     "Supprimer l’identifiant d’app ?",
+  "Developer Mode":
+    "Mode développeur",
   "Developer Mode is off.":
     "Le mode développeur est désactivé.",
   "Developer Mode off":
@@ -164,6 +174,10 @@ const dict: Dict = {
     "Certificats de développement",
   "Device":
     "Appareil",
+  "Device forgotten.":
+    "Appareil oublié.",
+  "Device, sign-in and what expires soon – at a glance.":
+    "Appareil, connexion et ce qui expire bientôt – en un coup d’œil.",
   "Different IPA":
     "Autre IPA",
   "Done":
@@ -204,6 +218,12 @@ const dict: Dict = {
     "Corriger",
   "Follow live again":
     "Suivre à nouveau en direct",
+  "Forget":
+    "Oublier",
+  "Forget device":
+    "Oublier l’appareil",
+  "Forget {name}?":
+    "Oublier {name} ?",
   "Found in your folders":
     "Trouvés dans vos dossiers",
   "Free":
@@ -232,6 +252,8 @@ const dict: Dict = {
     "Installer {name}",
   "Installed through your package manager ({name}) – updates come from there.":
     "Installé via votre gestionnaire de paquets ({name}) – les mises à jour viennent de là.",
+  "Installed user apps":
+    "Apps utilisateur installées",
   "Installing ModStaller…":
     "Installation de ModStaller…",
   "Is everything here that ModStaller needs?":
@@ -240,10 +262,14 @@ const dict: Dict = {
     "Il devient le compte actif pour les nouvelles installations. Les apps continuent d’être renouvelées avec le compte qui les a installées.",
   "It is installed but stopped. Windows asks for confirmation once when it is started.":
     "Il est installé, mais arrêté. Windows demande une confirmation au démarrage.",
+  "JIT and the Developer Disk Image still need the cable on this iOS version (Wi-Fi needs iOS 17.4 or newer for that).":
+    "Le JIT et la Developer Disk Image nécessitent encore le câble sur cette version d’iOS (en Wi-Fi, il faut iOS 17.4 ou plus récent).",
   "JIT for {name}":
     "JIT pour {name}",
   "Keep running in the tray when closed":
     "Rester dans la barre système à la fermeture",
+  "Keep that screen open and pick the Apple TV below.":
+    "Gardez cet écran ouvert et choisissez l’Apple TV ci-dessous.",
   "Keyboard":
     "Clavier",
   "Language":
@@ -252,6 +278,8 @@ const dict: Dict = {
     "Omettre toutes les extensions",
   "Leaving the beta channel keeps the installed beta until a newer stable version is out.":
     "En quittant le canal bêta, la bêta installée est conservée jusqu’à la sortie d’une version stable plus récente.",
+  "List apps":
+    "Lister les apps",
   "Live":
     "En direct",
   "Log":
@@ -264,6 +292,8 @@ const dict: Dict = {
     "Journal dans",
   "Looking for updates …":
     "Recherche de mises à jour …",
+  "Looking in the network …":
+    "Recherche sur le réseau …",
   "Make active":
     "Rendre actif",
   "Manage App IDs ({count})":
@@ -276,6 +306,8 @@ const dict: Dict = {
     "Installation de ModStaller",
   "ModStaller can stay in the tray, remind you before apps expire and renew them on its own. Renewing needs your iPhone connected via USB.":
     "ModStaller peut rester dans la barre système, vous rappeler l’expiration des apps et les renouveler tout seul. Le renouvellement nécessite que votre iPhone soit branché en USB.",
+  "ModStaller forgets the device and its pairing. Over the cable it shows up again; an Apple TV has to be paired again with a PIN.":
+    "ModStaller oublie l’appareil et son jumelage. Par câble, il réapparaît ; une Apple TV doit être jumelée à nouveau avec un code PIN.",
   "ModStaller is starting …":
     "ModStaller démarre …",
   "ModStaller was removed.":
@@ -292,20 +324,24 @@ const dict: Dict = {
     "Nouvelle icône – recadrée en carré.",
   "New installs sign with the active account. Renewals always use the account that installed the app.":
     "Les nouvelles installations sont signées avec le compte actif. Les renouvellements utilisent toujours le compte qui a installé l’app.",
+  "Next: turn on Developer Mode on the Apple TV (Settings › Privacy & Security), then install the tvOS version of an app.":
+    "Ensuite : activez le mode développeur sur l’Apple TV (Réglages › Confidentialité et sécurité), puis installez la version tvOS d’une app.",
+  "No Apple TV found. Is the pairing screen open and the Apple TV in the same network?":
+    "Aucune Apple TV trouvée. L’écran de jumelage est-il ouvert et l’Apple TV sur le même réseau ?",
   "No IPAs in Downloads, Documents or Desktop.":
     "Aucun IPA dans Téléchargements, Documents ou Bureau.",
   "No app installed yet":
     "Aucune application installée pour l’instant",
   "No certificates in the account.":
     "Aucun certificat dans le compte.",
+  "No device":
+    "Aucun appareil",
+  "No device connected – plug the iPhone in via USB and unlock it, or bring it into the same Wi-Fi.":
+    "Aucun appareil connecté – branchez l’iPhone en USB et déverrouillez-le, ou mettez-le sur le même Wi-Fi.",
+  "No device connected. Plug the iPhone in via USB and unlock it – or bring it into the same Wi-Fi.":
+    "Aucun appareil connecté. Branchez l’iPhone en USB et déverrouillez-le – ou mettez-le sur le même Wi-Fi.",
   "No entries for this filter.":
     "Aucune entrée pour ce filtre.",
-  "No iPhone":
-    "Aucun iPhone",
-  "No iPhone connected – plug it in via USB and unlock it.":
-    "Aucun iPhone connecté – branchez-le en USB et déverrouillez-le.",
-  "No iPhone connected. Plug it in via USB and unlock it.":
-    "Aucun iPhone connecté. Branchez-le en USB et déverrouillez-le.",
   "No installed app belongs to this App ID right now.":
     "Aucune application installée ne dépend actuellement de cet identifiant d’app.",
   "No messages yet.":
@@ -336,6 +372,8 @@ const dict: Dict = {
     "Rien n’était à renouveler.",
   "Notifications":
     "Notifications",
+  "On the Apple TV open Settings › Remotes and Devices › Remote App and Devices.":
+    "Sur l’Apple TV, ouvrez Réglages › Télécommandes et appareils › App Télécommande et appareils.",
   "One click fixes it – see above.":
     "Un clic suffit – voir ci-dessus.",
   "Only for installed copies and the AppImage - not in development builds.":
@@ -348,10 +386,20 @@ const dict: Dict = {
     "Icône d’origine",
   "Overview":
     "Vue d’ensemble",
+  "PIN from the Apple TV":
+    "Code PIN de l’Apple TV",
   "Paid":
     "Payant",
   "Paid account – no weekly limit on App IDs and no limit on apps.":
     "Compte payant – pas de limite hebdomadaire d’App ID ni de limite d’apps.",
+  "Pair":
+    "Jumeler",
+  "Pair Apple TV":
+    "Jumeler une Apple TV",
+  "Pair {name}":
+    "Jumeler {name}",
+  "Paired by PIN – reachable while the Apple TV is on and in the same network.":
+    "Jumelée par code PIN – joignable tant que l’Apple TV est allumée et sur le même réseau.",
   "Password":
     "Mot de passe",
   "Pause":
@@ -362,8 +410,8 @@ const dict: Dict = {
     "Retouche photo",
   "Pick an IPA – ModStaller signs it with your Apple account and puts it on the iPhone.":
     "Choisissez un IPA – ModStaller le signe avec votre compte Apple et l’installe sur l’iPhone.",
-  "Plug it in via USB and unlock it.":
-    "Branchez-le en USB et déverrouillez-le.",
+  "Plug it in via USB and unlock it – or bring it into the same Wi-Fi.":
+    "Branchez-le en USB et déverrouillez-le – ou mettez-le sur le même Wi-Fi.",
   "Preparing Anisette …":
     "Préparation d’Anisette …",
   "Program":
@@ -380,12 +428,14 @@ const dict: Dict = {
     "Actualiser",
   "Registered devices":
     "Appareils enregistrés",
+  "Reload":
+    "Recharger",
   "Remind me before apps expire":
     "Me rappeler avant l’expiration des apps",
   "Remove":
     "Retirer",
-  "Remove from the iPhone":
-    "Retirer de l’iPhone",
+  "Remove from the device":
+    "Supprimer de l’appareil",
   "Remove {name}":
     "Retirer {name}",
   "Remove {name}?":
@@ -430,6 +480,8 @@ const dict: Dict = {
     "Diffusion d’écran",
   "Search":
     "Rechercher",
+  "Search again":
+    "Rechercher à nouveau",
   "Set up automatically":
     "Configurer automatiquement",
   "Set up the Apple device service":
@@ -496,6 +548,12 @@ const dict: Dict = {
     "Démarre dans la barre système après la connexion, sans fenêtre.",
   "Still to do: {what}":
     "Reste à faire : {what}",
+  "Switch off Wi-Fi":
+    "Désactiver le Wi-Fi",
+  "Switch on Wi-Fi":
+    "Activer le Wi-Fi",
+  "Switch to this device":
+    "Passer à cet appareil",
   "System":
     "Système",
   "System check":
@@ -510,14 +568,16 @@ const dict: Dict = {
     "Impossible de lire cette image.",
   "That is not an IPA file.":
     "Ce n’est pas un fichier IPA.",
+  "The Apple TV now shows a code on the screen. Type it in here.":
+    "L’Apple TV affiche maintenant un code à l’écran. Saisissez-le ici.",
   "The Apple Watch app is removed – it cannot be installed this way.":
     "L’app Apple Watch est supprimée – elle ne peut pas être installée ainsi.",
   "The ModStaller service in the background has stopped":
     "Le service ModStaller en arrière-plan s’est arrêté",
-  "The app and its data are deleted from the iPhone. It comes from another tool – ModStaller cannot restore it.":
-    "L’application et ses données sont supprimées de l’iPhone. Elle vient d’un autre outil – ModStaller ne peut pas la restaurer.",
-  "The app and its data are deleted from the iPhone. That frees one of the three slots.":
-    "L’application et ses données sont supprimées de l’iPhone. Cela libère l’un des trois emplacements.",
+  "The app and its data are deleted from the device. It comes from another tool – ModStaller cannot restore it.":
+    "L’app et ses données sont supprimées de l’appareil. Elle provient d’un autre outil – ModStaller ne peut pas la restaurer.",
+  "The app and its data are deleted from the device. That frees one of the three slots.":
+    "L’app et ses données sont supprimées de l’appareil. Cela libère l’un des trois emplacements.",
   "The app runs under the unused App ID {id}.":
     "L’app utilise l’App ID inutilisé {id}.",
   "The backend did not report in.":
@@ -526,8 +586,8 @@ const dict: Dict = {
     "Le service de fond s’est arrêté.",
   "The bundle ID is not valid – letters, digits and hyphens, separated by dots.":
     "Le bundle ID n’est pas valide – lettres, chiffres et tirets, séparés par des points.",
-  "The connected iPhone.":
-    "L’iPhone connecté.",
+  "The connected device.":
+    "L’appareil connecté.",
   "The iPhone is plugged in but locked or not paired.":
     "L’iPhone est branché mais verrouillé ou non appairé.",
   "The next one frees up around {date}.":
@@ -538,6 +598,10 @@ const dict: Dict = {
     "Il existe déjà une autre commande `modstaller` dans ~/.local/bin – elle n’a pas été modifiée.",
   "This IPA is App Store encrypted (FairPlay) and cannot be re-signed.":
     "Cet IPA est chiffré par l’App Store (FairPlay) et ne peut pas être re-signé.",
+  "This IPA is an Apple TV app – pick the Apple TV as the device.":
+    "Cette IPA est une app Apple TV – choisissez l’Apple TV comme appareil.",
+  "This IPA is for iPhone and iPad – an Apple TV needs the app's tvOS version.":
+    "Cette IPA est pour iPhone et iPad – une Apple TV a besoin de la version tvOS de l’app.",
   "This does not give back weekly quota: Apple counts newly created App IDs, not existing ones. When the window is full, ModStaller falls back to a free App ID by itself.":
     "Cela ne rend aucun quota hebdomadaire : Apple compte les identifiants d’app nouvellement créés, pas ceux qui existent. Quand la fenêtre est pleine, ModStaller bascule de lui-même sur un identifiant libre.",
   "This install needs {cost} – {missing} more than are left.":
@@ -552,6 +616,8 @@ const dict: Dict = {
     "Réessayer",
   "Turn on":
     "Activer",
+  "Type in the PIN the Apple TV then shows.":
+    "Saisissez le code PIN que l’Apple TV affiche alors.",
   "Undo":
     "Annuler",
   "Undo changes":
@@ -584,6 +650,8 @@ const dict: Dict = {
     "La version {version} est disponible – voir en bas à gauche.",
   "Version {version} is ready":
     "La version {version} est prête",
+  "Version {version} · Apple TV · from tvOS {os}":
+    "Version {version} · Apple TV · à partir de tvOS {os}",
   "Version {version} · from iOS {ios}":
     "Version {version} · à partir d’iOS {ios}",
   "View quotas and certificates":
@@ -602,6 +670,12 @@ const dict: Dict = {
     "Où ModStaller est installé",
   "Whether an app depends on it cannot be determined without a connected iPhone.":
     "Impossible de déterminer si une application en dépend sans iPhone connecté.",
+  "Wi-Fi":
+    "Wi-Fi",
+  "Wi-Fi is off. The iPhone is only reachable over the cable again.":
+    "Le Wi-Fi est désactivé. L’iPhone n’est de nouveau joignable que par câble.",
+  "Wi-Fi is on. The iPhone can now be unplugged – ModStaller finds it in the same network.":
+    "Le Wi-Fi est activé. L’iPhone peut maintenant être débranché – ModStaller le trouve sur le même réseau.",
   "Widget":
     "Widget",
   "Windows shows the iPhone in Explorer through its own photo driver – ModStaller needs Apple’s device service for USB. ModStaller can set it up for you: “Apple Devices” from the Microsoft Store, otherwise just Apple’s USB driver.":
@@ -636,8 +710,6 @@ const dict: Dict = {
     "a expiré",
   "hours before expiry. If your iPhone is not connected then, ModStaller asks for it and renews as soon as it is.":
     "heures avant l’expiration. Si votre iPhone n’est pas branché à ce moment-là, ModStaller le demande et renouvelle dès qu’il l’est.",
-  "iPhone, sign-in and what expires soon – at a glance.":
-    "iPhone, connexion et ce qui expire bientôt – en un coup d’œil.",
   "in use":
     "utilisé",
   "injected dylibs":
@@ -682,14 +754,18 @@ const dict: Dict = {
     "{count} point(s) empêchent le sideloading.",
   "{count} point(s) to clear up.":
     "{count} point(s) à régler.",
+  "{kind} via {via}":
+    "{kind} via {via}",
   "{minutes} min ago":
     "il y a {minutes} min",
   "{name} is being renewed in the background. Try again in a moment.":
     "{name} est en cours de renouvellement en arrière-plan. Réessayez dans un instant.",
   "{name} is installed and runs for {days} days.":
     "{name} est installée et fonctionne {days} jours.",
-  "{name} was removed from the iPhone.":
-    "{name} a été retirée de l’iPhone.",
+  "{name} is paired.":
+    "{name} est jumelée.",
+  "{name} was removed from the device.":
+    "{name} a été supprimée de l’appareil.",
   "{name} was renewed – valid for {days} days again.":
     "{name} a été renouvelée – de nouveau valable {days} jours.",
   "{percent}% transferred":

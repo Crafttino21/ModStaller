@@ -13,12 +13,13 @@
   import { date, days } from "../lib/format";
   import { t } from "../lib/i18n.svelte";
   import { enableJit, refreshApps } from "../lib/actions";
+  import { deviceKind, osName, transportLabel } from "../lib/device";
 
   const st = $derived(ui.status);
   const urgent = $derived(st?.apps.filter((a) => a.urgent) ?? []);
 </script>
 
-<PageHeader title={t("Overview")} subtitle={t("iPhone, sign-in and what expires soon – at a glance.")} />
+<PageHeader title={t("Overview")} subtitle={t("Device, sign-in and what expires soon – at a glance.")} />
 
 <UsbServiceBanner />
 
@@ -39,22 +40,23 @@
 <div class="tiles">
   <div class="card tile">
     {#if st?.device}
-      <div class="mock"><PhoneMockup form={st.device.formFactor} height={62} /></div>
+      <div class="mock"><PhoneMockup form={st.device.formFactor} height={st.device.platform === "tvos" ? 44 : 62} /></div>
     {:else}
       <div class="tile-icon"><Smartphone size={22} /></div>
     {/if}
     <div class="grow">
-      <div class="label">{st?.device?.formFactor === "ipad" ? "iPad" : "iPhone"}</div>
+      <div class="label">{st?.device ? deviceKind(st.device) : t("Device")}</div>
       {#if st?.device}
         <div class="value">{st.device.name}</div>
         <div class="model">{st.device.model}</div>
         <div class="chips">
-          <span class="chip">iOS {st.device.iosVersion}</span>
+          <span class="chip">{osName(st.device)} {st.device.iosVersion}</span>
+          <span class="chip">{transportLabel(st.device)}</span>
           {#if st.device.battery}
             <span class="chip"><BatteryLevel level={st.device.battery.level} charging={st.device.battery.charging} /></span>
           {/if}
-          {#if st.device.developerMode}
-            <span class="chip ok"><span class="dot"></span>{t("Developer Mode on")}</span>
+          {#if st.device.developerMode || st.device.platform === "tvos"}
+            {#if st.device.developerMode}<span class="chip ok"><span class="dot"></span>{t("Developer Mode on")}</span>{/if}
           {:else}
             <span class="chip warn"><span class="dot"></span>{t("Developer Mode off")}</span>
           {/if}
@@ -68,7 +70,7 @@
         <div class="hint">{t("One click fixes it – see above.")}</div>
       {:else}
         <div class="value dim">{t("Not connected")}</div>
-        <div class="hint">{t("Plug it in via USB and unlock it.")}</div>
+        <div class="hint">{t("Plug it in via USB and unlock it – or bring it into the same Wi-Fi.")}</div>
       {/if}
     </div>
   </div>
@@ -128,8 +130,10 @@
           </div>
         </div>
         <div class="app-actions">
-          <button class="btn sm icon" title={t("Enable JIT")} disabled={busy() || !st.device}
-                  onclick={() => enableJit(app)}><Zap size={16} /></button>
+          {#if st.device?.platform !== "tvos"}
+            <button class="btn sm icon" title={t("Enable JIT")} disabled={busy() || !st.device}
+                    onclick={() => enableJit(app)}><Zap size={16} /></button>
+          {/if}
           <button class="btn sm icon" title={t("Renew now")} disabled={busy() || !st.device || app.sourceMissing}
                   onclick={() => refreshApps(app)}><RefreshCw size={16} /></button>
         </div>

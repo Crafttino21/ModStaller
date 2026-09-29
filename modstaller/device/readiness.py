@@ -22,9 +22,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
 
-from ..errors import DeviceError, DeviceNotFound, NotPaired
+from ..errors import DeviceError, DeviceNotFound, NotPaired, WifiPairingInvalid
 from ..i18n import _
-from .connection import ServiceProvider, device_info
+from . import registry
+from .connection import ServiceProvider, device_info, get_value
 
 OK, WARN, BAD, INFO, NA = "ok", "warn", "bad", "info", "na"
 
@@ -32,6 +33,7 @@ FIX_PAIR = "pair"
 FIX_DEVELOPER_MODE = "developer-mode"
 FIX_DDI = "ddi"
 FIX_EXPIRED_PROFILES = "expired-profiles"
+FIX_WIFI = "wifi"
 
 #: Free accounts: how many sideloaded apps iOS allows at the same time.
 FREE_APP_LIMIT = 3
@@ -51,6 +53,10 @@ TRUST_HINT = (
 DEVELOPER_MODE_HINT = (
     "Settings › Privacy & Security › turn on Developer Mode. The iPhone "
     "restarts; then confirm “Turn On” and enter the passcode."
+)
+TV_DEVELOPER_MODE_HINT = (
+    "On the Apple TV: Settings › Privacy & Security › Developer Mode. It "
+    "appears there once the Apple TV is paired with ModStaller."
 )
 
 
@@ -95,6 +101,10 @@ async def run_checks(udid: str | None = None) -> list[Check]:
             return await _checks(sp)
     except DeviceNotFound:
         return []
+    except WifiPairingInvalid as exc:
+        return [Check("pairing", _("Paired with this computer"), BAD, str(exc),
+                      manual=_("Connect the iPhone via USB once and switch on "
+                               "Wi-Fi for it again."))]
     except NotPaired as exc:
         from pymobiledevice3.exceptions import PasswordRequiredError
         if isinstance(exc.__cause__, PasswordRequiredError):
@@ -110,10 +120,13 @@ async def run_checks(udid: str | None = None) -> list[Check]:
 
 
 async def _checks(sp: ServiceProvider) -> list[Check]:
-    info = await device_info(sp.lockdown)
+    info = await device_info(sp.lockdown, sp.transport)
+    if info.platform == registry.TVOS:
+        return await _tv_checks(sp, info)
     major = _major(info.ios_version)
     checks = [Check("pairing", _("Paired with this computer"), OK,
                     _("{name} trusts this computer.", name=info.name))]
+    checks.append(_wifi_check(sp, info))
 
     if major and major < 12:
         checks.append(Check("ios", _("iOS version"), BAD,
@@ -143,6 +156,46 @@ async def _checks(sp: ServiceProvider) -> list[Check]:
     checks.append(await _space_check(sp))
     checks.append(Check("trust", _("Trust developer"), INFO,
                         _("Cannot be automated."), manual=_(TRUST_HINT)))
+    return checks
+
+
+def _wifi_check(sp: ServiceProvider, info) -> Check:
+    """Wi-Fi: on for this iPhone? Switching on needs the cable once."""
+    label = _("Wi-Fi")
+    if sp.is_network:
+        return Check("wifi", label, OK, _("Connected via Wi-Fi."))
+    known = registry.get(info.udid)
+    if known is not None and known.wifi_enabled:
+        return Check("wifi", label, OK,
+                     _("On - ModStaller also reaches the iPhone in the same "
+                       "Wi-Fi, without the cable."))
+    return Check("wifi", label, INFO,
+                 _("Off - the iPhone is only reachable over the cable."),
+                 fix=FIX_WIFI, fix_label=_("Switch on"))
+
+
+async def _tv_checks(sp: ServiceProvider, info) -> list[Check]:
+    """Apple TV: paired by PIN, only in the network. No Developer Disk Image
+    and no JIT yet - so fewer checks."""
+    checks = [Check("pairing", _("Paired with this computer"), OK,
+                    _("{name} is paired and reachable in the network.", name=info.name))]
+    major = _major(info.ios_version)
+    if major and major < 17:
+        checks.append(Check("ios", _("tvOS version"), BAD,
+                            _("tvOS {version} is too old - ModStaller needs "
+                              "tvOS 17 or newer.", version=info.ios_version)))
+    else:
+        checks.append(Check("ios", _("tvOS version"), OK,
+                            f"tvOS {info.ios_version} ({info.build})"))
+    if info.developer_mode:
+        checks.append(Check("developer-mode", _("Developer Mode"), OK, _("on")))
+    else:
+        checks.append(Check("developer-mode", _("Developer Mode"), WARN,
+                            _("Off or not readable - sideloaded apps only start "
+                              "with it."),
+                            manual=_(TV_DEVELOPER_MODE_HINT)))
+    checks.append(await _profiles_check(sp))
+    checks.append(await _space_check(sp))
     return checks
 
 
@@ -236,7 +289,7 @@ async def _profiles_check(sp: ServiceProvider) -> Check:
 
 async def _space_check(sp: ServiceProvider) -> Check:
     try:
-        usage = await sp.lockdown.get_value(domain="com.apple.disk_usage")
+        usage = await get_value(sp.lockdown, domain="com.apple.disk_usage")
         free = int(usage["TotalDataAvailable"])
     except Exception:
         return Check("space", _("Free storage"), INFO,
@@ -340,6 +393,11 @@ async def run_fix(fix: str, udid: str | None = None, *,
                   ) -> FixResult:
     if fix == FIX_PAIR:
         return await _pair(udid, on_step)
+    if fix == FIX_WIFI:
+        from .wifi import enable
+        await enable(udid, on_step=on_step)
+        return FixResult(_("Wi-Fi is on. The iPhone can now be unplugged - "
+                           "ModStaller finds it in the same network."))
     async with ServiceProvider(udid) as sp:
         if fix == FIX_DEVELOPER_MODE:
             return await _enable_developer_mode(sp, on_step)

@@ -55,6 +55,9 @@ class IPAInfo:
     encrypted: bool = False
     extension_details: list[ExtensionInfo] = field(default_factory=list)
     has_watch: bool = False
+    #: "ios" (iPhone/iPad) or "tvos" (Apple TV) - they need different
+    #: binaries, and Apple signs them per platform.
+    platform: str = "ios"
 
     @property
     def app_id_demand(self) -> int:
@@ -66,7 +69,7 @@ class IPAInfo:
             f"  Name        {self.name}",
             f"  Bundle-ID   {self.bundle_id}",
             f"  Version     {self.version}",
-            f"  min. iOS    {self.minimum_os or '?'}",
+            f"  min. {'tvOS' if self.platform == 'tvos' else 'iOS'}    {self.minimum_os or '?'}",
         ]
         if self.dylibs:
             lines.append(f"  dylibs      {len(self.dylibs)} injected "
@@ -147,7 +150,31 @@ def inspect(path: str | Path) -> IPAInfo:
         encrypted=encrypted,
         extension_details=details,
         has_watch=has_watch,
+        platform=platform_of(info),
     )
+
+
+def platform_of(info: dict) -> str:
+    """tvOS or iOS, from the app's Info.plist.
+
+    ``CFBundleSupportedPlatforms`` says it directly (``AppleTVOS`` vs.
+    ``iPhoneOS``); older or hand-built IPAs may lack it, then the device
+    family decides (3 = Apple TV)."""
+    platforms = info.get("CFBundleSupportedPlatforms") or []
+    if isinstance(platforms, str):
+        platforms = [platforms]
+    if any(str(p).lower().startswith("appletv") for p in platforms):
+        return "tvos"
+    if platforms:
+        return "ios"
+    family = info.get("UIDeviceFamily") or []
+    if isinstance(family, int):
+        family = [family]
+    if family and all(f == 3 for f in family):
+        return "tvos"
+    if str(info.get("DTPlatformName", "")).lower().startswith("appletv"):
+        return "tvos"
+    return "ios"
 
 
 def _main_binary_encrypted(zf: zipfile.ZipFile, prefix: str, info: dict,

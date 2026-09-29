@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { Smartphone, TriangleAlert, Search, LoaderCircle, RefreshCw } from "@lucide/svelte";
+  import { Smartphone, TriangleAlert, Search, LoaderCircle, RefreshCw, Wifi, Usb, Tv } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import DeviceChecks from "../components/DeviceChecks.svelte";
   import UsbServiceBanner from "../components/UsbServiceBanner.svelte";
-  import { errorText, ui } from "../lib/state.svelte";
+  import { busy, errorText, onDevice, refreshStatus, ui } from "../lib/state.svelte";
+  import { forgetDevice, setWifi } from "../lib/actions";
+  import { deviceKind, osName, transportLabel } from "../lib/device";
   import { call } from "../lib/rpc";
   import type { DeviceApp, DeviceInfo } from "../lib/types";
   import { t } from "../lib/i18n.svelte";
@@ -15,11 +17,12 @@
   let filter = $state("");
 
   const connected = $derived(!!ui.status?.device);
+  const selected = $derived(ui.status?.device?.udid ?? null);
 
   async function load() {
     error = "";
     try {
-      info = await call<DeviceInfo>("device.info");
+      info = await call<DeviceInfo>("device.info", onDevice({}));
     } catch (err) {
       info = null;
       error = errorText(err);
@@ -29,7 +32,7 @@
   async function loadApps() {
     appsLoading = true;
     try {
-      apps = await call<DeviceApp[]>("device.apps");
+      apps = await call<DeviceApp[]>("device.apps", onDevice({}));
     } catch (err) {
       error = errorText(err);
     } finally {
@@ -37,10 +40,13 @@
     }
   }
 
-  // Beim An- und Abstecken neu laden.
+  // Beim An- und Abstecken und beim Wechsel des Geraets neu laden.
   $effect(() => {
-    if (connected) load();
-    else { info = null; apps = null; }
+    if (selected) {
+      info = null;
+      apps = null;
+      load();
+    } else { info = null; apps = null; }
   });
 
   const shown = $derived(
@@ -48,7 +54,9 @@
   );
 </script>
 
-<PageHeader title={t("Device")} subtitle={t("The connected iPhone.")} />
+<PageHeader title={t("Device")} subtitle={ui.status?.device
+  ? t("{kind} via {via}", { kind: deviceKind(ui.status.device), via: transportLabel(ui.status.device) })
+  : t("The connected device.")} />
 
 {#if ui.status?.deviceAttached}
   <div class="checks"><DeviceChecks /></div>
@@ -58,8 +66,9 @@
   <UsbServiceBanner stuckHint />
   <div class="card empty">
     <Smartphone size={30} />
-    <p>{ui.status?.deviceAttached ? t("Connected but not ready – unlock the iPhone and confirm “Trust”.") : t("No iPhone connected. Plug it in via USB and unlock it.")}</p>
+    <p>{ui.status?.deviceAttached ? t("Connected but not ready – unlock the iPhone and confirm “Trust”.") : t("No device connected. Plug the iPhone in via USB and unlock it – or bring it into the same Wi-Fi.")}</p>
     {#if ui.status?.error && (ui.status.usbService ?? "ok") === "ok"}<p class="faint small selectable">{ui.status.error}</p>{/if}
+    <button class="btn sm" onclick={() => (ui.pairingOpen = true)}><Tv size={15} /> {t("Pair Apple TV")}</button>
   </div>
 {:else}
   {#if error}
@@ -70,15 +79,15 @@
       <div class="skeleton" style="height:120px"></div>
     {:else}
       <div class="head">
-        <div class="phone"><Smartphone size={30} /></div>
+        <div class="phone">{#if info.platform === "tvos"}<Tv size={30} />{:else}<Smartphone size={30} />{/if}</div>
         <div>
           <h2>{info.name}</h2>
-          <p class="muted">{info.productType} · iOS {info.iosVersion} ({info.build})</p>
+          <p class="muted">{info.productType} · {osName(info)} {info.iosVersion} ({info.build}) · {transportLabel(info)}</p>
         </div>
       </div>
       <dl>
         <dt>UDID</dt><dd class="mono selectable">{info.udid}</dd>
-        <dt>Entwicklermodus</dt>
+        <dt>{t("Developer Mode")}</dt>
         <dd>
           {#if info.developerMode}<span class="chip ok"><span class="dot"></span>{t("on")}</span>
           {:else}<span class="chip bad"><span class="dot"></span>{t("off")}</span>
@@ -88,17 +97,48 @@
     {/if}
   </div>
 
+  {#if ui.status?.device}
+    {@const d = ui.status.device}
+    <div class="card pad">
+      <h2 class="conn-head">{#if d.transport === "usb"}<Usb size={18} />{:else}<Wifi size={18} />{/if} {t("Connection")}</h2>
+      {#if d.platform === "tvos"}
+        <p class="muted small">{t("Paired by PIN – reachable while the Apple TV is on and in the same network.")}</p>
+      {:else if d.transport === "usb"}
+        <p class="muted small">{d.wifiEnabled
+          ? t("Connected via USB. Wi-Fi is on – without the cable ModStaller finds the iPhone in the same network.")
+          : t("Connected via USB. With Wi-Fi switched on, ModStaller also reaches the iPhone without the cable – for installing, renewing and the automatic renewal in the tray.")}</p>
+      {:else}
+        <p class="muted small">{t("Connected via Wi-Fi. For JIT below iOS 17.4 the cable is still needed.")}</p>
+      {/if}
+      <div class="conn-actions">
+        {#if d.platform !== "tvos" && !d.wifiEnabled}
+          <button class="btn sm primary" disabled={busy() || d.transport !== "usb"} onclick={() => setWifi(d.udid, true)}>
+            <Wifi size={15} /> {t("Switch on Wi-Fi")}
+          </button>
+        {:else if d.platform !== "tvos"}
+          <button class="btn sm" disabled={busy()} onclick={() => setWifi(d.udid, false)}>{t("Switch off Wi-Fi")}</button>
+        {/if}
+        {#if d.wifiEnabled || d.platform === "tvos"}
+          <button class="btn sm ghost" disabled={busy()}
+                  onclick={async () => { if (await forgetDevice(d.udid, d.name)) refreshStatus(true); }}>
+            {t("Forget device")}
+          </button>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
   <div class="card pad">
     <div class="apps-head">
-      <h2>Installierte Nutzer-Apps</h2>
+      <h2>{t("Installed user apps")}</h2>
       {#if apps}
         <div class="search"><Search size={15} /><input type="search" placeholder={t("Filter")} bind:value={filter} /></div>
-        <button class="btn sm icon ghost" title="Neu laden" onclick={loadApps}><RefreshCw size={15} /></button>
+        <button class="btn sm icon ghost" title={t("Reload")} onclick={loadApps}><RefreshCw size={15} /></button>
       {/if}
     </div>
     {#if !apps}
       <button class="btn" onclick={loadApps} disabled={appsLoading}>
-        {#if appsLoading}<LoaderCircle size={16} class="spin" />{/if} Apps auflisten
+        {#if appsLoading}<LoaderCircle size={16} class="spin" />{/if} {t("List apps")}
       </button>
     {:else}
       <p class="faint small">{apps.length} App(s)</p>
@@ -132,4 +172,6 @@
   .app { display: grid; grid-template-columns: minmax(160px, 1fr) 2fr auto; gap: 12px; padding: 8px 4px; align-items: center; }
   .app + .app { border-top: 1px solid var(--border); }
   .name { font-weight: 550; }
+  .conn-head { display: flex; align-items: center; gap: 9px; font-size: 17px; margin-bottom: 8px; }
+  .conn-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 </style>

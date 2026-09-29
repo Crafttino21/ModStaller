@@ -176,16 +176,23 @@ def _dev(dev_mode=True):
             "iosVersion": "27.0", "developerMode": dev_mode}
 
 
+def _ref(transport="usb"):
+    from modstaller.device.discovery import DeviceRef
+    return DeviceRef("A", transport)
+
+
 def test_device_connect_mode_change_and_disconnect(book):
     s = _Srv()
-    srv._log_device_changes(s, ["A"], _dev(False), "")
-    srv._log_device_changes(s, ["A"], _dev(False), "")      # unchanged: quiet
-    srv._log_device_changes(s, ["A"], _dev(True), "")
-    srv._log_device_changes(s, [], None, "")
+    srv._log_device_changes(s, [_ref()], {"A": _dev(False)}, {})
+    srv._log_device_changes(s, [_ref()], {"A": _dev(False)}, {})      # unchanged: quiet
+    srv._log_device_changes(s, [_ref()], {"A": _dev(True)}, {})
+    srv._log_device_changes(s, [_ref("wifi")], {"A": _dev(True)}, {})
+    srv._log_device_changes(s, [], {}, {})
     assert _messages(book) == [
-        "iPhone connected: iPhone of S · iPhone 16 Pro Max · iOS 27.0",
+        "Connected: iPhone of S · iPhone 16 Pro Max · iOS 27.0 · USB",
         "Developer Mode is off - sideloaded apps will not start.",
         "Developer Mode is now on.",
+        "iPhone of S is now connected via Wi-Fi.",
         "iPhone of S disconnected",
     ]
 
@@ -193,9 +200,9 @@ def test_device_connect_mode_change_and_disconnect(book):
 def test_locked_phone_is_reported_once(book):
     s = _Srv()
     for _ in range(3):
-        srv._log_device_changes(s, ["A"], None, "The iPhone is locked.")
+        srv._log_device_changes(s, [_ref()], {}, {"A": "The iPhone is locked."})
     assert _messages(book, "warn") == [
-        "iPhone plugged in but not ready: The iPhone is locked."]
+        "Device connected but not ready: The iPhone is locked."]
 
 
 async def test_history_is_there_for_a_late_interface(book, monkeypatch):

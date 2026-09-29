@@ -8,12 +8,13 @@
 const DICT = {
   de: {
     "{name} expires soon": "{name} läuft bald ab",
-    "Valid for {left}. ModStaller renews it on the last day - connect your iPhone via USB then.":
-      "Noch {left} gültig. ModStaller erneuert die App am letzten Tag – steck dein iPhone dann per USB an.",
+    "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
+      "Noch {left} gültig. ModStaller erneuert die App am letzten Tag – das Gerät sollte dann per USB oder im selben WLAN erreichbar sein.",
     "Valid for {left}. Open ModStaller to renew it.": "Noch {left} gültig. Öffne ModStaller, um die App zu erneuern.",
-    "Connect your iPhone": "iPhone anstecken",
-    "{names} must be renewed. Connect your iPhone via USB and ModStaller does the rest.":
-      "{names} muss erneuert werden. Steck dein iPhone per USB an, den Rest macht ModStaller.",
+    "Device not reachable":
+      "Gerät nicht erreichbar",
+    "{names} must be renewed. Connect the device via USB or bring it into the same Wi-Fi - ModStaller does the rest.":
+      "{names} muss erneuert werden. Schließ das Gerät per USB an oder bring es ins selbe WLAN – den Rest macht ModStaller.",
     "{name} cannot be renewed": "{name} kann nicht erneuert werden",
     "The original IPA is gone. Install the app again.": "Die ursprüngliche IPA fehlt. Installiere die App neu.",
     "The Apple account is not signed in. Open ModStaller and sign in.":
@@ -30,8 +31,8 @@ const DICT = {
     "It renews your apps in the background. Quit it from the tray icon.":
       "Deine Apps werden im Hintergrund erneuert. Beenden kannst du über das Tray-Symbol.",
     "Nothing to renew": "Nichts zu erneuern",
-    "No app can be renewed right now. Is your iPhone connected via USB?":
-      "Gerade lässt sich keine App erneuern. Ist dein iPhone per USB angesteckt?",
+    "No app can be renewed right now. Is the device connected via USB or in the same Wi-Fi?":
+      "Gerade lässt sich keine App erneuern. Ist das Gerät per USB angeschlossen oder im selben WLAN?",
     "Open ModStaller": "ModStaller öffnen",
     "Renew now": "Jetzt erneuern",
     "Quit": "Beenden",
@@ -46,12 +47,13 @@ const DICT = {
   },
   fr: {
     "{name} expires soon": "{name} expire bientôt",
-    "Valid for {left}. ModStaller renews it on the last day - connect your iPhone via USB then.":
-      "Encore valide {left}. ModStaller la renouvelle le dernier jour – branchez alors votre iPhone en USB.",
+    "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
+      "Encore valide {left}. ModStaller la renouvelle le dernier jour – l’appareil doit alors être branché en USB ou sur le même Wi-Fi.",
     "Valid for {left}. Open ModStaller to renew it.": "Encore valide {left}. Ouvrez ModStaller pour la renouveler.",
-    "Connect your iPhone": "Branchez votre iPhone",
-    "{names} must be renewed. Connect your iPhone via USB and ModStaller does the rest.":
-      "{names} doit être renouvelé. Branchez votre iPhone en USB, ModStaller s’occupe du reste.",
+    "Device not reachable":
+      "Appareil injoignable",
+    "{names} must be renewed. Connect the device via USB or bring it into the same Wi-Fi - ModStaller does the rest.":
+      "{names} doit être renouvelé. Branchez l’appareil en USB ou mettez-le sur le même Wi-Fi – ModStaller s’occupe du reste.",
     "{name} cannot be renewed": "Impossible de renouveler {name}",
     "The original IPA is gone. Install the app again.": "L’IPA d’origine a disparu. Réinstallez l’app.",
     "The Apple account is not signed in. Open ModStaller and sign in.":
@@ -68,8 +70,8 @@ const DICT = {
     "It renews your apps in the background. Quit it from the tray icon.":
       "Il renouvelle vos apps en arrière-plan. Quittez-le depuis l’icône de la barre système.",
     "Nothing to renew": "Rien à renouveler",
-    "No app can be renewed right now. Is your iPhone connected via USB?":
-      "Aucune app ne peut être renouvelée pour l’instant. Votre iPhone est-il branché en USB ?",
+    "No app can be renewed right now. Is the device connected via USB or in the same Wi-Fi?":
+      "Aucune app ne peut être renouvelée pour l’instant. L’appareil est-il branché en USB ou sur le même Wi-Fi ?",
     "Open ModStaller": "Ouvrir ModStaller",
     "Renew now": "Renouveler maintenant",
     "Quit": "Quitter",
@@ -84,12 +86,13 @@ const DICT = {
   },
   es: {
     "{name} expires soon": "{name} caduca pronto",
-    "Valid for {left}. ModStaller renews it on the last day - connect your iPhone via USB then.":
-      "Válida {left} más. ModStaller la renueva el último día; conecta entonces tu iPhone por USB.",
+    "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
+      "Válida {left} más. ModStaller la renueva el último día; el dispositivo debe estar entonces por USB o en la misma Wi-Fi.",
     "Valid for {left}. Open ModStaller to renew it.": "Válida {left} más. Abre ModStaller para renovarla.",
-    "Connect your iPhone": "Conecta tu iPhone",
-    "{names} must be renewed. Connect your iPhone via USB and ModStaller does the rest.":
-      "Hay que renovar {names}. Conecta tu iPhone por USB y ModStaller hace el resto.",
+    "Device not reachable":
+      "Dispositivo no disponible",
+    "{names} must be renewed. Connect the device via USB or bring it into the same Wi-Fi - ModStaller does the rest.":
+      "Hay que renovar {names}. Conecta el dispositivo por USB o ponlo en la misma Wi-Fi y ModStaller hace el resto.",
     "{name} cannot be renewed": "No se puede renovar {name}",
     "The original IPA is gone. Install the app again.": "Falta la IPA original. Vuelve a instalar la app.",
     "The Apple account is not signed in. Open ModStaller and sign in.":
@@ -106,8 +109,8 @@ const DICT = {
     "It renews your apps in the background. Quit it from the tray icon.":
       "Renueva tus apps en segundo plano. Ciérralo desde el icono de la bandeja.",
     "Nothing to renew": "Nada que renovar",
-    "No app can be renewed right now. Is your iPhone connected via USB?":
-      "Ahora mismo no se puede renovar ninguna app. ¿Está tu iPhone conectado por USB?",
+    "No app can be renewed right now. Is the device connected via USB or in the same Wi-Fi?":
+      "Ahora mismo no se puede renovar ninguna app. ¿Está el dispositivo conectado por USB o en la misma Wi-Fi?",
     "Open ModStaller": "Abrir ModStaller",
     "Renew now": "Renovar ahora",
     "Quit": "Salir",
@@ -122,12 +125,13 @@ const DICT = {
   },
   it: {
     "{name} expires soon": "{name} scade a breve",
-    "Valid for {left}. ModStaller renews it on the last day - connect your iPhone via USB then.":
-      "Valida ancora per {left}. ModStaller la rinnova l’ultimo giorno: collega allora l’iPhone via USB.",
+    "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
+      "Valida ancora per {left}. ModStaller la rinnova l’ultimo giorno: il dispositivo dovrà essere collegato via USB o sulla stessa Wi-Fi.",
     "Valid for {left}. Open ModStaller to renew it.": "Valida ancora per {left}. Apri ModStaller per rinnovarla.",
-    "Connect your iPhone": "Collega l’iPhone",
-    "{names} must be renewed. Connect your iPhone via USB and ModStaller does the rest.":
-      "{names} va rinnovata. Collega l’iPhone via USB, al resto pensa ModStaller.",
+    "Device not reachable":
+      "Dispositivo non raggiungibile",
+    "{names} must be renewed. Connect the device via USB or bring it into the same Wi-Fi - ModStaller does the rest.":
+      "{names} va rinnovata. Collega il dispositivo via USB o portalo sulla stessa Wi-Fi, al resto pensa ModStaller.",
     "{name} cannot be renewed": "Impossibile rinnovare {name}",
     "The original IPA is gone. Install the app again.": "L’IPA originale non c’è più. Reinstalla l’app.",
     "The Apple account is not signed in. Open ModStaller and sign in.":
@@ -144,8 +148,8 @@ const DICT = {
     "It renews your apps in the background. Quit it from the tray icon.":
       "Rinnova le tue app in background. Chiudilo dall’icona nell’area di notifica.",
     "Nothing to renew": "Niente da rinnovare",
-    "No app can be renewed right now. Is your iPhone connected via USB?":
-      "Al momento nessuna app può essere rinnovata. L’iPhone è collegato via USB?",
+    "No app can be renewed right now. Is the device connected via USB or in the same Wi-Fi?":
+      "Al momento nessuna app può essere rinnovata. Il dispositivo è collegato via USB o sulla stessa Wi-Fi?",
     "Open ModStaller": "Apri ModStaller",
     "Renew now": "Rinnova ora",
     "Quit": "Esci",
@@ -160,12 +164,13 @@ const DICT = {
   },
   "pt-BR": {
     "{name} expires soon": "{name} expira em breve",
-    "Valid for {left}. ModStaller renews it on the last day - connect your iPhone via USB then.":
-      "Válido por mais {left}. O ModStaller renova no último dia – conecte o iPhone via USB nesse dia.",
+    "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
+      "Válido por mais {left}. O ModStaller renova no último dia – o dispositivo precisa estar via USB ou na mesma Wi-Fi nesse dia.",
     "Valid for {left}. Open ModStaller to renew it.": "Válido por mais {left}. Abra o ModStaller para renovar.",
-    "Connect your iPhone": "Conecte seu iPhone",
-    "{names} must be renewed. Connect your iPhone via USB and ModStaller does the rest.":
-      "{names} precisa ser renovado. Conecte o iPhone via USB e o ModStaller faz o resto.",
+    "Device not reachable":
+      "Dispositivo inacessível",
+    "{names} must be renewed. Connect the device via USB or bring it into the same Wi-Fi - ModStaller does the rest.":
+      "{names} precisa ser renovado. Conecte o dispositivo via USB ou coloque-o na mesma Wi-Fi e o ModStaller faz o resto.",
     "{name} cannot be renewed": "Não é possível renovar {name}",
     "The original IPA is gone. Install the app again.": "O IPA original sumiu. Instale o app novamente.",
     "The Apple account is not signed in. Open ModStaller and sign in.":
@@ -182,8 +187,8 @@ const DICT = {
     "It renews your apps in the background. Quit it from the tray icon.":
       "Ele renova seus apps em segundo plano. Feche pelo ícone da bandeja.",
     "Nothing to renew": "Nada para renovar",
-    "No app can be renewed right now. Is your iPhone connected via USB?":
-      "Nenhum app pode ser renovado agora. O iPhone está conectado via USB?",
+    "No app can be renewed right now. Is the device connected via USB or in the same Wi-Fi?":
+      "Nenhum app pode ser renovado agora. O dispositivo está conectado via USB ou na mesma Wi-Fi?",
     "Open ModStaller": "Abrir ModStaller",
     "Renew now": "Renovar agora",
     "Quit": "Sair",
@@ -198,12 +203,13 @@ const DICT = {
   },
   nl: {
     "{name} expires soon": "{name} verloopt binnenkort",
-    "Valid for {left}. ModStaller renews it on the last day - connect your iPhone via USB then.":
-      "Nog {left} geldig. ModStaller vernieuwt de app op de laatste dag – sluit je iPhone dan via USB aan.",
+    "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
+      "Nog {left} geldig. ModStaller vernieuwt de app op de laatste dag – het apparaat moet dan via USB of in hetzelfde wifi bereikbaar zijn.",
     "Valid for {left}. Open ModStaller to renew it.": "Nog {left} geldig. Open ModStaller om de app te vernieuwen.",
-    "Connect your iPhone": "Sluit je iPhone aan",
-    "{names} must be renewed. Connect your iPhone via USB and ModStaller does the rest.":
-      "{names} moet worden vernieuwd. Sluit je iPhone via USB aan, ModStaller doet de rest.",
+    "Device not reachable":
+      "Apparaat niet bereikbaar",
+    "{names} must be renewed. Connect the device via USB or bring it into the same Wi-Fi - ModStaller does the rest.":
+      "{names} moet worden vernieuwd. Sluit het apparaat via USB aan of breng het in hetzelfde wifi – ModStaller doet de rest.",
     "{name} cannot be renewed": "{name} kan niet worden vernieuwd",
     "The original IPA is gone. Install the app again.": "De oorspronkelijke IPA is weg. Installeer de app opnieuw.",
     "The Apple account is not signed in. Open ModStaller and sign in.":
@@ -220,8 +226,8 @@ const DICT = {
     "It renews your apps in the background. Quit it from the tray icon.":
       "Je apps worden op de achtergrond vernieuwd. Afsluiten kan via het pictogram in het systeemvak.",
     "Nothing to renew": "Niets te vernieuwen",
-    "No app can be renewed right now. Is your iPhone connected via USB?":
-      "Er kan nu geen app worden vernieuwd. Is je iPhone via USB aangesloten?",
+    "No app can be renewed right now. Is the device connected via USB or in the same Wi-Fi?":
+      "Er kan nu geen app worden vernieuwd. Is het apparaat via USB aangesloten of in hetzelfde wifi?",
     "Open ModStaller": "ModStaller openen",
     "Renew now": "Nu vernieuwen",
     "Quit": "Afsluiten",

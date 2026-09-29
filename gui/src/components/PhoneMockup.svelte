@@ -1,8 +1,10 @@
 <script lang="ts">
   // Gezeichnetes Geraet in der Bauform des echten: Home-Button, Notch oder
-  // Dynamic Island. Bewusst kein Produktfoto - nur die Silhouette.
+  // Dynamic Island - oder ein Fernseher fuers Apple TV. Bewusst kein
+  // Produktfoto - nur die Silhouette.
   let { form = "island", height = 64 }: { form?: string; height?: number } = $props();
 
+  const tv = $derived(form === "tv");
   const ipad = $derived(form === "ipad");
   const home = $derived(form === "home");
   const w = $derived(ipad ? 90 : 60);
@@ -15,6 +17,25 @@
   const uid = Math.random().toString(36).slice(2, 8);
 </script>
 
+{#if tv}
+<svg viewBox="0 0 170 120" style:height="{height}px" style:width="{(height * 170) / 120}px" aria-hidden="true">
+  <defs>
+    <linearGradient id="wall-{uid}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b6cff" />
+      <stop offset="0.6" stop-color="#5b8cff" />
+      <stop offset="1" stop-color="#3ec9f0" />
+    </linearGradient>
+  </defs>
+  <!-- Fernseher -->
+  <rect x="1" y="6" width="168" height="98" rx="6" fill="#4b4f5c" />
+  <rect x="3" y="8" width="164" height="94" rx="5" fill="#0b0c10" />
+  <rect x="6" y="11" width="158" height="88" rx="3" fill="url(#wall-{uid})" />
+  <rect x="6" y="11" width="158" height="44" rx="3" fill="#fff" opacity="0.08" />
+  <!-- Fuss -->
+  <rect x="75" y="104" width="20" height="8" fill="#4b4f5c" />
+  <rect x="58" y="111" width="54" height="5" rx="2.5" fill="#6a6e7c" />
+</svg>
+{:else}
 <svg viewBox="0 0 {w} 120" style:height="{height}px" style:width="{(height * w) / 120}px" aria-hidden="true">
   <defs>
     <linearGradient id="frame-{uid}" x1="0" y1="0" x2="1" y2="1">
@@ -49,6 +70,7 @@
     <circle cx="45" cy="3.2" r="1" fill="#2a2d38" />
   {/if}
 </svg>
+{/if}
 
 <style>
   svg { display: block; flex: none; filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.35)); }

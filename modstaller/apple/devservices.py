@@ -118,13 +118,38 @@ class Profile:
         return (self.expires_at - datetime.now(timezone.utc)).total_seconds() / 86400
 
 
-class DeveloperServices:
-    """Client for Apple's developer API."""
+#: Calls whose answer depends on the device platform. The path stays
+#: ``ios/…`` for tvOS too; the platform goes into the body, the way Xcode
+#: (and AltSign) send it. Certificates are shared across platforms.
+_PLATFORM_ACTIONS = frozenset({
+    "ios/addDevice.action", "ios/listDevices.action", "ios/listAppIds.action",
+    "ios/addAppId.action", "ios/deleteAppId.action",
+    "ios/downloadTeamProvisioningProfile.action",
+})
 
-    def __init__(self, session, anisette) -> None:
+IOS, TVOS = "ios", "tvos"
+
+
+def _platform_params(platform: str) -> dict[str, str]:
+    """What tells Apple the request is about an Apple TV - nothing for iOS."""
+    if platform == TVOS:
+        return {"DTDK_Platform": "tvos", "subPlatform": "tvOS"}
+    return {}
+
+
+class DeveloperServices:
+    """Client for Apple's developer API.
+
+    ``platform`` is the device's: "ios" (iPhone, iPad) or "tvos" (Apple TV).
+    Set it before registering the device - devices, App IDs and profiles are
+    kept per platform.
+    """
+
+    def __init__(self, session, anisette, platform: str = IOS) -> None:
         self._session = session
         self._ani = anisette
         self._http = http.dev_session()
+        self.platform = platform
 
     # -- Transport ---------------------------------------------------------
 
@@ -144,6 +169,8 @@ class DeveloperServices:
         }
         if team_id:
             body["teamId"] = team_id
+        if action in _PLATFORM_ACTIONS:
+            body.update(_platform_params(self.platform))
         body.update(params or {})
 
         ani = self._ani.headers()
@@ -196,7 +223,7 @@ class DeveloperServices:
     # -- Devices -----------------------------------------------------------
 
     def register_device(self, team_id: str, udid: str, name: str) -> None:
-        """Registers the iPhone with the team. Already registered = success."""
+        """Registers the device with the team. Already registered = success."""
         self._post("ios/addDevice.action", {"deviceNumber": udid, "name": name},
                    team_id=team_id)
 

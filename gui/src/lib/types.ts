@@ -1,14 +1,23 @@
 // Was das Backend (modstaller/server.py) liefert.
 
+/** Wie das Geraet erreicht wird (modstaller/device/discovery.py). */
+export type Transport = "usb" | "usbmux-net" | "wifi" | "remote";
+
 export interface Device {
   name: string;
   udid: string;
+  /** Die Version des Systems - iOS oder tvOS. */
   iosVersion: string;
-  developerMode: boolean;
+  /** null: noch nicht gefragt (Geraet in der Liste, aber nicht ausgewaehlt). */
+  developerMode: boolean | null;
   productType: string;
   /** "iPhone 16 Pro Max" statt "iPhone17,2". */
   model: string;
-  formFactor: "home" | "notch" | "island" | "ipad";
+  formFactor: "home" | "notch" | "island" | "ipad" | "tv";
+  platform: "ios" | "tvos";
+  transport: Transport;
+  /** WLAN ist fuer dieses Geraet in ModStaller eingeschaltet. */
+  wifiEnabled: boolean;
   battery: { level: number; charging: boolean } | null;
 }
 
@@ -68,7 +77,11 @@ export interface SideloadedApp {
 }
 
 export interface Status {
+  /** Das ausgewaehlte Geraet - ausfuehrlich. */
   device: Device | null;
+  /** Alle erreichbaren Geraete, Kabel zuerst. */
+  devices: Device[];
+  selectedUdid: string | null;
   deviceAttached: boolean;
   loggedIn: boolean;
   /** Vorname des Apple-Accounts fuer die Begruessung - leer, wenn unbekannt. */
@@ -100,6 +113,8 @@ export interface IpaInfo {
   name: string;
   version: string;
   minimumOs: string;
+  /** Fuer iPhone/iPad oder fuers Apple TV. */
+  platform: "ios" | "tvos";
   extensions: string[];
   extensionDetails: ExtensionDetail[];
   hasWatch: boolean;
@@ -238,6 +253,8 @@ export interface DeviceInfo {
   iosVersion: string;
   build: string;
   developerMode: boolean;
+  platform: "ios" | "tvos";
+  transport: Transport;
 }
 
 export interface DeviceApp {
@@ -319,6 +336,15 @@ export interface DaemonPrefs {
 /** Was der Hintergrund gerade tut. */
 export interface DaemonState {
   refreshing: { bundleId: string; name: string } | null;
+}
+
+/** Ein Apple TV, das gerade den Koppel-Bildschirm zeigt ("pair.browse"). */
+export interface PairableTv {
+  name: string;
+  identifier: string;
+  host: string;
+  port: number;
+  model: string;
 }
 
 /** Linux-Setup: was schon installiert ist und wohin. */

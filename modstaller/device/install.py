@@ -133,7 +133,12 @@ async def list_apps(sp, *, user_only: bool = True) -> dict:
 
 
 async def _providers(sp) -> list[tuple[str, object]]:
-    """lockdown first, RSD as the fallback."""
+    """lockdown first, RSD as the fallback.
+
+    A device reached only through its tunnel (Apple TV) has no lockdown -
+    there the RSD is both."""
+    if sp.lockdown is getattr(sp, "_rsd", None):
+        return [("rsd", sp.lockdown)]
     out: list[tuple[str, object]] = [("lockdown", sp.lockdown)]
     try:
         out.append(("rsd", await sp.rsd()))

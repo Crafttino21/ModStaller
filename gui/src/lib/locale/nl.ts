@@ -136,6 +136,14 @@ const dict: Dict = {
     "Verbonden maar niet klaar",
   "Connected but not ready – unlock the iPhone and confirm “Trust”.":
     "Verbonden maar niet klaar – ontgrendel de iPhone en bevestig ‘Vertrouwen’.",
+  "Connected via USB. Wi-Fi is on – without the cable ModStaller finds the iPhone in the same network.":
+    "Verbonden via USB. Wifi staat aan – zonder kabel vindt ModStaller de iPhone in hetzelfde netwerk.",
+  "Connected via USB. With Wi-Fi switched on, ModStaller also reaches the iPhone without the cable – for installing, renewing and the automatic renewal in the tray.":
+    "Verbonden via USB. Met wifi aan bereikt ModStaller de iPhone ook zonder kabel – voor installeren, vernieuwen en het automatisch vernieuwen vanuit het systeemvak.",
+  "Connected via Wi-Fi. For JIT below iOS 17.4 the cable is still needed.":
+    "Verbonden via wifi. Voor JIT onder iOS 17.4 is de kabel nog nodig.",
+  "Connection":
+    "Verbinding",
   "Copy":
     "Kopiëren",
   "Copying is not possible.":
@@ -152,6 +160,8 @@ const dict: Dict = {
     "App-ID verwijderen",
   "Delete App ID?":
     "App-ID verwijderen?",
+  "Developer Mode":
+    "Ontwikkelaarsmodus",
   "Developer Mode is off.":
     "Ontwikkelaarsmodus staat uit.",
   "Developer Mode off":
@@ -164,6 +174,10 @@ const dict: Dict = {
     "Ontwikkelcertificaten",
   "Device":
     "Apparaat",
+  "Device forgotten.":
+    "Apparaat vergeten.",
+  "Device, sign-in and what expires soon – at a glance.":
+    "Apparaat, aanmelding en wat binnenkort verloopt – in één oogopslag.",
   "Different IPA":
     "Andere IPA",
   "Done":
@@ -204,6 +218,12 @@ const dict: Dict = {
     "Oplossen",
   "Follow live again":
     "Weer live volgen",
+  "Forget":
+    "Vergeten",
+  "Forget device":
+    "Apparaat vergeten",
+  "Forget {name}?":
+    "{name} vergeten?",
   "Found in your folders":
     "Gevonden in je mappen",
   "Free":
@@ -232,6 +252,8 @@ const dict: Dict = {
     "{name} installeren",
   "Installed through your package manager ({name}) – updates come from there.":
     "Geïnstalleerd via je pakketbeheerder ({name}) – updates komen daarvandaan.",
+  "Installed user apps":
+    "Geïnstalleerde gebruikersapps",
   "Installing ModStaller…":
     "ModStaller wordt geïnstalleerd…",
   "Is everything here that ModStaller needs?":
@@ -240,10 +262,14 @@ const dict: Dict = {
     "Het wordt het actieve account voor nieuwe installaties. Apps worden verder vernieuwd met het account dat ze heeft geïnstalleerd.",
   "It is installed but stopped. Windows asks for confirmation once when it is started.":
     "Hij is geïnstalleerd, maar gestopt. Bij het starten vraagt Windows één keer om bevestiging.",
+  "JIT and the Developer Disk Image still need the cable on this iOS version (Wi-Fi needs iOS 17.4 or newer for that).":
+    "JIT en de Developer Disk Image hebben op deze iOS-versie nog de kabel nodig (via wifi pas vanaf iOS 17.4).",
   "JIT for {name}":
     "JIT voor {name}",
   "Keep running in the tray when closed":
     "Bij sluiten in het systeemvak blijven",
+  "Keep that screen open and pick the Apple TV below.":
+    "Laat dat scherm open en kies hieronder de Apple TV.",
   "Keyboard":
     "Toetsenbord",
   "Language":
@@ -252,6 +278,8 @@ const dict: Dict = {
     "Alle extensies weglaten",
   "Leaving the beta channel keeps the installed beta until a newer stable version is out.":
     "Wie het bètakanaal verlaat, houdt de geïnstalleerde bèta tot er een nieuwere stabiele versie is.",
+  "List apps":
+    "Apps tonen",
   "Live":
     "Live",
   "Log":
@@ -264,6 +292,8 @@ const dict: Dict = {
     "Logboek in",
   "Looking for updates …":
     "Zoeken naar updates …",
+  "Looking in the network …":
+    "Zoeken in het netwerk …",
   "Make active":
     "Actief maken",
   "Manage App IDs ({count})":
@@ -276,6 +306,8 @@ const dict: Dict = {
     "ModStaller-installatie",
   "ModStaller can stay in the tray, remind you before apps expire and renew them on its own. Renewing needs your iPhone connected via USB.":
     "ModStaller kan in het systeemvak blijven, je herinneren voordat apps verlopen en ze zelf vernieuwen. Voor het vernieuwen moet je iPhone via USB zijn aangesloten.",
+  "ModStaller forgets the device and its pairing. Over the cable it shows up again; an Apple TV has to be paired again with a PIN.":
+    "ModStaller vergeet het apparaat en de koppeling. Via de kabel verschijnt het weer; een Apple TV moet opnieuw met een pincode worden gekoppeld.",
   "ModStaller is starting …":
     "ModStaller start op …",
   "ModStaller was removed.":
@@ -292,20 +324,24 @@ const dict: Dict = {
     "Nieuw pictogram – vierkant bijgesneden.",
   "New installs sign with the active account. Renewals always use the account that installed the app.":
     "Nieuwe installaties worden ondertekend met het actieve account. Vernieuwen gebeurt altijd met het account dat de app heeft geïnstalleerd.",
+  "Next: turn on Developer Mode on the Apple TV (Settings › Privacy & Security), then install the tvOS version of an app.":
+    "Daarna: zet de ontwikkelaarsmodus aan op de Apple TV (Instellingen › Privacy en beveiliging) en installeer dan de tvOS-versie van een app.",
+  "No Apple TV found. Is the pairing screen open and the Apple TV in the same network?":
+    "Geen Apple TV gevonden. Is het koppelscherm open en staat de Apple TV in hetzelfde netwerk?",
   "No IPAs in Downloads, Documents or Desktop.":
     "Geen IPA’s in Downloads, Documenten of Bureaublad.",
   "No app installed yet":
     "Nog geen app geïnstalleerd",
   "No certificates in the account.":
     "Geen certificaten in het account.",
+  "No device":
+    "Geen apparaat",
+  "No device connected – plug the iPhone in via USB and unlock it, or bring it into the same Wi-Fi.":
+    "Geen apparaat verbonden – sluit de iPhone via USB aan en ontgrendel hem, of breng hem in hetzelfde wifi.",
+  "No device connected. Plug the iPhone in via USB and unlock it – or bring it into the same Wi-Fi.":
+    "Geen apparaat verbonden. Sluit de iPhone via USB aan en ontgrendel hem – of breng hem in hetzelfde wifi.",
   "No entries for this filter.":
     "Geen regels voor dit filter.",
-  "No iPhone":
-    "Geen iPhone",
-  "No iPhone connected – plug it in via USB and unlock it.":
-    "Geen iPhone verbonden – sluit hem via USB aan en ontgrendel hem.",
-  "No iPhone connected. Plug it in via USB and unlock it.":
-    "Geen iPhone verbonden. Sluit hem via USB aan en ontgrendel hem.",
   "No installed app belongs to this App ID right now.":
     "Op dit moment hoort er geen geïnstalleerde app bij deze App-ID.",
   "No messages yet.":
@@ -336,6 +372,8 @@ const dict: Dict = {
     "Er verliep niets.",
   "Notifications":
     "Meldingen",
+  "On the Apple TV open Settings › Remotes and Devices › Remote App and Devices.":
+    "Open op de Apple TV Instellingen › Afstandsbedieningen en apparaten › Remote-app en apparaten.",
   "One click fixes it – see above.":
     "Eén klik lost het op – zie hierboven.",
   "Only for installed copies and the AppImage - not in development builds.":
@@ -348,10 +386,20 @@ const dict: Dict = {
     "Origineel pictogram",
   "Overview":
     "Overzicht",
+  "PIN from the Apple TV":
+    "Pincode van de Apple TV",
   "Paid":
     "Betaald",
   "Paid account – no weekly limit on App IDs and no limit on apps.":
     "Betaald account – geen weeklimiet voor App-ID's en geen limiet voor apps.",
+  "Pair":
+    "Koppelen",
+  "Pair Apple TV":
+    "Apple TV koppelen",
+  "Pair {name}":
+    "{name} koppelen",
+  "Paired by PIN – reachable while the Apple TV is on and in the same network.":
+    "Gekoppeld met pincode – bereikbaar zolang de Apple TV aan staat en in hetzelfde netwerk is.",
   "Password":
     "Wachtwoord",
   "Pause":
@@ -362,8 +410,8 @@ const dict: Dict = {
     "Foto’s bewerken",
   "Pick an IPA – ModStaller signs it with your Apple account and puts it on the iPhone.":
     "Kies een IPA – ModStaller ondertekent hem met je Apple-account en zet hem op de iPhone.",
-  "Plug it in via USB and unlock it.":
-    "Sluit hem via USB aan en ontgrendel hem.",
+  "Plug it in via USB and unlock it – or bring it into the same Wi-Fi.":
+    "Sluit hem via USB aan en ontgrendel hem – of breng hem in hetzelfde wifi.",
   "Preparing Anisette …":
     "Anisette wordt voorbereid …",
   "Program":
@@ -380,12 +428,14 @@ const dict: Dict = {
     "Vernieuwen",
   "Registered devices":
     "Geregistreerde apparaten",
+  "Reload":
+    "Opnieuw laden",
   "Remind me before apps expire":
     "Herinner me voordat apps verlopen",
   "Remove":
     "Verwijderen",
-  "Remove from the iPhone":
-    "Van de iPhone verwijderen",
+  "Remove from the device":
+    "Van het apparaat verwijderen",
   "Remove {name}":
     "{name} verwijderen",
   "Remove {name}?":
@@ -430,6 +480,8 @@ const dict: Dict = {
     "Schermuitzending",
   "Search":
     "Zoeken",
+  "Search again":
+    "Opnieuw zoeken",
   "Set up automatically":
     "Automatisch instellen",
   "Set up the Apple device service":
@@ -496,6 +548,12 @@ const dict: Dict = {
     "Start na het inloggen in het systeemvak, zonder venster.",
   "Still to do: {what}":
     "Nog te doen: {what}",
+  "Switch off Wi-Fi":
+    "Wifi uitzetten",
+  "Switch on Wi-Fi":
+    "Wifi aanzetten",
+  "Switch to this device":
+    "Naar dit apparaat wisselen",
   "System":
     "Systeem",
   "System check":
@@ -510,14 +568,16 @@ const dict: Dict = {
     "Deze afbeelding kan niet worden gelezen.",
   "That is not an IPA file.":
     "Dat is geen IPA-bestand.",
+  "The Apple TV now shows a code on the screen. Type it in here.":
+    "De Apple TV toont nu een code op het scherm. Voer die hier in.",
   "The Apple Watch app is removed – it cannot be installed this way.":
     "De Apple Watch-app wordt verwijderd – die kan zo niet worden geïnstalleerd.",
   "The ModStaller service in the background has stopped":
     "De ModStaller-dienst op de achtergrond is gestopt",
-  "The app and its data are deleted from the iPhone. It comes from another tool – ModStaller cannot restore it.":
-    "De app en zijn gegevens worden van de iPhone verwijderd. Hij komt van een ander programma – ModStaller kan hem niet terugzetten.",
-  "The app and its data are deleted from the iPhone. That frees one of the three slots.":
-    "De app en zijn gegevens worden van de iPhone verwijderd. Dat maakt een van de drie plekken vrij.",
+  "The app and its data are deleted from the device. It comes from another tool – ModStaller cannot restore it.":
+    "De app en zijn gegevens worden van het apparaat verwijderd. Hij komt van een ander programma – ModStaller kan hem niet terugzetten.",
+  "The app and its data are deleted from the device. That frees one of the three slots.":
+    "De app en zijn gegevens worden van het apparaat verwijderd. Dat maakt een van de drie plekken vrij.",
   "The app runs under the unused App ID {id}.":
     "De app draait onder de ongebruikte App-ID {id}.",
   "The backend did not report in.":
@@ -526,8 +586,8 @@ const dict: Dict = {
     "De achtergronddienst is gestopt.",
   "The bundle ID is not valid – letters, digits and hyphens, separated by dots.":
     "De bundle-ID is ongeldig – letters, cijfers en koppeltekens, gescheiden door punten.",
-  "The connected iPhone.":
-    "De aangesloten iPhone.",
+  "The connected device.":
+    "Het verbonden apparaat.",
   "The iPhone is plugged in but locked or not paired.":
     "De iPhone is aangesloten maar vergrendeld of niet gekoppeld.",
   "The next one frees up around {date}.":
@@ -538,6 +598,10 @@ const dict: Dict = {
     "Er staat al een andere opdracht `modstaller` in ~/.local/bin – die is niet aangeraakt.",
   "This IPA is App Store encrypted (FairPlay) and cannot be re-signed.":
     "Deze IPA is door de App Store versleuteld (FairPlay) en kan niet opnieuw worden ondertekend.",
+  "This IPA is an Apple TV app – pick the Apple TV as the device.":
+    "Deze IPA is een Apple TV-app – kies de Apple TV als apparaat.",
+  "This IPA is for iPhone and iPad – an Apple TV needs the app's tvOS version.":
+    "Deze IPA is voor iPhone en iPad – een Apple TV heeft de tvOS-versie van de app nodig.",
   "This does not give back weekly quota: Apple counts newly created App IDs, not existing ones. When the window is full, ModStaller falls back to a free App ID by itself.":
     "Dit levert geen weekquotum op: Apple telt nieuw aangemaakte App-ID’s, niet bestaande. Is het venster vol, dan stapt ModStaller zelf over op een vrije App-ID.",
   "This install needs {cost} – {missing} more than are left.":
@@ -552,6 +616,8 @@ const dict: Dict = {
     "Opnieuw proberen",
   "Turn on":
     "Aanzetten",
+  "Type in the PIN the Apple TV then shows.":
+    "Voer de pincode in die de Apple TV dan toont.",
   "Undo":
     "Ongedaan maken",
   "Undo changes":
@@ -584,6 +650,8 @@ const dict: Dict = {
     "Versie {version} is beschikbaar – zie linksonder.",
   "Version {version} is ready":
     "Versie {version} staat klaar",
+  "Version {version} · Apple TV · from tvOS {os}":
+    "Versie {version} · Apple TV · vanaf tvOS {os}",
   "Version {version} · from iOS {ios}":
     "Versie {version} · vanaf iOS {ios}",
   "View quotas and certificates":
@@ -602,6 +670,12 @@ const dict: Dict = {
     "Waar ModStaller wordt geïnstalleerd",
   "Whether an app depends on it cannot be determined without a connected iPhone.":
     "Zonder aangesloten iPhone valt niet vast te stellen of er een app van afhangt.",
+  "Wi-Fi":
+    "Wifi",
+  "Wi-Fi is off. The iPhone is only reachable over the cable again.":
+    "Wifi staat uit. De iPhone is weer alleen via de kabel bereikbaar.",
+  "Wi-Fi is on. The iPhone can now be unplugged – ModStaller finds it in the same network.":
+    "Wifi staat aan. De iPhone kan nu worden losgekoppeld – ModStaller vindt hem in hetzelfde netwerk.",
   "Widget":
     "Widget",
   "Windows shows the iPhone in Explorer through its own photo driver – ModStaller needs Apple’s device service for USB. ModStaller can set it up for you: “Apple Devices” from the Microsoft Store, otherwise just Apple’s USB driver.":
@@ -636,8 +710,6 @@ const dict: Dict = {
     "is verlopen",
   "hours before expiry. If your iPhone is not connected then, ModStaller asks for it and renews as soon as it is.":
     "uur voor het verlopen. Is je iPhone dan niet aangesloten, dan vraagt ModStaller erom en vernieuwt zodra hij er is.",
-  "iPhone, sign-in and what expires soon – at a glance.":
-    "iPhone, aanmelding en wat binnenkort verloopt – in één oogopslag.",
   "in use":
     "in gebruik",
   "injected dylibs":
@@ -682,14 +754,18 @@ const dict: Dict = {
     "{count} punt(en) verhinderen het sideloaden.",
   "{count} point(s) to clear up.":
     "{count} punt(en) op te lossen.",
+  "{kind} via {via}":
+    "{kind} via {via}",
   "{minutes} min ago":
     "{minutes} min geleden",
   "{name} is being renewed in the background. Try again in a moment.":
     "{name} wordt op de achtergrond vernieuwd. Probeer het zo meteen opnieuw.",
   "{name} is installed and runs for {days} days.":
     "{name} is geïnstalleerd en werkt {days} dagen.",
-  "{name} was removed from the iPhone.":
-    "{name} is van de iPhone verwijderd.",
+  "{name} is paired.":
+    "{name} is gekoppeld.",
+  "{name} was removed from the device.":
+    "{name} is van het apparaat verwijderd.",
   "{name} was renewed – valid for {days} days again.":
     "{name} is vernieuwd – weer {days} dagen geldig.",
   "{percent}% transferred":

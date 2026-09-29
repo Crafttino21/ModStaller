@@ -72,10 +72,15 @@ async def test_device_info_renders_warning_when_developer_mode_off():
 async def test_service_provider_closes_lockdown(monkeypatch):
     fake = FakeLockdown()
 
-    async def fake_connect(udid=None, timeout=0.0):
+    async def fake_connect(udid=None, timeout=0.0, ref=None):
         return fake
 
+    async def fake_resolve(udid=None):
+        from modstaller.device.discovery import USB, DeviceRef
+        return DeviceRef(VALUES["UniqueDeviceID"], USB)
+
     monkeypatch.setattr("modstaller.device.connection.connect", fake_connect)
+    monkeypatch.setattr("modstaller.device.connection.resolve", fake_resolve)
     async with ServiceProvider() as sp:
         assert sp.udid == VALUES["UniqueDeviceID"]
     assert fake.closed, "lockdown must be closed"

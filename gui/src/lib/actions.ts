@@ -1,10 +1,10 @@
 // Die Vorgaenge, die man von mehreren Stellen aus starten kann.
 
-import { ask, runTask, toast } from "./state.svelte";
+import { ask, chooseDevice, onDevice, runTask, toast } from "./state.svelte";
 import { call } from "./rpc";
 import { t } from "./i18n.svelte";
 import type {
-  Account, App, DeviceCheck, FixResult, InstallChoice, InstallOutcome, JitResult, UsbSetupResult,
+  Account, App, DeviceCheck, FixResult, InstallChoice, InstallOutcome, JitResult, PairableTv, UsbSetupResult,
 } from "./types";
 
 /** Mehr braucht es nicht, um eine App anzusprechen - so gehen auch die
@@ -15,7 +15,7 @@ type NamedApp = Pick<App, "bundleId" | "name">;
  *  Extensions bleiben, eine freie App-ID) und mit welchem Account. */
 export function installIpa(path: string, name: string, choice: InstallChoice = {}) {
   runTask<InstallOutcome>("install", t("Install {name}", { name }), "install",
-    { path, ...choice },
+    onDevice({ path, ...choice }),
     (o) => ({
       message: t("{name} is installed and runs for {days} days.",
                  { name: o.name, days: Math.round(o.daysValid) }),
@@ -45,7 +45,7 @@ export function refreshApps(app?: App) {
 }
 
 export function enableJit(app: NamedApp) {
-  runTask<JitResult>("jit", t("JIT for {name}", { name: app.name }), "jit", { bundleId: app.bundleId },
+  runTask<JitResult>("jit", t("JIT for {name}", { name: app.name }), "jit", onDevice({ bundleId: app.bundleId }),
     (r) => r.preparedRegions || r.txm === false
       ? { message: r.summary, notes: [...r.notes, t("Applies to this launch only – unlock again after quitting the app.")] }
       : {
@@ -62,15 +62,54 @@ export async function uninstallApp(app: NamedApp, foreign = false) {
   const { ok } = await ask({
     title: t("Remove {name}?", { name: app.name }),
     text: foreign
-      ? t("The app and its data are deleted from the iPhone. It comes from another tool – ModStaller cannot restore it.")
-      : t("The app and its data are deleted from the iPhone. That frees one of the three slots."),
+      ? t("The app and its data are deleted from the device. It comes from another tool – ModStaller cannot restore it.")
+      : t("The app and its data are deleted from the device. That frees one of the three slots."),
     confirm: t("Remove"),
     danger: true,
   });
   if (!ok) return;
   runTask<{ transport: string }>("uninstall", t("Remove {name}", { name: app.name }), "uninstall",
-    { bundleId: app.bundleId },
-    () => ({ message: t("{name} was removed from the iPhone.", { name: app.name }) }));
+    onDevice({ bundleId: app.bundleId }),
+    () => ({ message: t("{name} was removed from the device.", { name: app.name }) }));
+}
+
+/** WLAN fuer ein iPhone ein- (braucht einmal das Kabel) oder ausschalten. */
+export function setWifi(udid: string, on: boolean) {
+  runTask<{ udid: string; tunnel?: boolean }>("fix", on ? t("Switch on Wi-Fi") : t("Switch off Wi-Fi"),
+    "device.wifi", { udid, enable: on },
+    (r) => on
+      ? {
+          message: t("Wi-Fi is on. The iPhone can now be unplugged – ModStaller finds it in the same network."),
+          notes: r.tunnel ? [] : [t("JIT and the Developer Disk Image still need the cable on this iOS version (Wi-Fi needs iOS 17.4 or newer for that).")],
+        }
+      : { message: t("Wi-Fi is off. The iPhone is only reachable over the cable again.") });
+}
+
+/** Ein Apple TV per PIN koppeln - die PIN fragt das Backend ueber "prompt.pin". */
+export function pairTv(tv: PairableTv) {
+  runTask<{ udid: string; name: string; osVersion: string }>("fix", t("Pair {name}", { name: tv.name }),
+    "pair.start", { identifier: tv.identifier, host: tv.host, port: tv.port, name: tv.name },
+    (r) => {
+      chooseDevice(r.udid);
+      return {
+        message: t("{name} is paired.", { name: r.name || tv.name }),
+        notes: [t("Next: turn on Developer Mode on the Apple TV (Settings › Privacy & Security), then install the tvOS version of an app.")],
+      };
+    });
+}
+
+/** Ein Geraet vergessen: WLAN-Kopplung, Apple-TV-Kopplung, alles Gemerkte. */
+export async function forgetDevice(udid: string, name: string) {
+  const { ok } = await ask({
+    title: t("Forget {name}?", { name }),
+    text: t("ModStaller forgets the device and its pairing. Over the cable it shows up again; an Apple TV has to be paired again with a PIN."),
+    confirm: t("Forget"),
+    danger: true,
+  });
+  if (!ok) return false;
+  await call("device.forget", { udid });
+  toast(t("Device forgotten."));
+  return true;
 }
 
 /** ``last``: der letzte angemeldete Account - nur dann laesst sich die
@@ -103,7 +142,7 @@ export function setupUsbService() {
 
 export function fixCheck(check: DeviceCheck) {
   if (!check.fix) return;
-  runTask<FixResult>("fix", `${check.label}: ${check.fix_label}`, "device.fix", { fix: check.fix },
+  runTask<FixResult>("fix", `${check.label}: ${check.fix_label}`, "device.fix", onDevice({ fix: check.fix }),
     (r) => ({
       message: r.message,
       notes: r.manual ? [t("Still to do: {what}", { what: r.manual })] : [],
