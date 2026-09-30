@@ -49,6 +49,7 @@ DEFAULT_SOURCES = (
     # Community source with many emulators - and jailbreak tools, which are
     # marked in the store (risk.py) and ask before installing.
     "https://quarksources.github.io/dist/quantumsource.min.json",
+    "https://raw.githubusercontent.com/YTLitePlus/YTLitePlus-Altstore/main/apps.json",
 )
 
 #: A cached source is asked again after this long.
