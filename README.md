@@ -438,6 +438,7 @@ paid ones:
 | [iSH](https://ish.app/altstore.json) | a Linux shell for iOS |
 | [StikDebug](https://stikdebug.xyz/index.json) | StikDebug, StikPair |
 | [Quantum Source](https://quarksources.github.io/dist/quantumsource.min.json) | a large community collection of emulators and tools - **also jailbreak tools and exploits**, see below |
+| [YTLitePlus](https://raw.githubusercontent.com/YTLitePlus/YTLitePlus-Altstore/main/apps.json) | YouTube with Tweaks, **might be outdated** |
 
 Many of these need JIT - ModStaller enables it (see [JIT](#jit)).
 
