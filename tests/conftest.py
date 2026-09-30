@@ -10,6 +10,7 @@ from modstaller.apple import session as session_mod
 from modstaller.device import discovery, registry
 from modstaller.store import catalog as store_catalog
 from modstaller.store import images as store_images
+from modstaller.store import probe as store_probe
 from modstaller.store import sources as store_sources
 
 
@@ -38,3 +39,6 @@ def _private_store(tmp_path, monkeypatch):
     monkeypatch.setattr(store_images, "CACHE", tmp_path / "store" / "img")
     monkeypatch.setattr(config, "IPA_CACHE_DIR", tmp_path / "ipa")
     monkeypatch.setattr(store_catalog, "CATALOG", store_catalog.Catalog())
+    monkeypatch.setattr(store_probe, "CACHE", tmp_path / "store" / "probe")
+    # No reading of remote IPAs in tests - the ones about it switch it on.
+    monkeypatch.setattr(store_catalog, "PROBE_LIMIT", -1)

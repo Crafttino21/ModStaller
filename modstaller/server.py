@@ -1471,20 +1471,31 @@ async def _store_refresh(server: Server, job: Job, params: dict):
 async def _store_list(server: Server, job: Job, params: dict):
     from .store.catalog import CATALOG
     await asyncio.to_thread(CATALOG.ensure_loaded)
+    device = params.get("device") if isinstance(params.get("device"), dict) else None
     found = CATALOG.search(
         _text_param(params, "query") or "", source=_text_param(params, "source"),
         category=_text_param(params, "category"),
-        offset=params.get("offset") or 0, limit=params.get("limit") or 60)
-    return {"total": found["total"],
-            "items": [{**a.as_dict(), "offers": len(CATALOG.offers(a.bundle_id))}
-                      for a in found["items"]],
+        offset=params.get("offset") or 0, limit=params.get("limit") or 60,
+        device=device, only_compatible=params.get("allDevices") is not True)
+    return {"total": found["total"], "hidden": found["hidden"],
+            "probing": CATALOG.probing,
+            "items": [{**a.as_dict(), "offers": len(CATALOG.offers(a.bundle_id)),
+                       "compatible": fits}
+                      for a, fits in found["items"]],
             "categories": CATALOG.categories()}
 
 
 @method("store.app")
 async def _store_app_detail(server: Server, job: Job, params: dict):
+    from .store.catalog import CATALOG
     app = await asyncio.to_thread(_store_app, params)
-    return {**app.as_dict(full=True), "offers": _offers(app)}
+    facts = CATALOG.facts_for(app) or {}
+    device = params.get("device") if isinstance(params.get("device"), dict) else None
+    return {**app.as_dict(full=True), "offers": _offers(app),
+            # What the IPA itself says - more reliable than the source.
+            "families": facts.get("families") or [],
+            "minOs": facts.get("minOs") or app.min_os,
+            "compatible": CATALOG.compat(app, device) if device else True}
 
 
 @method("store.image")

@@ -212,6 +212,8 @@ export interface StoreApp {
   warning: "" | "jailbreak" | "exploit" | "store";
   /** In wie vielen Quellen es diese App gibt ("store.list"). */
   offers?: number;
+  /** Passt zum gewaehlten Geraet? null: noch nicht bekannt. */
+  compatible?: boolean | null;
 }
 
 /** Ein Angebot derselben App aus einer Quelle. */
@@ -239,12 +241,18 @@ export interface StoreAppDetail extends Omit<StoreApp, "offers"> {
   versions: StoreVersion[];
   /** Alle Quellen mit dieser App, das beste Angebot zuerst. */
   offers: StoreOffer[];
+  /** Laut der IPA selbst: 1 iPhone/iPod, 2 iPad, 3 Apple TV, 7 Vision Pro. */
+  families: number[];
 }
 
 export interface StoreList {
   total: number;
   items: StoreApp[];
   categories: string[];
+  /** Ausgeblendet, weil sie nicht aufs Geraet passen. */
+  hidden: number;
+  /** Wie viele IPAs noch im Hintergrund geprueft werden. */
+  probing: number;
 }
 
 export interface StoreSource {

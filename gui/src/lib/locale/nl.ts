@@ -128,6 +128,8 @@ const dict: Dict = {
     "Zoeken naar updates",
   "Checking the App ID quota …":
     "App-ID-quotum wordt gecontroleerd …",
+  "Checking {count} apps …":
+    "{count} apps controleren …",
   "Checking …":
     "Bezig met controleren …",
   "Choose a file":
@@ -196,6 +198,8 @@ const dict: Dict = {
     "Apparaat, aanmelding en wat binnenkort verloopt – in één oogopslag.",
   "Different IPA":
     "Andere IPA",
+  "Does not fit":
+    "Past niet",
   "Done":
     "Klaar",
   "Download":
@@ -364,6 +368,8 @@ const dict: Dict = {
     "Daarna: zet de ontwikkelaarsmodus aan op de Vision Pro (Instellingen › Privacy en beveiliging) en installeer dan een app.",
   "No IPAs in Downloads, Documents or Desktop.":
     "Geen IPA’s in Downloads, Documenten of Bureaublad.",
+  "No app in your sources fits the {kind}.":
+    "Geen app uit je bronnen past op de {kind}.",
   "No app installed yet":
     "Nog geen app geïnstalleerd",
   "No app matches “{query}”.":
@@ -526,6 +532,8 @@ const dict: Dict = {
     "Intrekken",
   "Revoke certificate?":
     "Certificaat intrekken?",
+  "Runs on":
+    "Draait op",
   "SRP-6a: Apple gets proof that you know the password – not the password itself.":
     "SRP-6a: Apple krijgt het bewijs dat jij het wachtwoord kent – niet het wachtwoord zelf.",
   "Safari":
@@ -548,6 +556,8 @@ const dict: Dict = {
     "Instellingen › Privacy en beveiliging › Ontwikkelaarsmodus – anders start geen enkele gesideloade app.",
   "Share":
     "Delen",
+  "Show all":
+    "Alles tonen",
   "Show in the store":
     "In de store tonen",
   "Show teams and certificates":
@@ -622,6 +632,8 @@ const dict: Dict = {
     "Nog te doen: {what}",
   "Store":
     "Store",
+  "Suitable for {name} ({os} {version})":
+    "Geschikt voor {name} ({os} {version})",
   "Switch off Wi-Fi":
     "Wifi uitzetten",
   "Switch on Wi-Fi":
@@ -694,6 +706,8 @@ const dict: Dict = {
     "Deze installatie gebruikt er {cost}.",
   "This is a jailbreak tool. It attacks the system with an exploit - a failed run can mean a boot loop, a restore and lost data, and it weakens the device's security. Only install it if you know exactly what you are doing.":
     "Dit is een jailbreak-tool. Die valt het systeem aan via een exploit – een mislukte poging kan een bootloop, een herstel en gegevensverlies betekenen, en verzwakt de beveiliging van het apparaat. Installeer hem alleen als je precies weet wat je doet.",
+  "This version does not fit the {kind} ({name}) - check the required system version and device type, or pick another source.":
+    "Deze versie past niet op de {kind} ({name}) – controleer de vereiste systeemversie en het apparaattype, of kies een andere bron.",
   "To renew, unlock or remove, the iPhone has to be connected and unlocked.":
     "Om te vernieuwen, vrij te geven of te verwijderen moet de iPhone aangesloten en ontgrendeld zijn.",
   "Translations that are missing fall back to English.":
@@ -842,6 +856,8 @@ const dict: Dict = {
     "{count} vrij",
   "{count} h ago":
     "{count} uur geleden",
+  "{count} hidden":
+    "{count} verborgen",
   "{count} hour left":
     "nog {count} uur",
   "{count} hours left":

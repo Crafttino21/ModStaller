@@ -42,6 +42,11 @@ export function transportLabel(d: Pick<Device, "transport"> | null | undefined):
   return overNetwork(d) ? t("Wi-Fi") : "USB";
 }
 
+/** Was der Store ueber das Geraet wissen muss, um passende Apps zu zeigen. */
+export function storeDevice(d: Device | null | undefined) {
+  return d ? { platform: d.platform, formFactor: d.formFactor, osVersion: d.iosVersion } : undefined;
+}
+
 /** Hoehe des Mockups: breite Geraete (TV, Vision Pro) flacher zeichnen. */
 export function mockupHeight(d: Pick<Device, "formFactor"> | null | undefined, tall: number): number {
   return d?.formFactor === "tv" || d?.formFactor === "vision" ? Math.round(tall * 0.7) : tall;

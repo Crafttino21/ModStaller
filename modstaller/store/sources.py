@@ -33,8 +33,9 @@ log = logging.getLogger(__name__)
 SOURCES_FILE = config.CONFIG_DIR / "sources.json"
 CACHE = config.CACHE_DIR / "store" / "sources"
 
-#: Official sources of their own projects, each checked by hand: open
-#: source or free apps, nothing that unlocks paid ones.
+#: The sources ModStaller starts with. Mostly the official sources of open
+#: source or free projects; the community ones (Quantum, YTLitePlus) are
+#: the maintainer's choice - risky entries are marked in the store (risk.py).
 DEFAULT_SOURCES = (
     "https://apps.altstore.io/",                                  # AltStore, Delta, Clip
     "https://community-apps.sidestore.io/sidecommunity.json",     # SideStore Team Picks

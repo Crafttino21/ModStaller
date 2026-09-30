@@ -128,6 +128,8 @@ const dict: Dict = {
     "Rechercher des mises à jour",
   "Checking the App ID quota …":
     "Vérification du quota d’App ID…",
+  "Checking {count} apps …":
+    "Vérification de {count} apps …",
   "Checking …":
     "Vérification …",
   "Choose a file":
@@ -196,6 +198,8 @@ const dict: Dict = {
     "Appareil, connexion et ce qui expire bientôt – en un coup d’œil.",
   "Different IPA":
     "Autre IPA",
+  "Does not fit":
+    "Incompatible",
   "Done":
     "Terminé",
   "Download":
@@ -364,6 +368,8 @@ const dict: Dict = {
     "Ensuite : activez le mode développeur sur la Vision Pro (Réglages › Confidentialité et sécurité), puis installez une app.",
   "No IPAs in Downloads, Documents or Desktop.":
     "Aucun IPA dans Téléchargements, Documents ou Bureau.",
+  "No app in your sources fits the {kind}.":
+    "Aucune app de vos sources ne convient à l’appareil {kind}.",
   "No app installed yet":
     "Aucune application installée pour l’instant",
   "No app matches “{query}”.":
@@ -526,6 +532,8 @@ const dict: Dict = {
     "Révoquer",
   "Revoke certificate?":
     "Révoquer le certificat ?",
+  "Runs on":
+    "Fonctionne sur",
   "SRP-6a: Apple gets proof that you know the password – not the password itself.":
     "SRP-6a : Apple obtient la preuve que vous connaissez le mot de passe – pas le mot de passe lui-même.",
   "Safari":
@@ -548,6 +556,8 @@ const dict: Dict = {
     "Réglages › Confidentialité et sécurité › Mode développeur – sinon aucune application sideloadée ne démarrera.",
   "Share":
     "Partage",
+  "Show all":
+    "Tout afficher",
   "Show in the store":
     "Afficher dans le store",
   "Show teams and certificates":
@@ -622,6 +632,8 @@ const dict: Dict = {
     "Reste à faire : {what}",
   "Store":
     "Store",
+  "Suitable for {name} ({os} {version})":
+    "Adapté à {name} ({os} {version})",
   "Switch off Wi-Fi":
     "Désactiver le Wi-Fi",
   "Switch on Wi-Fi":
@@ -694,6 +706,8 @@ const dict: Dict = {
     "Cette installation en utilise {cost}.",
   "This is a jailbreak tool. It attacks the system with an exploit - a failed run can mean a boot loop, a restore and lost data, and it weakens the device's security. Only install it if you know exactly what you are doing.":
     "C’est un outil de jailbreak. Il attaque le système via un exploit – un échec peut entraîner une boucle de démarrage, une restauration et une perte de données, et il affaiblit la sécurité de l’appareil. Ne l’installez que si vous savez exactement ce que vous faites.",
+  "This version does not fit the {kind} ({name}) - check the required system version and device type, or pick another source.":
+    "Cette version ne convient pas à l’appareil {kind} ({name}) – vérifiez la version du système requise et le type d’appareil, ou choisissez une autre source.",
   "To renew, unlock or remove, the iPhone has to be connected and unlocked.":
     "Pour renouveler, activer ou retirer, l’iPhone doit être branché et déverrouillé.",
   "Translations that are missing fall back to English.":
@@ -842,6 +856,8 @@ const dict: Dict = {
     "{count} libre(s)",
   "{count} h ago":
     "il y a {count} h",
+  "{count} hidden":
+    "{count} masquées",
   "{count} hour left":
     "encore {count} heure",
   "{count} hours left":

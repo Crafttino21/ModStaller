@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import io
 import json
 import pathlib
@@ -161,9 +162,9 @@ def test_search_pages_and_filters():
     cat = _catalog()
     everything = cat.search()
     assert everything["total"] == 6
-    names = [a.name for a in everything["items"]]
+    names = [a.name for a, _ in everything["items"]]
     assert names == sorted(names, key=str.lower)
-    assert [a.bundle_id for a in cat.search("delta")["items"]] == ["com.rileytestut.Delta"]
+    assert [a.bundle_id for a, _ in cat.search("delta")["items"]] == ["com.rileytestut.Delta"]
     assert cat.search("", source="https://b.test/")["total"] == 3
     page = cat.search(offset=4, limit=5)
     assert page["total"] == 6 and len(page["items"]) == 2
@@ -487,7 +488,7 @@ def _dup_catalog():
 
 def test_the_same_app_from_several_sources_shows_once():
     cat = _dup_catalog()
-    emus = [a for a in cat.search("emu")["items"] if a.bundle_id == "org.example.emu"]
+    emus = [a for a, _ in cat.search("emu")["items"] if a.bundle_id == "org.example.emu"]
     assert len(emus) == 1
     # The newest version speaks for the group; on a tie the source higher up.
     assert (emus[0].source_url, emus[0].version) == ("https://b.test/", "1.10")
@@ -498,7 +499,7 @@ def test_the_same_app_from_several_sources_shows_once():
 
 def test_filtering_by_source_shows_that_sources_entry():
     cat = _dup_catalog()
-    [emu] = [a for a in cat.search(source="https://a.test/")["items"]
+    [emu] = [a for a, _ in cat.search(source="https://a.test/")["items"]
              if a.bundle_id == "org.example.emu"]
     assert emu.version == "1.9"
 
@@ -535,3 +536,115 @@ def test_quantum_is_a_default_with_a_note():
     url = "https://quarksources.github.io/dist/quantumsource.min.json"
     assert url in sources.DEFAULT_SOURCES
     assert risk.SOURCE_NOTES[url] == risk.JAILBREAK
+
+
+# -- Fits the device? -----------------------------------------------------------
+
+
+class _RangeHttp:
+    """Serves bytes with HTTP ranges, like GitHub's release CDN."""
+
+    def __init__(self, data: bytes, ranges=True):
+        self.data, self.ranges, self.calls = data, ranges, 0
+
+    def get(self, url, headers=None, timeout=None, stream=False):
+        self.calls += 1
+        rng = (headers or {}).get("Range", "")
+        if not self.ranges or not rng.startswith("bytes=") or rng.startswith("bytes=-"):
+            return _Resp(self.data, status=200 if self.ranges else 200, url=url)
+        a, b = rng[6:].split("-")
+        a, b = int(a), min(int(b), len(self.data) - 1)
+        body = self.data[a:b + 1]
+        return _RangeResp(body, url, f"bytes {a}-{b}/{len(self.data)}")
+
+
+class _RangeResp(_Resp):
+    def __init__(self, body, url, content_range):
+        super().__init__(body, status=206, headers={"Content-Range": content_range}, url=url)
+        self.raw = io.BytesIO(body)
+        self.raw.read = lambda n=-1, decode_content=True, _r=self.raw: io.BytesIO.read(_r, n)
+
+
+def _big_ipa(info: dict) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("Payload/Big.app/Big", os.urandom(300_000))     # makes ranges matter
+        zf.writestr("Payload/Big.app/Info.plist", plistlib.dumps(info))
+        zf.writestr("Payload/Big.app/PlugIns/X.appex/Info.plist", plistlib.dumps({"x": 1}))
+    return buf.getvalue()
+
+
+def test_the_info_plist_is_read_with_a_few_ranges():
+    from modstaller.store import probe
+    data = _big_ipa({"CFBundleIdentifier": "b", "UIDeviceFamily": [2],
+                     "MinimumOSVersion": "16.0", "CFBundleSupportedPlatforms": ["iPhoneOS"]})
+    http = _RangeHttp(data)
+    facts = probe.facts("https://cdn.test/big.ipa", http=http)
+    assert facts["families"] == [2] and facts["minOs"] == "16.0" and facts["platform"] == "ios"
+    assert http.calls <= 5, "a few blocks - not the whole IPA"
+    # Cached: no second look.
+    assert probe.facts("https://cdn.test/big.ipa", http=_RangeHttp(b"")) == facts
+
+
+def test_no_range_support_means_unknown_not_an_error():
+    from modstaller.store import probe
+    facts = probe.facts("https://cdn.test/plain.ipa", http=_RangeHttp(b"x", ranges=False))
+    assert "error" in facts
+
+
+def _dev(platform="ios", form="island", os_version="18.0"):
+    return {"platform": platform, "formFactor": form, "osVersion": os_version}
+
+
+def _probed(platform="ios", families=(1, 2), min_os="14.0"):
+    return {"platform": platform, "families": list(families), "minOs": min_os}
+
+
+@pytest.mark.parametrize("facts, device, expected", [
+    (_probed(), _dev(), True),
+    (_probed(min_os="19.0"), _dev(), False),                          # iOS too old
+    (_probed(families=[2]), _dev(), False),                           # iPad-only on iPhone
+    (_probed(families=[2]), _dev(form="ipad"), True),
+    (_probed(families=[1]), _dev(form="ipad"), True),                 # iPhone app on iPad
+    (_probed(), _dev("tvos", "tv", "18.0"), False),                   # iOS app on Apple TV
+    (_probed("tvos", [3], "17.0"), _dev("tvos", "tv", "18.0"), True),
+    (_probed(), _dev("xros", "vision", "2.4"), True),                 # Designed for iPad
+    (_probed("xros", [7], "1.0"), _dev(), False),
+    (None, _dev(), None),                                             # not read yet
+    (None, _dev("tvos", "tv"), None),
+    ({"error": "no ranges"}, _dev(), None),
+])
+def test_compatibility_rules(facts, device, expected):
+    from types import SimpleNamespace
+
+    from modstaller.store.compat import compatible
+    app = SimpleNamespace(min_os="", max_os="")
+    assert compatible(app, facts, device) is expected
+
+
+def test_the_sources_os_limits_count_while_nothing_is_read():
+    from types import SimpleNamespace
+
+    from modstaller.store.compat import compatible
+    assert compatible(SimpleNamespace(min_os="19.0", max_os=""), None, _dev()) is False
+    assert compatible(SimpleNamespace(min_os="", max_os="15.0"), None, _dev()) is False
+
+
+def test_the_store_picks_the_offer_that_fits_and_hides_the_rest():
+    cat = _dup_catalog()                       # emu 1.10 in b and c, 1.9 in a
+    new = [o for o in cat.offers("org.example.emu") if o.version == "1.10"]
+    old = next(o for o in cat.offers("org.example.emu") if o.version == "1.9")
+    for o in new:
+        cat._facts[o.download_url] = _probed(min_os="18.0")
+    cat._facts[old.download_url] = _probed(min_os="15.0")
+    for bundle in ("org.example.a", "org.example.b", "org.example.c"):
+        for o in cat.offers(bundle):
+            cat._facts[o.download_url] = _probed(families=[2])        # iPad-only
+
+    found = cat.search(device=_dev(os_version="16.0"))
+    [(emu, fits)] = [(a, f) for a, f in found["items"] if a.bundle_id == "org.example.emu"]
+    assert (emu.version, fits) == ("1.9", True), "the older version still runs on iOS 16"
+    assert found["total"] == 1 and found["hidden"] == 3
+
+    everything = cat.search(device=_dev(os_version="16.0"), only_compatible=False)
+    assert everything["total"] == 4

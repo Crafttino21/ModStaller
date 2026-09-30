@@ -128,6 +128,8 @@ const dict: Dict = {
     "Nach Updates suchen",
   "Checking the App ID quota …":
     "Prüfe das App-ID-Kontingent …",
+  "Checking {count} apps …":
+    "Prüfe {count} Apps …",
   "Checking …":
     "Wird geprüft …",
   "Choose a file":
@@ -196,6 +198,8 @@ const dict: Dict = {
     "Gerät, Anmeldung und was bald abläuft – auf einen Blick.",
   "Different IPA":
     "Andere IPA",
+  "Does not fit":
+    "Passt nicht",
   "Done":
     "Fertig",
   "Download":
@@ -364,6 +368,8 @@ const dict: Dict = {
     "Als Nächstes: Entwicklermodus an der Vision Pro einschalten (Einstellungen › Datenschutz & Sicherheit), dann eine App installieren.",
   "No IPAs in Downloads, Documents or Desktop.":
     "Keine IPAs in Downloads, Dokumente oder Desktop.",
+  "No app in your sources fits the {kind}.":
+    "Keine App aus deinen Quellen passt aufs {kind}.",
   "No app installed yet":
     "Noch keine App installiert",
   "No app matches “{query}”.":
@@ -526,6 +532,8 @@ const dict: Dict = {
     "Widerrufen",
   "Revoke certificate?":
     "Zertifikat widerrufen?",
+  "Runs on":
+    "Läuft auf",
   "SRP-6a: Apple gets proof that you know the password – not the password itself.":
     "SRP-6a: Apple bekommt einen Beweis, dass du das Passwort kennst – nicht das Passwort selbst.",
   "Safari":
@@ -548,6 +556,8 @@ const dict: Dict = {
     "Einstellungen › Datenschutz & Sicherheit › Entwicklermodus – sonst startet keine sideloadete App.",
   "Share":
     "Teilen",
+  "Show all":
+    "Alle zeigen",
   "Show in the store":
     "Im Store zeigen",
   "Show teams and certificates":
@@ -622,6 +632,8 @@ const dict: Dict = {
     "Noch zu tun: {what}",
   "Store":
     "Store",
+  "Suitable for {name} ({os} {version})":
+    "Passend für {name} ({os} {version})",
   "Switch off Wi-Fi":
     "WLAN ausschalten",
   "Switch on Wi-Fi":
@@ -694,6 +706,8 @@ const dict: Dict = {
     "Diese Installation verbraucht {cost} davon.",
   "This is a jailbreak tool. It attacks the system with an exploit - a failed run can mean a boot loop, a restore and lost data, and it weakens the device's security. Only install it if you know exactly what you are doing.":
     "Das ist ein Jailbreak-Tool. Es greift das System über einen Exploit an – ein fehlgeschlagener Lauf kann eine Bootschleife, eine Wiederherstellung und Datenverlust bedeuten, und es schwächt die Sicherheit des Geräts. Installiere es nur, wenn du genau weißt, was du tust.",
+  "This version does not fit the {kind} ({name}) - check the required system version and device type, or pick another source.":
+    "Diese Version passt nicht aufs {kind} ({name}) – prüfe die nötige Systemversion und den Gerätetyp oder wähle eine andere Quelle.",
   "To renew, unlock or remove, the iPhone has to be connected and unlocked.":
     "Zum Erneuern, Freischalten oder Entfernen muss das iPhone angesteckt und entsperrt sein.",
   "Translations that are missing fall back to English.":
@@ -842,6 +856,8 @@ const dict: Dict = {
     "{count} frei",
   "{count} h ago":
     "vor {count} Std.",
+  "{count} hidden":
+    "{count} ausgeblendet",
   "{count} hour left":
     "noch {count} Stunde",
   "{count} hours left":

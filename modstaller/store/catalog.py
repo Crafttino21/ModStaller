@@ -19,7 +19,14 @@ from typing import Callable
 
 from . import sources as sources_mod
 from .model import Source, StoreApp
+from . import probe
+from .compat import compatible
 from .risk import SOURCE_NOTES
+
+#: Sources bigger than this are not probed - thousands of range requests
+#: for one collection (AppTesters) would be anything but polite.
+PROBE_LIMIT = 1000
+PROBE_WORKERS = 4
 from .updates import newer
 
 
@@ -32,6 +39,10 @@ class Catalog:
         self._apps: list[StoreApp] = []
         self._by_key: dict[str, StoreApp] = {}
         self._groups: dict[str, list[StoreApp]] = {}
+        #: download URL -> what the IPA says about itself (probe.facts).
+        self._facts: dict[str, dict] = {}
+        self._probe_pending = 0
+        self._probe_thread: threading.Thread | None = None
         self.loaded = False
 
     # -- Loading --
@@ -69,6 +80,57 @@ class Catalog:
             self._sources = {u: s for u, s in self._sources.items() if u in enabled}
             self._reindex()
             self.loaded = True
+        self._start_probing()
+
+    # -- What the IPAs say about themselves --
+
+    def _to_probe(self) -> list[str]:
+        with self._lock:
+            urls = []
+            for src in self._sources.values():
+                if len(src.apps) > PROBE_LIMIT:
+                    continue
+                for app in src.apps:
+                    for v in app.versions[:1]:
+                        urls.append(v.download_url)
+            return list(dict.fromkeys(urls))
+
+    def _start_probing(self) -> None:
+        """Reads what is cached at once, the rest in the background."""
+        urls = self._to_probe()
+        todo = []
+        for url in urls:
+            hit = probe.cached(url)
+            if hit is not None:
+                self._facts[url] = hit
+            elif url not in self._facts:
+                todo.append(url)
+        if not todo or (self._probe_thread and self._probe_thread.is_alive()):
+            return
+        self._probe_pending = len(todo)
+
+        def run() -> None:
+            def one(url: str) -> None:
+                try:
+                    self._facts[url] = probe.facts(url)
+                finally:
+                    self._probe_pending = max(0, self._probe_pending - 1)
+            with ThreadPoolExecutor(max_workers=PROBE_WORKERS) as pool:
+                list(pool.map(one, todo))
+
+        self._probe_thread = threading.Thread(target=run, name="store-probe", daemon=True)
+        self._probe_thread.start()
+
+    @property
+    def probing(self) -> int:
+        """How many IPAs are still being looked at."""
+        return self._probe_pending
+
+    def facts_for(self, app: StoreApp) -> dict | None:
+        return self._facts.get(app.download_url)
+
+    def compat(self, app: StoreApp, device: dict | None) -> bool | None:
+        return compatible(app, self._facts.get(app.download_url), device)
 
     def ensure_loaded(self) -> None:
         if not self.loaded:
@@ -123,28 +185,47 @@ class Catalog:
             return list(self._groups.get(bundle_id.lower(), []))
 
     def search(self, query: str = "", *, source: str | None = None,
-               category: str | None = None, offset: int = 0, limit: int = 60) -> dict:
+               category: str | None = None, offset: int = 0, limit: int = 60,
+               device: dict | None = None, only_compatible: bool = True) -> dict:
         """One hit per app. Filtered by source, the hit is that source's
-        entry - so the list shows what that source offers."""
+        entry - so the list shows what that source offers.
+
+        With a ``device``, the hit is the best offer that fits it (an older
+        version elsewhere may still run where the newest does not), and apps
+        that fit nowhere are left out - unless ``only_compatible`` is off.
+        ``items`` are ``(app, compatible)`` pairs; compatible is None where
+        nothing is known yet."""
         words = [w for w in (query or "").lower().split() if w]
         with self._lock:
             hits = []
+            hidden = 0
             for app in self._apps:
                 group = self._groups.get(app.bundle_id.lower(), [app])
                 if source:
-                    app = next((a for a in group if a.source_url == source), None)
-                    if app is None:
+                    group = [a for a in group if a.source_url == source]
+                    if not group:
                         continue
+                app, fits = group[0], True
+                if device:
+                    rated = [(a, self.compat(a, device)) for a in group]
+                    fitting = [x for x in rated if x[1] is not False]
+                    if fitting:
+                        app, fits = fitting[0]
+                    else:
+                        app, fits = rated[0]
+                        if only_compatible:
+                            hidden += 1
+                            continue
                 if category and not any(a.category == category for a in group):
                     continue
                 if words:
                     hay = f"{app.name} {app.developer} {app.bundle_id} {app.subtitle}".lower()
                     if not all(w in hay for w in words):
                         continue
-                hits.append(app)
+                hits.append((app, fits))
         offset = max(0, int(offset))
         limit = max(1, min(200, int(limit)))
-        return {"total": len(hits), "items": hits[offset:offset + limit]}
+        return {"total": len(hits), "items": hits[offset:offset + limit], "hidden": hidden}
 
     def get(self, source_url: str, bundle_id: str) -> StoreApp | None:
         with self._lock:

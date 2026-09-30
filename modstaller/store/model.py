@@ -29,6 +29,7 @@ class StoreVersion:
     download_url: str = ""
     size: int = 0
     min_os: str = ""
+    max_os: str = ""
     sha256: str = ""
     notes: str = ""
 
@@ -48,6 +49,7 @@ class StoreApp:
     description: str = ""
     screenshots: list[str] = field(default_factory=list)
     min_os: str = ""
+    max_os: str = ""
     sha256: str = ""
     category: str = ""
     tint: str = ""
@@ -124,6 +126,7 @@ def _versions(app: dict) -> list[StoreVersion]:
         out.append(StoreVersion(
             version=version, date=_text(v.get("date")), download_url=url,
             size=_int(v.get("size")), min_os=_text(v.get("minOSVersion")),
+            max_os=_text(v.get("maxOSVersion")),
             sha256=_text(v.get("sha256")).lower(),
             notes=_text(v.get("localizedDescription"))))
         if len(out) >= MAX_VERSIONS:
@@ -147,6 +150,7 @@ def parse_app(raw: dict, source_url: str) -> StoreApp | None:
         newest = StoreVersion(version=version, date=_text(raw.get("versionDate")),
                               download_url=url, size=_int(raw.get("size")),
                               min_os=_text(raw.get("minOSVersion")),
+                              max_os=_text(raw.get("maxOSVersion")),
                               sha256=_text(raw.get("sha256")).lower(),
                               notes=_text(raw.get("versionDescription")))
         versions = [newest]
@@ -163,7 +167,7 @@ def parse_app(raw: dict, source_url: str) -> StoreApp | None:
         icon_url=https(raw.get("iconURL") or raw.get("icon")),
         subtitle=_text(raw.get("subtitle")),
         description=description,
-        screenshots=_screenshots(raw), min_os=newest.min_os,
+        screenshots=_screenshots(raw), min_os=newest.min_os, max_os=newest.max_os,
         sha256=newest.sha256, category=_text(raw.get("category")),
         tint=_text(raw.get("tintColor")).lstrip("#")[:6], versions=versions)
 

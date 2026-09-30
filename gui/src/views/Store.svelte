@@ -3,6 +3,7 @@
     Search, RefreshCw, Library, LoaderCircle, ArrowUpCircle, Store as StoreIconLucide, TriangleAlert,
   } from "@lucide/svelte";
   import { warningLabel } from "../lib/store";
+  import { deviceKind, osName, storeDevice } from "../lib/device";
   import PageHeader from "../components/PageHeader.svelte";
   import StoreImage from "../components/StoreImage.svelte";
   import StoreAppDialog from "../components/StoreAppDialog.svelte";
@@ -27,6 +28,13 @@
   let error = $state("");
   let selected = $state<StoreApp | null>(null);
   let managing = $state(false);
+  let hidden = $state(0);
+  let probing = $state(0);
+  /** Auch Apps zeigen, die nicht aufs gewaehlte Geraet passen. */
+  let showAll = $state(false);
+  const device = $derived(ui.status?.device ?? null);
+  // Nur was die Auswahl aendert - nicht jede Akku-Aenderung im Status.
+  const deviceKey = $derived(device ? `${device.udid}|${device.platform}|${device.formFactor}|${device.iosVersion}` : "");
   let sentinel = $state<HTMLElement | null>(null);
 
   const sourceName = (url: string) => sources.find((s) => s.url === url)?.name || url.replace(/^https:\/\//, "");
@@ -43,11 +51,14 @@
       const r = await call<StoreList>("store.list", {
         query, source: source || undefined, category: category || undefined,
         offset: reset ? 0 : items.length, limit: PAGE,
+        device: storeDevice(device), allDevices: showAll,
       });
       if (mine !== seq) return;
       items = reset ? r.items : [...items, ...r.items];
       total = r.total;
       categories = r.categories;
+      hidden = r.hidden;
+      probing = r.probing;
     } catch (err) {
       if (mine === seq) error = errorText(err);
     } finally {
@@ -77,7 +88,7 @@
   // Suche leicht verzoegert - nicht bei jedem Tastendruck.
   let timer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
-    void query; void source; void category;
+    void query; void source; void category; void showAll; void deviceKey;
     clearTimeout(timer);
     timer = setTimeout(() => load(true), 250);
     return () => clearTimeout(timer);
@@ -85,6 +96,14 @@
 
   loadSources();
   refreshStoreUpdates();
+
+  // Solange IPAs im Hintergrund geprueft werden, wird die Auswahl genauer -
+  // also nachladen, bis alles bekannt ist.
+  $effect(() => {
+    if (!probing || !device) return;
+    const id = setTimeout(() => load(true), 4000);
+    return () => clearTimeout(id);
+  });
 
   // Nachladen, wenn das Ende der Liste ins Bild kommt.
   $effect(() => {
@@ -150,6 +169,15 @@
   </div>
 {/if}
 
+{#if device}
+  <div class="fit">
+    <span>{t("Suitable for {name} ({os} {version})", { name: device.name, os: osName(device), version: device.iosVersion })}</span>
+    {#if hidden && !showAll}<span class="faint">· {t("{count} hidden", { count: hidden })}</span>{/if}
+    {#if probing}<span class="faint"><LoaderCircle size={12} class="spin" /> {t("Checking {count} apps …", { count: probing })}</span>{/if}
+    <label class="all"><input type="checkbox" bind:checked={showAll} /> {t("Show all")}</label>
+  </div>
+{/if}
+
 {#if error}
   <div class="banner bad small">{error}</div>
 {/if}
@@ -159,7 +187,9 @@
 {:else if !items.length}
   <div class="card empty">
     <StoreIconLucide size={30} />
-    <p>{query ? t("No app matches “{query}”.", { query }) : t("No apps - add a source under “Sources”.")}</p>
+    <p>{query ? t("No app matches “{query}”.", { query })
+      : hidden && device ? t("No app in your sources fits the {kind}.", { kind: deviceKind(device) })
+      : t("No apps - add a source under “Sources”.")}</p>
   </div>
 {:else}
   <p class="faint small count">{t("{count} apps", { count: total })}</p>
@@ -178,6 +208,7 @@
             {:else if installed(app)}<span class="chip ok">{t("Installed")}</span>{/if}
             {#if (app.offers ?? 1) > 1}<span class="chip">{t("{count} sources", { count: app.offers ?? 1 })}</span>{/if}
             {#if app.warning}<span class="chip bad"><TriangleAlert size={11} /> {warningLabel(app.warning)}</span>{/if}
+            {#if device && app.compatible === false}<span class="chip warn">{t("Does not fit")}</span>{/if}
           </div>
         </div>
       </button>
@@ -189,7 +220,7 @@
 {/if}
 
 {#if selected}
-  <StoreAppDialog app={selected} {sourceName}
+  <StoreAppDialog app={selected} {sourceName} {device}
                   update={storeUpdateFor(ui.status?.apps.find((a) => a.originalBundleId === selected?.bundleId)?.bundleId ?? "")}
                   installed={installed(selected)} onclose={() => (selected = null)} />
 {/if}
@@ -210,6 +241,9 @@
   .chip-btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
   .sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
   .count { margin-bottom: 8px; }
+  .fit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-2);
+         margin-bottom: 12px; }
+  .fit .all { margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
   .app { display: flex; gap: 12px; align-items: center; padding: 12px; text-align: left; cursor: pointer;
          font: inherit; color: inherit; transition: border-color 0.15s; min-width: 0; }

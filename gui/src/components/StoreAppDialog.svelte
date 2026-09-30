@@ -8,11 +8,12 @@
   import { mb } from "../lib/format";
   import { storeCustomize, storeInstall, storeUpdate } from "../lib/actions";
   import { t } from "../lib/i18n.svelte";
-  import type { StoreApp, StoreAppDetail, StoreUpdate } from "../lib/types";
+  import type { Device, StoreApp, StoreAppDetail, StoreUpdate } from "../lib/types";
+  import { deviceKind, storeDevice } from "../lib/device";
 
-  let { app, sourceName, update, installed, onclose }: {
+  let { app, sourceName, update, installed, device = null, onclose }: {
     app: StoreApp; sourceName: (url: string) => string; update?: StoreUpdate; installed: boolean;
-    onclose: () => void;
+    device?: Device | null; onclose: () => void;
   } = $props();
 
   let detail = $state<StoreAppDetail | null>(null);
@@ -32,7 +33,7 @@
     detail = null;
     error = "";
     let stale = false;
-    call<StoreAppDetail>("store.app", { source: from, bundleId }).then(
+    call<StoreAppDetail>("store.app", { source: from, bundleId, device: storeDevice(device) }).then(
       (d) => { if (!stale) { detail = d; version = d.versions[0]?.version ?? d.version; } },
       (err) => { if (!stale) error = errorText(err); },
     );
@@ -44,6 +45,11 @@
   const latest = $derived(!detail || version === detail.versions[0]?.version);
 
   const chosenApp = $derived({ ...app, source });
+
+  function families(f: number[]): string {
+    const names: Record<number, string> = { 1: "iPhone", 2: "iPad", 3: "Apple TV", 7: "Vision Pro" };
+    return f.map((x) => names[x]).filter(Boolean).join(", ");
+  }
 
   /** Vor riskanten Apps einmal nachfragen. */
   async function confirmed(): Promise<boolean> {
@@ -95,6 +101,13 @@
     </div>
   {/if}
 
+  {#if device && detail?.compatible === false}
+    <div class="banner warn warnbox">
+      <TriangleAlert size={18} color="var(--warn)" />
+      <div class="grow small">{t("This version does not fit the {kind} ({name}) - check the required system version and device type, or pick another source.", { kind: deviceKind(device), name: device.name })}</div>
+    </div>
+  {/if}
+
   {#if detail && detail.offers.length > 1}
     <label class="pick">
       <span class="faint small">{t("Source")}</span>
@@ -109,7 +122,8 @@
   <div class="facts">
     <div><span class="faint">{t("Version")}</span><b>{chosen?.version ?? app.version}</b></div>
     <div><span class="faint">{t("Size")}</span><b>{mb(chosen?.size || app.size)}</b></div>
-    {#if chosen?.min_os || app.minOs}<div><span class="faint">{t("Requires")}</span><b>iOS {chosen?.min_os || app.minOs}</b></div>{/if}
+    {#if chosen?.min_os || detail?.minOs || app.minOs}<div><span class="faint">{t("Requires")}</span><b>iOS {chosen?.min_os || detail?.minOs || app.minOs}</b></div>{/if}
+    {#if detail?.families.length}<div><span class="faint">{t("Runs on")}</span><b>{families(detail.families)}</b></div>{/if}
     {#if chosen?.date || app.date}<div><span class="faint">{t("Released")}</span><b>{(chosen?.date || app.date).slice(0, 10)}</b></div>{/if}
   </div>
 

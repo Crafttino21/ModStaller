@@ -421,9 +421,8 @@ starting ModStaller again brings up the window.
 ## Store
 
 *Store* in the sidebar lists apps from **sources** - JSON files in the
-format AltStore and SideStore use. ModStaller comes with the official
-sources of these projects - open source or free apps, nothing that unlocks
-paid ones:
+format AltStore and SideStore use. ModStaller comes with these - mostly the
+official sources of open source or free projects:
 
 | Source | What's in it |
 |---|---|
@@ -446,6 +445,13 @@ More sources are added under *Store › Sources* by URL (https only). Sources
 you add are your responsibility: ModStaller shows what they list and does
 not check it - only install apps you are allowed to use.
 
+* **Only what fits.** The store shows the apps that run on the selected
+  device - iPhone, iPad, iPod touch, Apple TV or Vision Pro - and its system
+  version (*Show all* shows the rest). Sources rarely say which devices an
+  app is for, so ModStaller reads that from the IPA itself: a few kilobytes
+  of its `Info.plist` via HTTP range requests, not the whole download, and
+  only once per version. Where a newer version needs a newer iOS, an older
+  one from another source is offered instead.
 * **One app, one entry.** Many apps are in several sources. The store shows
   each once - the newest version speaks for it - and the detail view lets
   you pick the source to download from.
