@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { Zap, RefreshCw, Trash2, Download, TriangleAlert, Package, LoaderCircle } from "@lucide/svelte";
+  import { Zap, RefreshCw, Trash2, Download, TriangleAlert, Package, LoaderCircle, ArrowUpCircle } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import ExpiryRing from "../components/ExpiryRing.svelte";
-  import { busy, errorText, go, onDevice, ui } from "../lib/state.svelte";
+  import { busy, errorText, go, onDevice, storeUpdateFor, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import { basename, date, days } from "../lib/format";
-  import { enableJit, refreshApps, uninstallApp } from "../lib/actions";
+  import { enableJit, refreshApps, storeUpdate, uninstallApp } from "../lib/actions";
   import { t } from "../lib/i18n.svelte";
   import { jitAvailable } from "../lib/device";
   import type { SideloadedApp } from "../lib/types";
@@ -111,6 +111,13 @@
           {#if jit}
             <button class="btn sm" disabled={busy() || noDevice} onclick={() => enableJit(app)}>
               <Zap size={15} /> JIT
+            </button>
+          {/if}
+          {#if storeUpdateFor(app.bundleId)}
+            {@const upd = storeUpdateFor(app.bundleId)!}
+            <button class="btn sm primary" disabled={busy() || noDevice} onclick={() => storeUpdate(upd)}
+                    title={t("{from} → {to}", { from: upd.installed || "?", to: upd.offered })}>
+              <ArrowUpCircle size={15} /> {t("Update")}
             </button>
           {/if}
           <button class="btn sm" disabled={busy() || noDevice || app.sourceMissing} onclick={() => refreshApps(app)}>

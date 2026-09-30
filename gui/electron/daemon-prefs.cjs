@@ -15,6 +15,8 @@ const DEFAULTS = Object.freeze({
   autoRefresh: true,
   refreshHoursBefore: 24,
   autoUpdate: true,
+  // Store-Apps beim Erneuern auf die neueste Version ihrer Quelle bringen.
+  storeAutoUpdate: true,
   // Sprache der Benachrichtigungen - die Oberflaeche meldet sie (siehe
   // daemon-i18n.cjs). null: noch nie gemeldet, dann Englisch.
   language: null,
@@ -38,7 +40,7 @@ function clamp(value, [lo, hi], fallback) {
 function sanitize(raw, base = DEFAULTS) {
   const out = { ...base };
   if (!raw || typeof raw !== "object") return out;
-  for (const key of ["autostart", "closeToTray", "remind", "autoRefresh", "autoUpdate"]) {
+  for (const key of ["autostart", "closeToTray", "remind", "autoRefresh", "autoUpdate", "storeAutoUpdate"]) {
     if (typeof raw[key] === "boolean") out[key] = raw[key];
   }
   for (const [key, range] of Object.entries(LIMITS)) {

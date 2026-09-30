@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     LayoutGrid, Download, Package, UserRound, Smartphone, ScrollText, Stethoscope, SlidersHorizontal, LoaderCircle,
-    Wifi, Usb, Tv, Plus,
+    Wifi, Usb, Tv, Plus, Store,
   } from "@lucide/svelte";
   import PhoneMockup from "./PhoneMockup.svelte";
   import DeviceIcon from "./DeviceIcon.svelte";
@@ -15,6 +15,7 @@
   const items = $derived<{ view: View; label: string; icon: typeof LayoutGrid }[]>([
     { view: "overview", label: t("Overview"), icon: LayoutGrid },
     { view: "install", label: t("Install"), icon: Download },
+    { view: "store", label: t("Store"), icon: Store },
     { view: "apps", label: t("Apps"), icon: Package },
     { view: "account", label: t("Account"), icon: UserRound },
     { view: "device", label: t("Device"), icon: Smartphone },
@@ -58,6 +59,9 @@
         <span>{item.label}</span>
         {#if item.view === "apps" && urgentCount}
           <span class="badge">{urgentCount}</span>
+        {/if}
+        {#if item.view === "store" && ui.storeUpdates.length}
+          <span class="badge">{ui.storeUpdates.length}</span>
         {/if}
         {#if item.view === "device" && checkProblems}
           <span class="badge bad">{checkProblems}</span>

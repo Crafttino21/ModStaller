@@ -48,3 +48,9 @@ test("only plausible language codes are kept", () => {
   assert.equal(sanitize({ language: "pt-BR" }).language, "pt-BR");
   assert.equal(sanitize({ language: "../../etc" }).language, null);
 });
+
+test("store apps are updated while renewing unless switched off", () => {
+  assert.equal(DEFAULTS.storeAutoUpdate, true);
+  assert.equal(sanitize({ storeAutoUpdate: false }).storeAutoUpdate, false);
+  assert.equal(sanitize({ storeAutoUpdate: "no" }).storeAutoUpdate, true);
+});

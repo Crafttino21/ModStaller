@@ -183,6 +183,92 @@ export interface InstallChoice {
   extensions?: string[];
   spareAppId?: string;
   account?: string;
+  /** Die IPA kam aus dem Store - fuer spaetere Update-Hinweise. */
+  store?: StoreOrigin;
+}
+
+/** Woher eine IPA im Store stammt. */
+export interface StoreOrigin {
+  source: string;
+  bundleId: string;
+  version: string;
+}
+
+/** Ein Eintrag aus "store.list". */
+export interface StoreApp {
+  source: string;
+  name: string;
+  bundleId: string;
+  version: string;
+  developer: string;
+  date: string;
+  size: number;
+  iconUrl: string;
+  subtitle: string;
+  category: string;
+  minOs: string;
+  tint: string;
+  /** "jailbreak", "exploit", "store" - oder leer (modstaller/store/risk.py). */
+  warning: "" | "jailbreak" | "exploit" | "store";
+  /** In wie vielen Quellen es diese App gibt ("store.list"). */
+  offers?: number;
+}
+
+/** Ein Angebot derselben App aus einer Quelle. */
+export interface StoreOffer {
+  source: string;
+  version: string;
+  size: number;
+  date: string;
+}
+
+export interface StoreVersion {
+  version: string;
+  date: string;
+  download_url: string;
+  size: number;
+  min_os: string;
+  sha256: string;
+  notes: string;
+}
+
+/** "store.app": alles fuer die Detailansicht. */
+export interface StoreAppDetail extends Omit<StoreApp, "offers"> {
+  description: string;
+  screenshots: string[];
+  versions: StoreVersion[];
+  /** Alle Quellen mit dieser App, das beste Angebot zuerst. */
+  offers: StoreOffer[];
+}
+
+export interface StoreList {
+  total: number;
+  items: StoreApp[];
+  categories: string[];
+}
+
+export interface StoreSource {
+  url: string;
+  enabled: boolean;
+  name: string;
+  iconUrl: string;
+  subtitle: string;
+  apps: number;
+  fetchedAt: number | null;
+  error: string;
+  /** Hinweis zur Quelle, z. B. "jailbreak": fuehrt auch Jailbreak-Tools. */
+  notice: string;
+}
+
+/** Eine installierte Store-App mit neuerer Version in ihrer Quelle. */
+export interface StoreUpdate {
+  bundleId: string;
+  name: string;
+  installed: string;
+  offered: string;
+  source: string;
+  storeBundleId: string;
+  size: number;
 }
 
 export interface InstallOutcome {
@@ -193,6 +279,8 @@ export interface InstallOutcome {
   strippedExtensions: boolean;
   keptExtensions: number;
   newAppIds: number;
+  /** Beim Erneuern auf diese Store-Version aktualisiert - sonst leer. */
+  updatedTo?: string;
 }
 
 export interface JitResult {
@@ -328,6 +416,8 @@ export interface DaemonPrefs {
   autoRefresh: boolean;
   refreshHoursBefore: number;
   autoUpdate: boolean;
+  /** Store-Apps beim Erneuern auf die neueste Version ihrer Quelle bringen. */
+  storeAutoUpdate: boolean;
   language: string | null;
   /** Kann diese Kopie mit dem System starten (nicht in der Entwicklung,
    *  nicht aus einer entpackten AppImage)? */

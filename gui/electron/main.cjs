@@ -858,12 +858,18 @@ async function runRefreshes(apps) {
     setRefreshing({ bundleId: a.bundleId, name: a.name });
     log(`Hintergrund: erneuere ${a.bundleId}`);
     try {
-      const [outcome] = await backendCall("refresh", { bundleId: a.bundleId });
+      const [outcome] = await backendCall("refresh", {
+        bundleId: a.bundleId, storeUpdates: prefs().storeAutoUpdate,
+      });
       memory = scheduler.onRefreshResult(memory, a, null, Date.now()).memory;
       if (outcome) {
         const until = Date.now() + outcome.daysValid * scheduler.DAY;
-        notify(tr("{name} renewed", { name: a.name }),
-          tr("Valid until {date}.", { date: i18n.date(prefs().language, until) }));
+        const valid = tr("Valid until {date}.", { date: i18n.date(prefs().language, until) });
+        if (outcome.updatedTo) {
+          notify(tr("{name} updated to {version}", { name: a.name, version: outcome.updatedTo }), valid);
+        } else {
+          notify(tr("{name} renewed", { name: a.name }), valid);
+        }
       }
     } catch (err) {
       const r = scheduler.onRefreshResult(memory, a, err, Date.now());
@@ -1130,11 +1136,46 @@ function registerSetupIpc() {
 // stattdessen das Fenster des ersten nach vorn. Das Setup ist davon
 // ausgenommen - es ersetzt ja gerade die laufende Kopie.
 const PRIMARY = MODE === "setup" || app.requestSingleInstanceLock();
+
+/**
+ * Fingerabdruck der eigenen Programmdateien. Laeuft die App im Tray weiter,
+ * waehrend eine neue Version darueber installiert wird (Setup, Windows-
+ * Installer von Hand), holte ein Neustart sonst nur das Fenster der alten
+ * Instanz nach vorn - samt altem Code. Hat sich der Fingerabdruck seit dem
+ * Start geaendert, startet sie sich stattdessen neu.
+ */
+function installStamp() {
+  if (!app.isPackaged) return null;
+  try {
+    // original-fs: das normale fs haelt app.asar fuer einen Ordner.
+    const st = require("original-fs").statSync(path.join(process.resourcesPath, "app.asar"));
+    return `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+const STARTED_STAMP = PRIMARY ? installStamp() : null;
+
+function relaunchReplaced(background) {
+  log("Die Programmdateien wurden ersetzt - starte die neue Version.");
+  const args = background ? [autostart.BACKGROUND_ARG] : [];
+  // Die installierte Linux-Kopie ueber ihren Starter (AppRun kuemmert sich
+  // um die Sandbox), sonst die ausfuehrbare Datei selbst.
+  const launcher = MODE === "installed" ? linuxInstall().paths().launcher : null;
+  app.relaunch(launcher && fs.existsSync(launcher) ? { execPath: launcher, args } : { args });
+  app.quit();
+}
+
 if (!PRIMARY) {
   app.quit();
 } else if (MODE !== "setup") {
   app.on("second-instance", (_e, argv) => {
-    if (!argv.includes(autostart.BACKGROUND_ARG)) showWindow();
+    const background = argv.includes(autostart.BACKGROUND_ARG);
+    if (STARTED_STAMP && installStamp() !== STARTED_STAMP) {
+      relaunchReplaced(background);
+      return;
+    }
+    if (!background) showWindow();
   });
 }
 

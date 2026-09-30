@@ -16,10 +16,11 @@
   import System from "./views/System.svelte";
   import Log from "./views/Log.svelte";
   import Settings from "./views/Settings.svelte";
+  import Store from "./views/Store.svelte";
   import { go, toast, ui } from "./lib/state.svelte";
   import { t } from "./lib/i18n.svelte";
 
-  const views = { overview: Overview, install: Install, apps: Apps, account: Account,
+  const views = { overview: Overview, install: Install, store: Store, apps: Apps, account: Account,
                   device: Device, log: Log, system: System, settings: Settings };
   const View = $derived(views[ui.view]);
 

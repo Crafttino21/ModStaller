@@ -1,10 +1,11 @@
 // Die Vorgaenge, die man von mehreren Stellen aus starten kann.
 
-import { ask, chooseDevice, onDevice, runTask, toast } from "./state.svelte";
+import { ask, chooseDevice, go, onDevice, runTask, toast, ui } from "./state.svelte";
 import { call } from "./rpc";
 import { t } from "./i18n.svelte";
 import type {
-  Account, App, DeviceCheck, FixResult, InstallChoice, InstallOutcome, JitResult, PairableTv, UsbSetupResult,
+  Account, App, DeviceCheck, FixResult, InstallChoice, InstallOutcome, JitResult, PairableTv,
+  StoreApp, StoreOrigin, StoreUpdate, UsbSetupResult,
 } from "./types";
 
 /** Mehr braucht es nicht, um eine App anzusprechen - so gehen auch die
@@ -27,6 +28,42 @@ export function installIpa(path: string, name: string, choice: InstallChoice = {
         ...(o.daysValid < 10 ? [t("Renew before it expires, from the overview or under “Apps”.")] : []),
       ],
     }));
+}
+
+// -- Store ---------------------------------------------------------------------
+
+/** Laden und installieren in einem Rutsch - mit den Standardwerten des
+ *  Install-Editors. */
+export function storeInstall(app: Pick<StoreApp, "source" | "bundleId" | "name">, version?: string) {
+  runTask<InstallOutcome>("install", t("Install {name}", { name: app.name }), "store.install",
+    onDevice({ source: app.source, bundleId: app.bundleId, ...(version ? { version } : {}) }),
+    (o) => ({
+      message: t("{name} is installed and runs for {days} days.",
+                 { name: o.name, days: Math.round(o.daysValid) }),
+      notes: [
+        ...(o.strippedExtensions ? [t("App extensions were removed to save App IDs.")] : []),
+        ...(o.daysValid < 10 ? [t("Renew before it expires, from the overview or under “Apps”.")] : []),
+      ],
+    }));
+}
+
+/** Eine installierte Store-App auf die neue Version bringen - gleiche
+ *  Bundle-ID, die Daten bleiben. */
+export function storeUpdate(update: StoreUpdate) {
+  storeInstall({ source: update.source, bundleId: update.storeBundleId, name: update.name }, update.offered);
+}
+
+/** Nur laden und im Install-Editor oeffnen - fuer Name, Icon, Extensions. */
+export function storeCustomize(app: Pick<StoreApp, "source" | "bundleId" | "name">, version?: string) {
+  runTask<{ path: string; store: StoreOrigin }>("install", t("Download {name}", { name: app.name }),
+    "store.download", { source: app.source, bundleId: app.bundleId, ...(version ? { version } : {}) },
+    (r) => {
+      ui.storeOrigin = { ...r.store, path: r.path };
+      ui.droppedIpa = r.path;
+      ui.task = null;
+      go("install");
+      return { message: t("{name} is downloaded - adjust it and install.", { name: app.name }) };
+    });
 }
 
 /** Ohne App: alle faelligen. */

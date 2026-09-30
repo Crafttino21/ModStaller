@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { Languages, Check, FlaskConical, TriangleAlert, BellRing } from "@lucide/svelte";
+  import { Languages, Check, FlaskConical, TriangleAlert, BellRing, Store as StoreIcon } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import { LANGUAGES, locale, setLocale, t } from "../lib/i18n.svelte";
-  import { applyLanguage, ui } from "../lib/state.svelte";
+  import { applyLanguage, errorText, toast, ui } from "../lib/state.svelte";
+  import { call } from "../lib/rpc";
+  import { mb } from "../lib/format";
   import type { DaemonPrefs } from "../lib/types";
 
   // -- Update-Kanal ----------------------------------------------------------
@@ -30,6 +32,21 @@
   function setNumber(key: "remindDaysBefore" | "refreshHoursBefore", value: string) {
     const n = Number(value);
     if (Number.isFinite(n)) setDaemon({ [key]: n });
+  }
+
+  // -- Store-Cache ------------------------------------------------------------
+  let clearing = $state(false);
+
+  async function clearStoreCache() {
+    clearing = true;
+    try {
+      const r = await call<{ removedIpas: number; freedBytes: number }>("store.cache.clear");
+      toast(t("{size} freed ({count} IPAs removed).", { size: mb(r.freedBytes), count: r.removedIpas }));
+    } catch (err) {
+      toast(errorText(err), "bad");
+    } finally {
+      clearing = false;
+    }
   }
 
   function pick(code: string) {
@@ -125,6 +142,16 @@
     </div>
   </label>
 
+  <label class="toggle">
+    <input type="checkbox" checked={daemon.storeAutoUpdate}
+           onchange={(e) => setDaemon({ storeAutoUpdate: e.currentTarget.checked })} />
+    <span class="switch"></span>
+    <div>
+      <div>{t("Update store apps while renewing")}</div>
+      <div class="faint small">{t("Apps from the store are brought to the newest version of their source when they are renewed – same bundle ID, the app's data stays.")}</div>
+    </div>
+  </label>
+
   <label class="toggle" class:off={!updatesSupported}>
     <input type="checkbox" checked={daemon.autoUpdate && updatesSupported} disabled={!updatesSupported}
            onchange={(e) => setDaemon({ autoUpdate: e.currentTarget.checked })} />
@@ -149,6 +176,14 @@
   {/if}
 </div>
 {/if}
+
+<div class="card pad">
+  <h2><StoreIcon size={18} /> {t("Store")}</h2>
+  <p class="muted desc">
+    {t("Downloaded IPAs stay so apps can be renewed later. Clearing removes pictures and every IPA no installed app needs.")}
+  </p>
+  <button class="btn sm cache-btn" disabled={clearing} onclick={clearStoreCache}>{t("Clear store cache")}</button>
+</div>
 
 <div class="card pad">
   <h2><FlaskConical size={18} /> {t("Updates")}</h2>
@@ -212,4 +247,5 @@
           text-overflow: ellipsis; white-space: nowrap; }
   .code { font-family: var(--mono); font-size: 11.5px; color: var(--text-3); }
   .tiny { margin-top: 14px; font-size: 12px; }
+  .cache-btn { margin-top: 14px; }
 </style>

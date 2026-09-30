@@ -1,0 +1,162 @@
+{
+ "name": "AltStore",
+ "identifier": "com.rileytestut.AltStore",
+ "subtitle": "A home for apps that push the boundaries of iOS.",
+ "website": "https://altstore.io",
+ "apps": [
+  {
+   "name": "AltStore",
+   "bundleIdentifier": "com.rileytestut.AltStore",
+   "developerName": "Riley Testut",
+   "versions": [
+    {
+     "version": "2.3",
+     "date": "2026-09-14T12:00:00-04:00",
+     "localizedDescription": "NEW\n\nRemote AltServer\n• Supports sideloading apps without a computer\n• Install, refresh, and (de-)activate apps from any",
+     "downloadURL": "https://cdn.altstore.io/file/altstore/apps/altstore/2_3.ipa",
+     "size": 40649417,
+     "sha256": "e39b8728299d4fe50818fac36dba9cd025065818e91755eade486f7f9a897742",
+     "minOSVersion": "17.4"
+    },
+    {
+     "version": "2.2.2",
+     "date": "2026-09-08T15:00:00-05:00",
+     "localizedDescription": "⚠️ You must manually install this update by re-installing AltStore with AltServer. You do NOT need to delete AltStore fi",
+     "downloadURL": "https://cdn.altstore.io/file/altstore/apps/altstore/2_2_2.ipa",
+     "size": 32770196,
+     "sha256": "afa85752546e3f775aacb7dc747bb1d45764634cbb607f44e50570ee536ab6e7",
+     "minOSVersion": "14.0"
+    }
+   ],
+   "version": "1.6.3",
+   "versionDate": "2023-04-12T12:00:00-05:00",
+   "versionDescription": "• Fixed error fetching Friend Zone patrons due to unexpected nil name\n• Fixed incorrect cell height for some News items",
+   "downloadURL": "https://cdn.altstore.io/file/altstore/apps/altstore/1_6_3.ipa",
+   "localizedDescription": "AltStore is an alternative app store for non-jailbroken devices. \n\nThis version of AltStore allows you to install Delta, an all-in-one emulator for iOS, as well as sideload other .ipa files from the F",
+   "iconURL": "https://user-images.githubusercontent.com/705880/65270980-1eb96f80-dad1-11e9-9367-78ccd25ceb02.png",
+   "tintColor": "018084",
+   "size": 5625134,
+   "category": "utilities",
+   "screenshots": [
+    "https://user-images.githubusercontent.com/705880/277757391-76c02f48-be2a-485a-ba75-277480c99356.jpeg",
+    "https://user-images.githubusercontent.com/705880/277757303-ee0b7695-0e7d-4a93-8b25-4fbbbd3cb745.PNG",
+    "https://user-images.githubusercontent.com/705880/277757263-ef612879-0314-4464-a8f4-103e1f22fbb1.png",
+    "https://user-images.githubusercontent.com/705880/277757445-450618d1-6005-445e-bfd4-7c75387e990b.PNG",
+    "https://user-images.githubusercontent.com/705880/277757220-ebbf42dc-5153-4e2d-9ff4-4c25ad367941.PNG",
+    "https://user-images.githubusercontent.com/705880/277757419-f8067301-61f3-4eae-bbd1-be1bf2a1c05c.PNG"
+   ],
+   "screenshotURLs": [
+    "https://user-images.githubusercontent.com/705880/78942028-acf54300-7a6d-11ea-821c-5bb7a9b3e73a.PNG",
+    "https://user-images.githubusercontent.com/705880/78942222-0fe6da00-7a6e-11ea-9f2a-dda16157583c.PNG",
+    "https://user-images.githubusercontent.com/705880/65605577-332cba80-df5e-11e9-9f00-b369ce974f71.PNG"
+   ]
+  },
+  {
+   "name": "AltStore",
+   "bundleIdentifier": "com.rileytestut.AltStore.Beta",
+   "developerName": "Riley Testut",
+   "subtitle": "An alternative App Store for iOS.",
+   "versions": [
+    {
+     "version": "2.3rc",
+     "date": "2026-09-11T14:00:00-04:00",
+     "localizedDescription": "NEW\n\nRemote AltServer Onboarding\n• New in-app guide to easily set up on-device sideloading\n• Get started in seconds with",
+     "downloadURL": "https://cdn.altstore.io/file/altstore/apps/altstore/2_3_rc.ipa",
+     "size": 40652725,
+     "sha256": "f03a2a39e0bede08682a27716b11263a7c4c6616ff157c6026ea06629c0de919",
+     "minOSVersion": "17.4"
+    },
+    {
+     "version": "2.3b3",
+     "date": "2026-09-08T15:00:00-05:00",
+     "localizedDescription": "⚠️ You must manually install this update by re-installing AltStore with AltServer. You do NOT need to delete AltStore fi",
+     "downloadURL": "https://cdn.altstore.io/file/altstore/apps/altstore/2_3_b3.ipa",
+     "size": 35905742,
+     "sha256": "449ad3ed6c95e477c9d05b4bdf67af0cb6dc6fa53ee8bf37e6b1bcc54bd089d1",
+     "minOSVersion": "17.4"
+    }
+   ],
+   "version": "1.6.2b",
+   "versionDate": "2023-03-21T12:00:00-05:00",
+   "versionDescription": "This beta fixes the \"no provisioning profile with the requested identifier…\" error when sideloading or refreshing apps.\n\n⚠️ You must manually install this update by downloading the latest AltServer beta from Patreon and using it to re-reinstall AltStore. You do not need to delete AltStore first.",
+   "downloadURL": "https://cdn.altstore.io/file/altstore/apps/altstore/1_6_2_b.ipa",
+   "localizedDescription": "AltStore is an alternative app store for non-jailbroken devices. \n\nThis beta release of AltStore adds support for 3rd party sources, allowing you to download apps from other developers directly throug",
+   "iconURL": "https://user-images.githubusercontent.com/705880/65270980-1eb96f80-dad1-11e9-9367-78ccd25ceb02.png",
+   "tintColor": "018084",
+   "size": 5624104,
+   "category": "utilities",
+   "beta": true,
+   "patreon": {
+    "pledge": 3,
+    "benefit": "1186336",
+    "hidden": true
+   },
+   "screenshots": [
+    "https://user-images.githubusercontent.com/705880/277757361-da7fcafa-6fc7-4b2b-90c9-debaddf80954.PNG",
+    "https://user-images.githubusercontent.com/705880/277757303-ee0b7695-0e7d-4a93-8b25-4fbbbd3cb745.PNG",
+    "https://user-images.githubusercontent.com/705880/277757263-ef612879-0314-4464-a8f4-103e1f22fbb1.png",
+    "https://user-images.githubusercontent.com/705880/277757445-450618d1-6005-445e-bfd4-7c75387e990b.PNG",
+    "https://user-images.githubusercontent.com/705880/277757220-ebbf42dc-5153-4e2d-9ff4-4c25ad367941.PNG",
+    "https://user-images.githubusercontent.com/705880/277757419-f8067301-61f3-4eae-bbd1-be1bf2a1c05c.PNG"
+   ],
+   "screenshotURLs": [
+    "https://user-images.githubusercontent.com/705880/78942028-acf54300-7a6d-11ea-821c-5bb7a9b3e73a.PNG",
+    "https://user-images.githubusercontent.com/705880/78942222-0fe6da00-7a6e-11ea-9f2a-dda16157583c.PNG",
+    "https://user-images.githubusercontent.com/705880/65605577-332cba80-df5e-11e9-9f00-b369ce974f71.PNG"
+   ]
+  },
+  {
+   "name": "Delta",
+   "bundleIdentifier": "com.rileytestut.Delta",
+   "developerName": "Riley Testut",
+   "subtitle": "Classic games in your pocket.",
+   "versions": [
+    {
+     "version": "1.7.1",
+     "buildVersion": "139",
+     "date": "2025-04-08T14:00:00-05:00",
+     "localizedDescription": "This update fixes compatibility with certain N64 games.\n\nPREVIOUS UPDATE\n\nNEW\n\nOnline Multiplayer\n• Play online-compatib",
+     "downloadURL": "https://cdn.altstore.io/file/altstore/apps/delta/1_7_1.ipa",
+     "size": 196023694,
+     "minOSVersion": "14.0"
+    },
+    {
+     "version": "1.7",
+     "buildVersion": "137",
+     "date": "2025-03-31T12:00:00-05:00",
+     "localizedDescription": "NEW\n\nOnline Multiplayer\n• Play online-compatible Nintendo DS games with friends around the world!\n• Connect via communit",
+     "downloadURL": "https://cdn.altstore.io/file/altstore/apps/delta/1_7.ipa",
+     "size": 196022883,
+     "minOSVersion": "14.0"
+    }
+   ],
+   "version": "1.4.2",
+   "versionDate": "2023-09-19T12:30:00-05:00",
+   "versionDescription": "• Fixed crash when loading save states on iOS 17\n• Fixed displaying system name in dark text when remapping inputs on iOS 17",
+   "downloadURL": "https://cdn.altstore.io/file/altstore/apps/delta/1_4_2.ipa",
+   "localizedDescription": "Delta is an all-in-one emulator for iOS. Delta builds upon the strengths of its predecessor, GBA4iOS, while expanding to include support for more game systems such as NES, SNES, and N64.\n\nFEATURES\n\nSu",
+   "iconURL": "https://cdn.altstore.io/file/altstore/images/delta/Delta4.png",
+   "tintColor": "8A28F7",
+   "size": 46319655,
+   "category": "games",
+   "screenshotURLs": [
+    "https://user-images.githubusercontent.com/705880/65600448-f7d9be00-df54-11e9-9e3e-d4c31296da94.PNG",
+    "https://user-images.githubusercontent.com/705880/65813009-f2ae8600-e183-11e9-9eb7-704effc11173.png",
+    "https://user-images.githubusercontent.com/705880/65601117-58b5c600-df56-11e9-9c19-9a5ba5da54cf.PNG",
+    "https://user-images.githubusercontent.com/705880/65601125-5b182000-df56-11e9-9e7e-261480e893c0.PNG"
+   ],
+   "screenshots": [
+    "https://user-images.githubusercontent.com/705880/277049094-8458028c-92e0-4e73-99de-5dd865b76487.PNG",
+    "https://user-images.githubusercontent.com/705880/277049686-975b9d37-140a-481e-8668-765acdd1dedb.PNG",
+    {
+     "imageURL": "https://user-images.githubusercontent.com/705880/277049716-5d043eac-4cf2-46c9-8dfe-daefc40d0325.PNG",
+     "width": 2556,
+     "height": 1179
+    },
+    "https://user-images.githubusercontent.com/705880/277049074-15aabbaf-58f3-4609-b578-60ac7539ced0.PNG",
+    "https://user-images.githubusercontent.com/705880/277049050-e0d90f06-1f38-4736-8c1b-d41ec45d201b.PNG",
+    "https://user-images.githubusercontent.com/705880/277049040-a4dcc9d0-561d-4f1e-87cb-ff03e542a6d7.png"
+   ]
+  }
+ ]
+}

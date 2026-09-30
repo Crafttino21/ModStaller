@@ -9,9 +9,11 @@
 
 import { call, failAll, handle, on, onReady, RpcError, start, type Call } from "./rpc";
 import { locale, t } from "./i18n.svelte";
-import type { BackendExit, DaemonState, DeviceCheck, LogEntry, Status, UpdateState } from "./types";
+import type {
+  BackendExit, DaemonState, DeviceCheck, LogEntry, Status, StoreOrigin, StoreUpdate, UpdateState,
+} from "./types";
 
-export type View = "overview" | "install" | "apps" | "account" | "device" | "log" | "system" | "settings";
+export type View = "overview" | "install" | "store" | "apps" | "account" | "device" | "log" | "system" | "settings";
 export type TaskKind = "install" | "refresh" | "jit" | "uninstall" | "fix";
 export type TaskState = "running" | "done" | "error" | "cancelled";
 
@@ -72,6 +74,10 @@ export const ui = $state({
   confirm: null as Confirm | null,
   /** Per Drag & Drop irgendwo ins Fenster gezogene IPA. */
   droppedIpa: null as string | null,
+  /** Die IPA, die der Install-Editor gerade bekommt, kam aus dem Store. */
+  storeOrigin: null as (StoreOrigin & { path: string }) | null,
+  /** Installierte Store-Apps mit neuerer Version. */
+  storeUpdates: [] as StoreUpdate[],
   /** Neue Version aus den GitHub-Releases (nur in der AppImage). */
   update: { state: "unsupported" } as UpdateState,
   /** Was der Hintergrund (Tray) gerade tut - etwa eine App erneuern. */
@@ -272,6 +278,8 @@ export function runTask<T>(
   ).finally(async () => {
     await refreshStatus(true);
     if (ui.status?.deviceAttached) refreshChecks();
+    // Installiert oder erneuert: vielleicht ist ein Update-Hinweis erledigt.
+    refreshStoreUpdates(true);
   });
 }
 
@@ -332,6 +340,7 @@ function markReady() {
   applyLanguage();
   refreshStatus(true);
   loadLog();
+  refreshStoreUpdates(true);
 }
 
 // -- Protokoll -----------------------------------------------------------------
@@ -405,6 +414,31 @@ export function restartBackend() {
 
 window.updates.get().then((s) => (ui.update = s));
 window.updates.onState((s) => (ui.update = s));
+
+// -- Store-Updates -----------------------------------------------------------
+//
+// Welche installierten Store-Apps eine neuere Version haben. Die Quellen
+// fragt das Backend nur alle paar Stunden ab - hier reicht es, nach einem
+// Vorgang und hoechstens alle zehn Minuten nachzusehen.
+
+const STORE_UPDATES_EVERY = 10 * 60 * 1000;
+let storeUpdatesAt = 0;
+
+export async function refreshStoreUpdates(force = false) {
+  if (ui.backend !== "ready") return;
+  if (!force && Date.now() - storeUpdatesAt < STORE_UPDATES_EVERY) return;
+  storeUpdatesAt = Date.now();
+  try {
+    ui.storeUpdates = await call<StoreUpdate[]>("store.updates");
+  } catch {
+    // Keine Quelle erreichbar - dann eben keine Hinweise.
+  }
+}
+
+/** Das Update fuer eine installierte App - oder undefined. */
+export function storeUpdateFor(bundleId: string): StoreUpdate | undefined {
+  return ui.storeUpdates.find((u) => u.bundleId === bundleId);
+}
 
 // -- Hintergrund -------------------------------------------------------------
 

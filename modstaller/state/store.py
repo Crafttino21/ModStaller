@@ -44,6 +44,11 @@ class InstallRecord:
     kept_extensions: list[str] | None = None
     #: "ios" or "tvos" - older records are all iOS.
     platform: str = "ios"
+    #: Installed from the store: which source, which entry, which version.
+    #: Empty for IPAs from disk. Lets the store offer updates.
+    store_source: str = ""
+    store_bundle_id: str = ""
+    store_version: str = ""
 
     @property
     def days_left(self) -> float:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import shutil
 import time
 from dataclasses import dataclass
@@ -25,6 +27,8 @@ from .signing import ipa as ipa_mod
 from .signing.signer import SignRequest, sign
 from .state import store
 
+log = logging.getLogger(__name__)
+
 
 @dataclass
 class InstallOutcome:
@@ -35,6 +39,8 @@ class InstallOutcome:
     stripped_extensions: bool
     kept_extensions: int = 0
     new_app_ids: int = 0
+    #: The store version a renewal updated the app to - empty if none.
+    updated_to: str = ""
 
 
 def _ipa_mismatch(ipa_platform: str, device_platform: str) -> str:
@@ -73,6 +79,18 @@ def incompatibility(info, dev) -> str | None:
     return None
 
 
+def _store_fields(origin: dict | None, renewing) -> dict:
+    if origin:
+        return {"store_source": str(origin.get("source") or ""),
+                "store_bundle_id": str(origin.get("bundleId") or ""),
+                "store_version": str(origin.get("version") or "")}
+    if renewing is not None:
+        return {"store_source": renewing.store_source,
+                "store_bundle_id": renewing.store_bundle_id,
+                "store_version": renewing.store_version}
+    return {}
+
+
 def _say(msg: str) -> None:
     print(msg, flush=True)
 
@@ -92,10 +110,15 @@ async def install(
     icon: Path | None = None,
     keep_extensions: list[str] | None = None,
     spare_app_id: str | None = None,
+    store_origin: dict | None = None,
     progress: Callable[[int], None] | None = None,
     on_step: Callable[[str], None] = _say,
 ) -> InstallOutcome:
     """Signs and installs ``ipa_path``.
+
+    ``store_origin`` (``{source, bundleId, version}``): the IPA came from
+    the store - remembered, so the store can offer updates. A renewal keeps
+    the origin of the app it renews unless a new one is given.
 
     ``bundle_id`` pins the identifier on the device instead of deriving it
     from the IPA - a renewal must hit exactly the app that is installed,
@@ -291,6 +314,7 @@ async def install(
             display_name=display_name or "",
             icon_path=kept_icon,
             kept_extensions=keep,
+            **_store_fields(store_origin, renewing),
         ))
 
     return InstallOutcome(bundle_id=new_id, name=display_name or info.name,
@@ -307,6 +331,7 @@ async def refresh(
     settings: Settings | None = None,
     threshold_days: float | None = None,
     only: str | None = None,
+    store_updates: bool = False,
     progress: Callable[[int], None] | None = None,
     on_step: Callable[[str], None] = _say,
 ) -> list[InstallOutcome]:
@@ -317,6 +342,10 @@ async def refresh(
     Those can differ (a recycled App ID, a newer IPA with a new ID), and a
     different ID is a second app to iOS: installed next to the old one, with
     none of its data.
+
+    ``store_updates``: an app from the store is brought to the newest version
+    its source offers on the way - same bundle ID, so the data stays. If the
+    original IPA of a store app is gone, the store fetches it again anyway.
     """
     settings = settings or Settings.load()
     threshold = (settings.renew_threshold_days if threshold_days is None
@@ -337,6 +366,12 @@ async def refresh(
     results: list[InstallOutcome] = []
     for rec in due:
         source = Path(rec.source_ipa)
+        origin = None
+        if rec.store_bundle_id and (store_updates or not source.is_file()):
+            fetched = await asyncio.to_thread(
+                _store_ipa, rec, store_updates, on_step)
+            if fetched is not None:
+                source, origin = fetched
         if not source.is_file():
             on_step("\n" + _("{name}: original IPA missing ({path}) - skipped.",
                                    name=rec.name, path=source))
@@ -349,7 +384,7 @@ async def refresh(
             continue
         on_step("\n=== " + _("Renewing {name} ({expiry})",
                                    name=rec.name, expiry=rec.expiry_text) + " ===")
-        results.append(await install(
+        outcome = await install(
             source, udid=udid or rec.udid, team_id=rec.team_id,
             account=account,
             settings=settings, strip_extensions=rec.strip_extensions,
@@ -358,9 +393,42 @@ async def refresh(
             icon=(Path(rec.icon_path) if rec.icon_path
                   and Path(rec.icon_path).is_file() else None),
             keep_extensions=rec.kept_extensions,
+            store_origin=origin,
             progress=progress, on_step=on_step,
-        ))
+        )
+        if origin and origin["version"] != rec.store_version:
+            outcome.updated_to = origin["version"]
+        results.append(outcome)
     return results
+
+
+def _store_ipa(rec, update: bool, on_step) -> tuple[Path, dict] | None:
+    """The IPA a store app is renewed with: a newer version if ``update``,
+    else the installed one again (when its file is gone). None: keep what
+    there is - a store that cannot be reached must never stop a renewal."""
+    from .store import download as store_download
+    from .store.catalog import CATALOG
+    from .store.updates import newer
+
+    try:
+        CATALOG.ensure_loaded()
+        app = CATALOG.find(rec.store_bundle_id, rec.store_source)
+        if app is None:
+            return None
+        if update and newer(rec.store_version, app.version):
+            version = app.version
+            on_step("\n" + _("{name}: version {version} is available in the store - "
+                             "updating while renewing.", name=rec.name, version=version))
+        else:
+            version = rec.store_version or None
+        path = store_download.download(app, version)
+        return path, {"source": app.source_url, "bundleId": app.bundle_id,
+                      "version": version or app.version}
+    except Exception as exc:
+        log.warning("Store lookup for %s failed: %s", rec.bundle_id, exc)
+        on_step("\n" + _("{name}: the store is not reachable ({error}) - renewing "
+                         "the installed version.", name=rec.name, error=exc))
+        return None
 
 
 def account_for(rec: "store.InstallRecord") -> str | None:

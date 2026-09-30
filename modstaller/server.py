@@ -435,6 +435,21 @@ _ACTIONS: dict[str, _Action] = {
         lambda p: _("Pairing {name}", name=p.get("name") or p.get("host", "")),
         lambda p, r: (SUCCESS, _("{name} is paired.", name=r.get("name", ""))),
         lambda e: _("Pairing failed: {error}", error=e)),
+    "store.install": _Action(
+        logbook.INSTALL,
+        lambda p: _("Installing {bundle_id} from the store",
+                    bundle_id=p.get("bundleId", "")),
+        lambda p, r: (SUCCESS, _(
+            "{name} installed as {bundle_id} - valid for {days} days",
+            name=r["name"], bundle_id=r["bundleId"],
+            days=round(r["daysValid"]))),
+        lambda e: _("Installation failed: {error}", error=e)),
+    "store.sources.add": _Action(
+        logbook.SYSTEM,
+        lambda p: _("Adding the source {url}", url=p.get("url", "")),
+        lambda p, r: (SUCCESS, _("Source added: {name} ({count} apps)",
+                                 name=r.get("name", ""), count=r.get("apps", 0))),
+        lambda e: _("The source could not be added: {error}", error=e)),
     "device.forget": _Action(
         logbook.DEVICE, None,
         lambda p, r: (SUCCESS, _("Device forgotten.")),
@@ -592,7 +607,8 @@ def _outcome_dict(o) -> dict:
             "daysValid": o.days_valid,
             "strippedExtensions": o.stripped_extensions,
             "keptExtensions": o.kept_extensions,
-            "newAppIds": o.new_app_ids}
+            "newAppIds": o.new_app_ids,
+            "updatedTo": getattr(o, "updated_to", "")}
 
 
 def _udid_param(params: dict) -> str | None:
@@ -831,6 +847,7 @@ async def _install(server: Server, job: Job, params: dict):
             icon=icon, keep_extensions=_keep_param(params),
             spare_app_id=_text_param(params, "spareAppId"),
             udid=_udid_param(params),
+            store_origin=_store_origin(params),
             progress=job.progress, on_step=job.log))
     finally:
         if icon is not None:
@@ -956,6 +973,7 @@ async def _refresh(server: Server, job: Job, params: dict):
     from .pipeline import refresh
     results = await job.isolated(lambda: refresh(
         only=params.get("bundleId"), threshold_days=params.get("threshold"),
+        store_updates=bool(params.get("storeUpdates")),
         progress=job.progress, on_step=job.log))
     return [_outcome_dict(o) for o in results]
 
@@ -1367,6 +1385,159 @@ async def _device_wifi(server: Server, job: Job, params: dict):
         result = await job.isolated(lambda: wifi.disable(udid, on_step=job.log))
     server.device_cache.clear()
     return result
+
+
+# -- Store --------------------------------------------------------------------
+
+
+def _store_origin(params: dict) -> dict | None:
+    """``store`` from the install screen: the IPA came from the store."""
+    origin = params.get("store")
+    if not isinstance(origin, dict) or not origin.get("bundleId"):
+        return None
+    return {"source": str(origin.get("source") or ""),
+            "bundleId": str(origin["bundleId"]), "version": str(origin.get("version") or "")}
+
+
+def _store_app(params: dict):
+    """The entry of the given source - or, without one, the best offer."""
+    from .store.catalog import CATALOG
+    CATALOG.ensure_loaded()
+    bundle_id = _need(params, "bundleId")
+    source = _text_param(params, "source")
+    app = CATALOG.get(source, bundle_id) if source else CATALOG.find(bundle_id)
+    if app is None:
+        raise RpcError(INVALID_PARAMS, _("This app is not in the store (any more)."))
+    return app
+
+
+def _offers(app) -> list[dict]:
+    from .store.catalog import CATALOG
+    return [{"source": o.source_url, "version": o.version, "size": o.size, "date": o.date}
+            for o in CATALOG.offers(app.bundle_id)]
+
+
+def _store_download(job, app, version):
+    from .store import download as store_download
+    return store_download.download(app, version, progress=job.progress,
+                                   cancelled=lambda: job.cancelled)
+
+
+@method("store.sources")
+async def _store_sources(server: Server, job: Job, params: dict):
+    from .store.catalog import CATALOG
+    await asyncio.to_thread(CATALOG.ensure_loaded)
+    return CATALOG.sources()
+
+
+@method("store.sources.add")
+async def _store_sources_add(server: Server, job: Job, params: dict):
+    from .store import sources
+    from .store.catalog import CATALOG
+    url = sources.normalize(_need(params, "url"))
+    # Load first: a URL that is not a source never makes it into the list.
+    src = await asyncio.to_thread(sources.fetch, url, force=True)
+    sources.add(url)
+    await asyncio.to_thread(CATALOG.load, only=url)
+    return {"url": url, "name": src.name, "apps": len(src.apps)}
+
+
+@method("store.sources.remove")
+async def _store_sources_remove(server: Server, job: Job, params: dict):
+    from .store import sources
+    from .store.catalog import CATALOG
+    sources.remove(_need(params, "url"))
+    await asyncio.to_thread(CATALOG.load)
+    return CATALOG.sources()
+
+
+@method("store.sources.toggle")
+async def _store_sources_toggle(server: Server, job: Job, params: dict):
+    from .store import sources
+    from .store.catalog import CATALOG
+    sources.set_enabled(_need(params, "url"), bool(params.get("enabled")))
+    await asyncio.to_thread(CATALOG.load)
+    return CATALOG.sources()
+
+
+@method("store.refresh")
+async def _store_refresh(server: Server, job: Job, params: dict):
+    from .store.catalog import CATALOG
+    await asyncio.to_thread(CATALOG.load, force=True)
+    return CATALOG.sources()
+
+
+@method("store.list")
+async def _store_list(server: Server, job: Job, params: dict):
+    from .store.catalog import CATALOG
+    await asyncio.to_thread(CATALOG.ensure_loaded)
+    found = CATALOG.search(
+        _text_param(params, "query") or "", source=_text_param(params, "source"),
+        category=_text_param(params, "category"),
+        offset=params.get("offset") or 0, limit=params.get("limit") or 60)
+    return {"total": found["total"],
+            "items": [{**a.as_dict(), "offers": len(CATALOG.offers(a.bundle_id))}
+                      for a in found["items"]],
+            "categories": CATALOG.categories()}
+
+
+@method("store.app")
+async def _store_app_detail(server: Server, job: Job, params: dict):
+    app = await asyncio.to_thread(_store_app, params)
+    return {**app.as_dict(full=True), "offers": _offers(app)}
+
+
+@method("store.image")
+async def _store_image(server: Server, job: Job, params: dict):
+    from .store import images
+    kind = params.get("kind") if params.get("kind") in ("icon", "screenshot") else "icon"
+    return await asyncio.to_thread(images.image, _need(params, "url"), kind)
+
+
+@method("store.download")
+async def _store_download_method(server: Server, job: Job, params: dict):
+    """For "Customize": only the download - the install screen takes over."""
+    app = await asyncio.to_thread(_store_app, params)
+    version = _text_param(params, "version")
+    path = await asyncio.to_thread(_store_download, job, app, version)
+    return {"path": str(path), "store": {"source": app.source_url, "bundleId": app.bundle_id,
+                                         "version": version or app.version}}
+
+
+@method("store.install")
+async def _store_install(server: Server, job: Job, params: dict):
+    """Download and install in one go - with the install screen's defaults."""
+    from .pipeline import install
+    app = await asyncio.to_thread(_store_app, params)
+    version = _text_param(params, "version")
+    job.log(_("Downloading {name} {version} …", name=app.name, version=version or app.version))
+    path = await asyncio.to_thread(_store_download, job, app, version)
+    origin = {"source": app.source_url, "bundleId": app.bundle_id,
+              "version": version or app.version}
+    try:
+        outcome = await job.isolated(lambda: install(
+            path, account=_account_param(params), udid=_udid_param(params),
+            store_origin=origin, progress=job.progress, on_step=job.log))
+    finally:
+        server.apple_cache.clear()
+    return _outcome_dict(outcome)
+
+
+@method("store.updates")
+async def _store_updates(server: Server, job: Job, params: dict):
+    """Installed store apps with a newer version on offer."""
+    from .state import store
+    from .store.catalog import CATALOG
+    from .store.updates import available
+    await asyncio.to_thread(CATALOG.ensure_loaded)
+    return available(store.all_installs(), CATALOG.find)
+
+
+@method("store.cache.clear")
+async def _store_cache_clear(server: Server, job: Job, params: dict):
+    """Pictures and every downloaded IPA no installed app still needs."""
+    from .store import cache
+    return await asyncio.to_thread(cache.clear)
 
 
 @method("pair.browse")

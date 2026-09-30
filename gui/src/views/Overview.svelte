@@ -1,6 +1,6 @@
 <script lang="ts">
   import {
-    Smartphone, UserRound, TriangleAlert, RefreshCw, Zap, Download, ChevronRight, Lock,
+    Smartphone, UserRound, TriangleAlert, RefreshCw, Zap, Download, ChevronRight, Lock, ArrowUpCircle,
   } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import ExpiryRing from "../components/ExpiryRing.svelte";
@@ -9,10 +9,10 @@
   import BatteryLevel from "../components/BatteryLevel.svelte";
   import RecentActivity from "../components/RecentActivity.svelte";
   import UsbServiceBanner from "../components/UsbServiceBanner.svelte";
-  import { busy, go, ui } from "../lib/state.svelte";
+  import { busy, go, storeUpdateFor, ui } from "../lib/state.svelte";
   import { date, days } from "../lib/format";
   import { t } from "../lib/i18n.svelte";
-  import { enableJit, refreshApps } from "../lib/actions";
+  import { enableJit, refreshApps, storeUpdate } from "../lib/actions";
   import { deviceKind, jitAvailable, mockupHeight, networkOnly, osName, transportLabel } from "../lib/device";
 
   const st = $derived(ui.status);
@@ -130,6 +130,11 @@
           </div>
         </div>
         <div class="app-actions">
+          {#if storeUpdateFor(app.bundleId)}
+            {@const upd = storeUpdateFor(app.bundleId)!}
+            <button class="btn sm icon primary" disabled={busy() || !st.device} onclick={() => storeUpdate(upd)}
+                    title={t("Update to {version}", { version: upd.offered })}><ArrowUpCircle size={16} /></button>
+          {/if}
           {#if jitAvailable(st.device)}
             <button class="btn sm icon" title={t("Enable JIT")} disabled={busy() || !st.device}
                     onclick={() => enableJit(app)}><Zap size={16} /></button>

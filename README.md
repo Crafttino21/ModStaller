@@ -21,6 +21,7 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 [Roadmap](#roadmap) ·
 [Supported devices](#supported-devices) ·
 [Wi-Fi, Apple TV and Vision Pro](#wi-fi-apple-tv-and-vision-pro) ·
+[Store](#store) ·
 [Installation](#installation) ·
 [Usage](#usage) ·
 [JIT](#jit) ·
@@ -63,6 +64,9 @@ Windows. See [Supported devices](#supported-devices) for the full list.
   the app slots on the iPhone.
 - **Auto-updates** for the AppImage, the Linux installation and the Windows
   installer.
+- **Store**: browse apps from sources in the AltStore format (AltStore,
+  SideStore and any you add), install with one click, get notified about
+  updates - and have them applied while renewing. See [Store](#store).
 - **Seven languages**: English, German, French, Spanish, Italian, Portuguese
   (Brazil) and Dutch.
 - **GUI and CLI** on the same backend - everything the window can do, a
@@ -116,8 +120,8 @@ Windows. See [Supported devices](#supported-devices) for the full list.
 
 **Ideas (maybe)**
 
-- [ ] A small built-in IPA market: curated sources for sideloadable apps,
-      installable with one click
+- [x] A small built-in IPA market: sources in the AltStore format, apps
+      installable with one click - see [Store](#store)
 
 ## Supported devices
 
@@ -413,6 +417,55 @@ does three things:
 The tray menu has *Renew now* and *Quit*. On GNOME the tray icon needs the
 AppIndicator extension; reminders and renewals work without it, and
 starting ModStaller again brings up the window.
+
+## Store
+
+*Store* in the sidebar lists apps from **sources** - JSON files in the
+format AltStore and SideStore use. ModStaller comes with the official
+sources of these projects - open source or free apps, nothing that unlocks
+paid ones:
+
+| Source | What's in it |
+|---|---|
+| [AltStore](https://apps.altstore.io/) | AltStore, the Delta emulator, Clip |
+| [SideStore Team Picks](https://community-apps.sidestore.io/sidecommunity.json) | community picks, mostly emulators (PPSSPP, iNDS, MAME4iOS, …) |
+| [SideStore](https://apps.sidestore.io/) | SideStore itself |
+| [UTM](https://alt.getutm.app/) | UTM and UTM SE - virtual machines |
+| [crystall1ne.dev](https://alt.crystall1ne.dev/) | PojavLauncher and its successor Angel Aura Amethyst (Minecraft: Java Edition) |
+| [OatmealDome](https://altstore.oatmealdome.me/) | DolphiniOS (GameCube, Wii) |
+| [Provenance](https://provenance-emu.com/apps.json) | Provenance, iCube |
+| [Flyinghead](https://flyinghead.github.io/flycast-builds/altstore.json) | Flycast (Dreamcast, Naomi) |
+| [iSH](https://ish.app/altstore.json) | a Linux shell for iOS |
+| [StikDebug](https://stikdebug.xyz/index.json) | StikDebug, StikPair |
+| [Quantum Source](https://quarksources.github.io/dist/quantumsource.min.json) | a large community collection of emulators and tools - **also jailbreak tools and exploits**, see below |
+
+Many of these need JIT - ModStaller enables it (see [JIT](#jit)).
+
+More sources are added under *Store › Sources* by URL (https only). Sources
+you add are your responsibility: ModStaller shows what they list and does
+not check it - only install apps you are allowed to use.
+
+* **One app, one entry.** Many apps are in several sources. The store shows
+  each once - the newest version speaks for it - and the detail view lets
+  you pick the source to download from.
+* **Warnings.** Jailbreak tools (unc0ver, Taurine, Odyssey), exploit tools
+  (Filza Escaped, the WDB tools) and third-party app stores (appdb) are
+  marked, explain the risk and ask before installing: a jailbreak attacks the
+  system and can end in a boot loop, a restore or lost data. Anything else
+  that calls itself a jailbreak is marked too - also in sources you add.
+* **Install** downloads the IPA and signs and installs it in one go, with the
+  same defaults as the install screen. **Customize …** only downloads it and
+  opens it in the install screen (name, icon, extensions, App ID quota).
+* Downloaded IPAs are kept under the data folder (`ipa/`): renewing an app
+  signs its original IPA again. *Settings › Store › Clear store cache* removes
+  pictures and every IPA no installed app needs.
+* **Updates**: when a source offers a newer version of an installed app, the
+  store, the app list and the sidebar say so; one click updates it (same
+  bundle ID, the app's data stays). With *Settings › Background › Update
+  store apps while renewing* the tray does it on its own at the next renewal.
+* Checks on the way: https only, the `sha256` if the source gives one, the
+  size, and that the download really is an IPA. Icons and screenshots are
+  fetched by the backend - the window itself never talks to a source's server.
 
 ## Wi-Fi, Apple TV and Vision Pro
 

@@ -18,6 +18,8 @@ const dict: Dict = {
     "Actief",
   "Active account ({account})":
     "Actief account ({account})",
+  "Add":
+    "Toevoegen",
   "Add account":
     "Account toevoegen",
   "Add an Apple account":
@@ -30,12 +32,16 @@ const dict: Dict = {
     "Alles",
   "All areas":
     "Alle onderdelen",
+  "All sources":
+    "Alle bronnen",
   "All {max} app slots of the free profile are taken – iOS will refuse a further app. Remove one first:":
     "Alle {max} app-plekken van het gratis profiel zijn bezet – iOS weigert nog een app. Verwijder er eerst een:",
   "Also delete sign-ins, settings and logs":
     "Ook aanmeldingen, instellingen en logboeken verwijderen",
   "Also discard the device identity (Apple will then ask for a two-factor code again)":
     "Ook de apparaatidentiteit wissen (Apple vraagt dan weer om een tweefactorcode)",
+  "Also lists jailbreak tools and exploits - they are marked and ask before installing.":
+    "Bevat ook jailbreak-tools en exploits – die zijn gemarkeerd en vragen om bevestiging vóór het installeren.",
   "An installed app belongs to it – from ModStaller or from another tool. After deleting, it can no longer be renewed.":
     "Er hoort een geïnstalleerde app bij – van ModStaller of van een ander programma. Na het verwijderen kan die niet meer worden vernieuwd.",
   "An instance has to be started inside the app while it waits – only then does it ask for memory.":
@@ -74,6 +80,10 @@ const dict: Dict = {
     "Geldt alleen voor deze start – na het afsluiten van de app opnieuw vrijgeven.",
   "Apps":
     "Apps",
+  "Apps from AltStore-compatible sources – signed with your Apple account and installed like any IPA.":
+    "Apps uit AltStore-compatibele bronnen – ondertekend met je Apple-account en geïnstalleerd zoals elke IPA.",
+  "Apps from the store are brought to the newest version of their source when they are renewed – same bundle ID, the app's data stays.":
+    "Store-apps worden bij het vernieuwen naar de nieuwste versie van hun bron gebracht – zelfde bundle-ID, de gegevens van de app blijven.",
   "Apps on the iPhone (free profile)":
     "Apps op de iPhone (gratis profiel)",
   "Asking Apple – this takes a few seconds …":
@@ -124,6 +134,8 @@ const dict: Dict = {
     "Bestand kiezen",
   "Choose image …":
     "Afbeelding kiezen …",
+  "Clear store cache":
+    "Store-cache legen",
   "Close":
     "Sluiten",
   "Closing the window keeps ModStaller in the tray. Quit it from the tray icon.":
@@ -132,6 +144,8 @@ const dict: Dict = {
     "Bevestigen",
   "Confirmation code":
     "Bevestigingscode",
+  "Connect a device to install.":
+    "Sluit een apparaat aan om te installeren.",
   "Connected but not ready":
     "Verbonden maar niet klaar",
   "Connected but not ready – unlock the iPhone and confirm “Trust”.":
@@ -152,6 +166,8 @@ const dict: Dict = {
     "Snelkoppeling op het bureaublad maken",
   "Customize":
     "Aanpassen",
+  "Customize …":
+    "Aanpassen …",
   "Data in":
     "Gegevens in",
   "Delete":
@@ -184,6 +200,10 @@ const dict: Dict = {
     "Klaar",
   "Download":
     "Downloaden",
+  "Download {name}":
+    "{name} downloaden",
+  "Downloaded IPAs stay so apps can be renewed later. Clearing removes pictures and every IPA no installed app needs.":
+    "Gedownloade IPA’s blijven, zodat apps later kunnen worden vernieuwd. Legen verwijdert afbeeldingen en elke IPA die geen geïnstalleerde app nodig heeft.",
   "Downloads new versions and installs them while ModStaller is not in use. Afterwards it keeps running in the tray.":
     "Downloadt nieuwe versies en installeert ze terwijl ModStaller niet in gebruik is. Daarna blijft het in het systeemvak.",
   "Drag an IPA here":
@@ -202,6 +222,8 @@ const dict: Dict = {
     "Alles klaar voor sideloaden.",
   "Everything ready.":
     "Alles klaar.",
+  "Exploit":
+    "Exploit",
   "Explorer shows the iPhone but ModStaller doesn’t? Unplug it, unlock it and plug it back in – if that doesn’t help, restart the PC.":
     "Verkenner toont de iPhone, maar ModStaller niet? Koppel hem los, ontgrendel hem en sluit hem opnieuw aan – helpt dat niet, start de pc dan opnieuw op.",
   "Extension":
@@ -232,6 +254,8 @@ const dict: Dict = {
     "Weer vrij: {dates}",
   "From other tools":
     "Van andere programma’s",
+  "From {source}":
+    "Uit {source}",
   "Full log:":
     "Volledig logboek:",
   "Go to device":
@@ -244,12 +268,18 @@ const dict: Dict = {
     "Op de achtergrond",
   "Install":
     "Installeren",
+  "Install anyway":
+    "Toch installeren",
   "Install app":
     "App installeren",
   "Install updates automatically":
     "Updates automatisch installeren",
   "Install {name}":
     "{name} installeren",
+  "Install {name}?":
+    "{name} installeren?",
+  "Installed":
+    "Geïnstalleerd",
   "Installed through your package manager ({name}) – updates come from there.":
     "Geïnstalleerd via je pakketbeheerder ({name}) – updates komen daarvandaan.",
   "Installed user apps":
@@ -266,6 +296,8 @@ const dict: Dict = {
     "JIT en de Developer Disk Image hebben op deze iOS-versie nog de kabel nodig (via wifi pas vanaf iOS 17.4).",
   "JIT for {name}":
     "JIT voor {name}",
+  "Jailbreak tool":
+    "Jailbreak-tool",
   "Keep running in the tray when closed":
     "Bij sluiten in het systeemvak blijven",
   "Keep that screen open and pick the Apple TV below.":
@@ -282,6 +314,8 @@ const dict: Dict = {
     "Apps tonen",
   "Live":
     "Live",
+  "Loading sources …":
+    "Bronnen laden …",
   "Log":
     "Logboek",
   "Log file":
@@ -332,6 +366,10 @@ const dict: Dict = {
     "Geen IPA’s in Downloads, Documenten of Bureaublad.",
   "No app installed yet":
     "Nog geen app geïnstalleerd",
+  "No app matches “{query}”.":
+    "Geen app past bij „{query}”.",
+  "No apps - add a source under “Sources”.":
+    "Geen apps – voeg een bron toe onder „Bronnen”.",
   "No certificates in the account.":
     "Geen certificaten in het account.",
   "No device":
@@ -436,8 +474,14 @@ const dict: Dict = {
     "Vernieuwen",
   "Registered devices":
     "Geregistreerde apparaten",
+  "Reinstall":
+    "Opnieuw installeren",
+  "Released":
+    "Uitgebracht",
   "Reload":
     "Opnieuw laden",
+  "Reload sources":
+    "Bronnen opnieuw laden",
   "Remind me before apps expire":
     "Herinner me voordat apps verlopen",
   "Remove":
@@ -472,6 +516,8 @@ const dict: Dict = {
     "{name} op de achtergrond vernieuwen …",
   "Repair":
     "Herstellen",
+  "Requires":
+    "Vereist",
   "Restart":
     "Opnieuw starten",
   "Reuse an unused App ID …":
@@ -490,6 +536,8 @@ const dict: Dict = {
     "Zoeken",
   "Search again":
     "Opnieuw zoeken",
+  "Search apps":
+    "Apps zoeken",
   "Set up automatically":
     "Automatisch instellen",
   "Set up the Apple device service":
@@ -500,10 +548,14 @@ const dict: Dict = {
     "Instellingen › Privacy en beveiliging › Ontwikkelaarsmodus – anders start geen enkele gesideloade app.",
   "Share":
     "Delen",
+  "Show in the store":
+    "In de store tonen",
   "Show teams and certificates":
     "Teams en certificaten tonen",
   "Sideloading for {platform}":
     "Sideloaden voor {platform}",
+  "Sideloading has risks: apps from sources are not reviewed by Apple. Only install apps from sources you trust, and keep an eye on what an app asks for.":
+    "Sideloaden brengt risico’s mee: Apple controleert apps uit bronnen niet. Installeer alleen apps uit bronnen die je vertrouwt en let op wat een app vraagt.",
   "Sideloads on the iPhone that do not come from ModStaller – from AltStore or SideStore, for instance. Renewing is not possible: the original IPA and the private key live with the other tool.":
     "Sideloads op de iPhone die niet van ModStaller komen – van AltStore of SideStore bijvoorbeeld. Vernieuwen kan niet: de oorspronkelijke IPA en de privésleutel zitten bij het andere programma.",
   "Sign & install":
@@ -534,8 +586,20 @@ const dict: Dict = {
     "Aangemelde accounts",
   "Siri & Shortcuts":
     "Siri en Opdrachten",
+  "Size":
+    "Grootte",
+  "Source":
+    "Bron",
+  "Source added: {name} ({count} apps)":
+    "Bron toegevoegd: {name} ({count} apps)",
   "Source missing ({path}) – renewing is not possible.":
     "Bron ontbreekt ({path}) – vernieuwen kan niet.",
+  "Sources":
+    "Bronnen",
+  "Sources in the AltStore format – the same ones AltStore and SideStore read. ModStaller comes with the official sources of AltStore, SideStore, UTM, PojavLauncher/Amethyst, iSH, StikDebug and several emulators.":
+    "Bronnen in het AltStore-formaat – dezelfde die AltStore en SideStore lezen. ModStaller heeft de officiële bronnen van AltStore, SideStore, UTM, PojavLauncher/Amethyst, iSH, StikDebug en diverse emulators ingebouwd.",
+  "Sources you add are your responsibility: ModStaller shows what they list, it does not check it. Only install apps you are allowed to use.":
+    "Bronnen die je toevoegt zijn je eigen verantwoordelijkheid: ModStaller toont wat ze aanbieden, maar controleert het niet. Installeer alleen apps die je mag gebruiken.",
   "Stable channel":
     "Stabiel kanaal",
   "Stable versions are always offered. With the beta channel, pre-release versions (-beta.x) are offered as well.":
@@ -556,6 +620,8 @@ const dict: Dict = {
     "Start na het inloggen in het systeemvak, zonder venster.",
   "Still to do: {what}":
     "Nog te doen: {what}",
+  "Store":
+    "Store",
   "Switch off Wi-Fi":
     "Wifi uitzetten",
   "Switch on Wi-Fi":
@@ -604,6 +670,8 @@ const dict: Dict = {
     "De sessie wordt weggegooid. Geïnstalleerde apps blijven werken, maar kunnen pas na opnieuw aanmelden worden vernieuwd.",
   "There already is a different `modstaller` command in ~/.local/bin – it was left untouched.":
     "Er staat al een andere opdracht `modstaller` in ~/.local/bin – die is niet aangeraakt.",
+  "Third-party store":
+    "Externe appstore",
   "This IPA is App Store encrypted (FairPlay) and cannot be re-signed.":
     "Deze IPA is door de App Store versleuteld (FairPlay) en kan niet opnieuw worden ondertekend.",
   "This IPA is an Apple TV app – pick the Apple TV as the device.":
@@ -612,6 +680,10 @@ const dict: Dict = {
     "Deze IPA is een Apple Vision Pro-app – kies de Vision Pro als apparaat.",
   "This IPA is for iPhone and iPad – an Apple TV needs the app's tvOS version.":
     "Deze IPA is voor iPhone en iPad – een Apple TV heeft de tvOS-versie van de app nodig.",
+  "This app changes the system through an exploit. That can go wrong and leave the device unstable - only install it if you know what it does.":
+    "Deze app wijzigt het systeem via een exploit. Dat kan misgaan en het apparaat instabiel maken – installeer hem alleen als je weet wat hij doet.",
+  "This app installs apps from another store, many of them cracked. ModStaller cannot check what comes from there.":
+    "Deze app installeert apps uit een andere store, veel daarvan gekraakt. ModStaller kan niet controleren wat daar vandaan komt.",
   "This app is made for iPad only and does not start on an {kind}.":
     "Deze app is alleen voor iPad gemaakt en start niet op een {kind}.",
   "This does not give back weekly quota: Apple counts newly created App IDs, not existing ones. When the window is full, ModStaller falls back to a free App ID by itself.":
@@ -620,6 +692,8 @@ const dict: Dict = {
     "Deze installatie heeft er {cost} nodig – {missing} meer dan er nog vrij zijn.",
   "This install uses {cost} of them.":
     "Deze installatie gebruikt er {cost}.",
+  "This is a jailbreak tool. It attacks the system with an exploit - a failed run can mean a boot loop, a restore and lost data, and it weakens the device's security. Only install it if you know exactly what you are doing.":
+    "Dit is een jailbreak-tool. Die valt het systeem aan via een exploit – een mislukte poging kan een bootloop, een herstel en gegevensverlies betekenen, en verzwakt de beveiliging van het apparaat. Installeer hem alleen als je precies weet wat je doet.",
   "To renew, unlock or remove, the iPhone has to be connected and unlocked.":
     "Om te vernieuwen, vrij te geven of te verwijderen moet de iPhone aangesloten en ontgrendeld zijn.",
   "Translations that are missing fall back to English.":
@@ -646,14 +720,22 @@ const dict: Dict = {
     "Ongebruikte worden automatisch hergebruikt als het weekquotum op is – of kies er zelf een bij het installeren.",
   "Up to date – no newer version on GitHub.":
     "Actueel – geen nieuwere versie op GitHub.",
+  "Update":
+    "Bijwerken",
   "Update check failed: {message}":
     "Updatecontrole mislukt: {message}",
+  "Update store apps while renewing":
+    "Store-apps bijwerken bij het vernieuwen",
   "Update to {version}":
     "Bijwerken naar {version}",
   "Updates":
     "Updates",
+  "Updates available":
+    "Updates beschikbaar",
   "VPN / network":
     "VPN / netwerk",
+  "Version":
+    "Versie",
   "Version {version} for Linux":
     "Versie {version} voor Linux",
   "Version {version} is available":
@@ -678,6 +760,8 @@ const dict: Dict = {
     "Wat ModStaller doet – live. De volledige geschiedenis staat in het logbestand.",
   "What ModStaller has installed. Free accounts: at most 3 apps, valid for 7 days each.":
     "Wat ModStaller heeft geïnstalleerd. Gratis accounts: hoogstens 3 apps, elk 7 dagen geldig.",
+  "What's new in {version}":
+    "Nieuw in {version}",
   "What's new?":
     "Wat is er nieuw?",
   "Where ModStaller is installed":
@@ -744,6 +828,8 @@ const dict: Dict = {
     "nog {available} van {max} vrij",
   "{count} accounts signed in":
     "{count} accounts aangemeld",
+  "{count} apps":
+    "{count} apps",
   "{count} day left":
     "nog {count} dag",
   "{count} days ago":
@@ -768,12 +854,18 @@ const dict: Dict = {
     "{count} punt(en) verhinderen het sideloaden.",
   "{count} point(s) to clear up.":
     "{count} punt(en) op te lossen.",
+  "{count} sources":
+    "{count} bronnen",
+  "{from} → {to}":
+    "{from} → {to}",
   "{kind} via {via}":
     "{kind} via {via}",
   "{minutes} min ago":
     "{minutes} min geleden",
   "{name} is being renewed in the background. Try again in a moment.":
     "{name} wordt op de achtergrond vernieuwd. Probeer het zo meteen opnieuw.",
+  "{name} is downloaded - adjust it and install.":
+    "{name} is gedownload – pas hem aan en installeer.",
   "{name} is installed and runs for {days} days.":
     "{name} is geïnstalleerd en werkt {days} dagen.",
   "{name} is paired.":
@@ -784,6 +876,8 @@ const dict: Dict = {
     "{name} is vernieuwd – weer {days} dagen geldig.",
   "{percent}% transferred":
     "{percent}% overgedragen",
+  "{size} freed ({count} IPAs removed).":
+    "{size} vrijgemaakt ({count} IPA’s verwijderd).",
   "{used} of {max} used":
     "{used} van {max} bezet",
   "~/.local/bin is not on your PATH yet – the `modstaller` command works in the terminal after logging in again.":

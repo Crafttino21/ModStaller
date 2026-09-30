@@ -7,6 +7,7 @@
 
 const DICT = {
   de: {
+    "{name} updated to {version}": "{name} auf {version} aktualisiert",
     "{name} expires soon": "{name} läuft bald ab",
     "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
       "Noch {left} gültig. ModStaller erneuert die App am letzten Tag – das Gerät sollte dann per USB oder im selben WLAN erreichbar sein.",
@@ -46,6 +47,7 @@ const DICT = {
     "{n} hours": "{n} Stunden",
   },
   fr: {
+    "{name} updated to {version}": "{name} mise à jour vers {version}",
     "{name} expires soon": "{name} expire bientôt",
     "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
       "Encore valide {left}. ModStaller la renouvelle le dernier jour – l’appareil doit alors être branché en USB ou sur le même Wi-Fi.",
@@ -85,6 +87,7 @@ const DICT = {
     "{n} hours": "{n} heures",
   },
   es: {
+    "{name} updated to {version}": "{name} actualizada a {version}",
     "{name} expires soon": "{name} caduca pronto",
     "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
       "Válida {left} más. ModStaller la renueva el último día; el dispositivo debe estar entonces por USB o en la misma Wi-Fi.",
@@ -124,6 +127,7 @@ const DICT = {
     "{n} hours": "{n} horas",
   },
   it: {
+    "{name} updated to {version}": "{name} aggiornata a {version}",
     "{name} expires soon": "{name} scade a breve",
     "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
       "Valida ancora per {left}. ModStaller la rinnova l’ultimo giorno: il dispositivo dovrà essere collegato via USB o sulla stessa Wi-Fi.",
@@ -163,6 +167,7 @@ const DICT = {
     "{n} hours": "{n} ore",
   },
   "pt-BR": {
+    "{name} updated to {version}": "{name} atualizado para {version}",
     "{name} expires soon": "{name} expira em breve",
     "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
       "Válido por mais {left}. O ModStaller renova no último dia – o dispositivo precisa estar via USB ou na mesma Wi-Fi nesse dia.",
@@ -202,6 +207,7 @@ const DICT = {
     "{n} hours": "{n} horas",
   },
   nl: {
+    "{name} updated to {version}": "{name} bijgewerkt naar {version}",
     "{name} expires soon": "{name} verloopt binnenkort",
     "Valid for {left}. ModStaller renews it on the last day - keep the device on USB or in the same Wi-Fi then.":
       "Nog {left} geldig. ModStaller vernieuwt de app op de laatste dag – het apparaat moet dan via USB of in hetzelfde wifi bereikbaar zijn.",

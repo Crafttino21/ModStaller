@@ -203,7 +203,9 @@
   function start() {
     if (!info) return;
     const name = displayName.trim();
+    const origin = ui.storeOrigin?.path === info.path ? ui.storeOrigin : null;
     installIpa(info.path, name || info.name, {
+      ...(origin ? { store: { source: origin.source, bundleId: origin.bundleId, version: origin.version } } : {}),
       ...(name ? { displayName: name } : {}),
       ...(bundleId.trim() && !spare ? { bundleId: bundleId.trim() } : {}),
       ...(icon ? { icon } : {}),

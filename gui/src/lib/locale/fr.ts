@@ -18,6 +18,8 @@ const dict: Dict = {
     "Actif",
   "Active account ({account})":
     "Compte actif ({account})",
+  "Add":
+    "Ajouter",
   "Add account":
     "Ajouter un compte",
   "Add an Apple account":
@@ -30,12 +32,16 @@ const dict: Dict = {
     "Tout",
   "All areas":
     "Tous les domaines",
+  "All sources":
+    "Toutes les sources",
   "All {max} app slots of the free profile are taken – iOS will refuse a further app. Remove one first:":
     "Les {max} emplacements du profil gratuit sont occupés – iOS refusera une app de plus. Supprimez-en d’abord une :",
   "Also delete sign-ins, settings and logs":
     "Supprimer aussi les connexions, les réglages et les journaux",
   "Also discard the device identity (Apple will then ask for a two-factor code again)":
     "Effacer aussi l’identité de l’appareil (Apple redemandera alors un code à deux facteurs)",
+  "Also lists jailbreak tools and exploits - they are marked and ask before installing.":
+    "Liste aussi des outils de jailbreak et des exploits – ils sont signalés et demandent confirmation avant l’installation.",
   "An installed app belongs to it – from ModStaller or from another tool. After deleting, it can no longer be renewed.":
     "Une application installée en dépend – de ModStaller ou d’un autre outil. Après la suppression, elle ne pourra plus être renouvelée.",
   "An instance has to be started inside the app while it waits – only then does it ask for memory.":
@@ -74,6 +80,10 @@ const dict: Dict = {
     "Ne vaut que pour ce lancement – à réactiver après avoir quitté l’application.",
   "Apps":
     "Applications",
+  "Apps from AltStore-compatible sources – signed with your Apple account and installed like any IPA.":
+    "Des apps issues de sources compatibles AltStore – signées avec votre compte Apple et installées comme n’importe quelle IPA.",
+  "Apps from the store are brought to the newest version of their source when they are renewed – same bundle ID, the app's data stays.":
+    "Les apps du store passent à la dernière version de leur source lors du renouvellement – même bundle ID, les données de l’app restent.",
   "Apps on the iPhone (free profile)":
     "Apps sur l’iPhone (profil gratuit)",
   "Asking Apple – this takes a few seconds …":
@@ -124,6 +134,8 @@ const dict: Dict = {
     "Choisir un fichier",
   "Choose image …":
     "Choisir une image…",
+  "Clear store cache":
+    "Vider le cache du store",
   "Close":
     "Fermer",
   "Closing the window keeps ModStaller in the tray. Quit it from the tray icon.":
@@ -132,6 +144,8 @@ const dict: Dict = {
     "Confirmer",
   "Confirmation code":
     "Code de confirmation",
+  "Connect a device to install.":
+    "Connectez un appareil pour installer.",
   "Connected but not ready":
     "Connecté mais pas prêt",
   "Connected but not ready – unlock the iPhone and confirm “Trust”.":
@@ -152,6 +166,8 @@ const dict: Dict = {
     "Créer un raccourci sur le bureau",
   "Customize":
     "Personnaliser",
+  "Customize …":
+    "Personnaliser …",
   "Data in":
     "Données dans",
   "Delete":
@@ -184,6 +200,10 @@ const dict: Dict = {
     "Terminé",
   "Download":
     "Télécharger",
+  "Download {name}":
+    "Télécharger {name}",
+  "Downloaded IPAs stay so apps can be renewed later. Clearing removes pictures and every IPA no installed app needs.":
+    "Les IPA téléchargées restent pour que les apps puissent être renouvelées plus tard. Vider supprime les images et chaque IPA dont aucune app installée n’a besoin.",
   "Downloads new versions and installs them while ModStaller is not in use. Afterwards it keeps running in the tray.":
     "Télécharge les nouvelles versions et les installe quand ModStaller n’est pas utilisé. Ensuite, il reste dans la barre système.",
   "Drag an IPA here":
@@ -202,6 +222,8 @@ const dict: Dict = {
     "Tout est prêt pour le sideloading.",
   "Everything ready.":
     "Tout est prêt.",
+  "Exploit":
+    "Exploit",
   "Explorer shows the iPhone but ModStaller doesn’t? Unplug it, unlock it and plug it back in – if that doesn’t help, restart the PC.":
     "L’Explorateur affiche l’iPhone mais pas ModStaller ? Débranchez-le, déverrouillez-le et rebranchez-le – sinon, redémarrez le PC.",
   "Extension":
@@ -232,6 +254,8 @@ const dict: Dict = {
     "De nouveau libres : {dates}",
   "From other tools":
     "D’autres outils",
+  "From {source}":
+    "Depuis {source}",
   "Full log:":
     "Journal complet :",
   "Go to device":
@@ -244,12 +268,18 @@ const dict: Dict = {
     "En arrière-plan",
   "Install":
     "Installer",
+  "Install anyway":
+    "Installer quand même",
   "Install app":
     "Installer une application",
   "Install updates automatically":
     "Installer les mises à jour automatiquement",
   "Install {name}":
     "Installer {name}",
+  "Install {name}?":
+    "Installer {name} ?",
+  "Installed":
+    "Installée",
   "Installed through your package manager ({name}) – updates come from there.":
     "Installé via votre gestionnaire de paquets ({name}) – les mises à jour viennent de là.",
   "Installed user apps":
@@ -266,6 +296,8 @@ const dict: Dict = {
     "Le JIT et la Developer Disk Image nécessitent encore le câble sur cette version d’iOS (en Wi-Fi, il faut iOS 17.4 ou plus récent).",
   "JIT for {name}":
     "JIT pour {name}",
+  "Jailbreak tool":
+    "Outil de jailbreak",
   "Keep running in the tray when closed":
     "Rester dans la barre système à la fermeture",
   "Keep that screen open and pick the Apple TV below.":
@@ -282,6 +314,8 @@ const dict: Dict = {
     "Lister les apps",
   "Live":
     "En direct",
+  "Loading sources …":
+    "Chargement des sources …",
   "Log":
     "Journal",
   "Log file":
@@ -332,6 +366,10 @@ const dict: Dict = {
     "Aucun IPA dans Téléchargements, Documents ou Bureau.",
   "No app installed yet":
     "Aucune application installée pour l’instant",
+  "No app matches “{query}”.":
+    "Aucune app ne correspond à « {query} ».",
+  "No apps - add a source under “Sources”.":
+    "Aucune app – ajoutez une source dans « Sources ».",
   "No certificates in the account.":
     "Aucun certificat dans le compte.",
   "No device":
@@ -436,8 +474,14 @@ const dict: Dict = {
     "Actualiser",
   "Registered devices":
     "Appareils enregistrés",
+  "Reinstall":
+    "Réinstaller",
+  "Released":
+    "Publiée",
   "Reload":
     "Recharger",
+  "Reload sources":
+    "Recharger les sources",
   "Remind me before apps expire":
     "Me rappeler avant l’expiration des apps",
   "Remove":
@@ -472,6 +516,8 @@ const dict: Dict = {
     "Renouvellement de {name} en arrière-plan …",
   "Repair":
     "Réparer",
+  "Requires":
+    "Nécessite",
   "Restart":
     "Redémarrer",
   "Reuse an unused App ID …":
@@ -490,6 +536,8 @@ const dict: Dict = {
     "Rechercher",
   "Search again":
     "Rechercher à nouveau",
+  "Search apps":
+    "Rechercher des apps",
   "Set up automatically":
     "Configurer automatiquement",
   "Set up the Apple device service":
@@ -500,10 +548,14 @@ const dict: Dict = {
     "Réglages › Confidentialité et sécurité › Mode développeur – sinon aucune application sideloadée ne démarrera.",
   "Share":
     "Partage",
+  "Show in the store":
+    "Afficher dans le store",
   "Show teams and certificates":
     "Afficher les équipes et certificats",
   "Sideloading for {platform}":
     "Sideloading pour {platform}",
+  "Sideloading has risks: apps from sources are not reviewed by Apple. Only install apps from sources you trust, and keep an eye on what an app asks for.":
+    "Le sideloading comporte des risques : les apps issues de sources ne sont pas vérifiées par Apple. N’installez que des apps de sources de confiance et surveillez ce qu’une app demande.",
   "Sideloads on the iPhone that do not come from ModStaller – from AltStore or SideStore, for instance. Renewing is not possible: the original IPA and the private key live with the other tool.":
     "Sideloads présents sur l’iPhone qui ne viennent pas de ModStaller – d’AltStore ou de SideStore, par exemple. Le renouvellement est impossible : l’IPA d’origine et la clé privée restent chez l’autre outil.",
   "Sign & install":
@@ -534,8 +586,20 @@ const dict: Dict = {
     "Comptes connectés",
   "Siri & Shortcuts":
     "Siri et Raccourcis",
+  "Size":
+    "Taille",
+  "Source":
+    "Source",
+  "Source added: {name} ({count} apps)":
+    "Source ajoutée : {name} ({count} apps)",
   "Source missing ({path}) – renewing is not possible.":
     "Source manquante ({path}) – renouvellement impossible.",
+  "Sources":
+    "Sources",
+  "Sources in the AltStore format – the same ones AltStore and SideStore read. ModStaller comes with the official sources of AltStore, SideStore, UTM, PojavLauncher/Amethyst, iSH, StikDebug and several emulators.":
+    "Des sources au format AltStore – les mêmes que lisent AltStore et SideStore. ModStaller inclut les sources officielles d’AltStore, SideStore, UTM, PojavLauncher/Amethyst, iSH, StikDebug et de plusieurs émulateurs.",
+  "Sources you add are your responsibility: ModStaller shows what they list, it does not check it. Only install apps you are allowed to use.":
+    "Les sources que vous ajoutez sont sous votre responsabilité : ModStaller affiche ce qu’elles proposent, sans le vérifier. N’installez que des apps que vous avez le droit d’utiliser.",
   "Stable channel":
     "Canal stable",
   "Stable versions are always offered. With the beta channel, pre-release versions (-beta.x) are offered as well.":
@@ -556,6 +620,8 @@ const dict: Dict = {
     "Démarre dans la barre système après la connexion, sans fenêtre.",
   "Still to do: {what}":
     "Reste à faire : {what}",
+  "Store":
+    "Store",
   "Switch off Wi-Fi":
     "Désactiver le Wi-Fi",
   "Switch on Wi-Fi":
@@ -604,6 +670,8 @@ const dict: Dict = {
     "La session est abandonnée. Les applications installées continuent de fonctionner mais ne pourront être renouvelées qu’après une nouvelle connexion.",
   "There already is a different `modstaller` command in ~/.local/bin – it was left untouched.":
     "Il existe déjà une autre commande `modstaller` dans ~/.local/bin – elle n’a pas été modifiée.",
+  "Third-party store":
+    "Store tiers",
   "This IPA is App Store encrypted (FairPlay) and cannot be re-signed.":
     "Cet IPA est chiffré par l’App Store (FairPlay) et ne peut pas être re-signé.",
   "This IPA is an Apple TV app – pick the Apple TV as the device.":
@@ -612,6 +680,10 @@ const dict: Dict = {
     "Cette IPA est une app Apple Vision Pro – choisissez la Vision Pro comme appareil.",
   "This IPA is for iPhone and iPad – an Apple TV needs the app's tvOS version.":
     "Cette IPA est pour iPhone et iPad – une Apple TV a besoin de la version tvOS de l’app.",
+  "This app changes the system through an exploit. That can go wrong and leave the device unstable - only install it if you know what it does.":
+    "Cette app modifie le système via un exploit. Cela peut mal tourner et rendre l’appareil instable – ne l’installez que si vous savez ce qu’elle fait.",
+  "This app installs apps from another store, many of them cracked. ModStaller cannot check what comes from there.":
+    "Cette app installe des apps depuis un autre store, dont beaucoup sont crackées. ModStaller ne peut pas vérifier ce qui en provient.",
   "This app is made for iPad only and does not start on an {kind}.":
     "Cette app est conçue uniquement pour l’iPad et ne démarre pas sur un {kind}.",
   "This does not give back weekly quota: Apple counts newly created App IDs, not existing ones. When the window is full, ModStaller falls back to a free App ID by itself.":
@@ -620,6 +692,8 @@ const dict: Dict = {
     "Cette installation en nécessite {cost} – {missing} de plus que ce qui reste.",
   "This install uses {cost} of them.":
     "Cette installation en utilise {cost}.",
+  "This is a jailbreak tool. It attacks the system with an exploit - a failed run can mean a boot loop, a restore and lost data, and it weakens the device's security. Only install it if you know exactly what you are doing.":
+    "C’est un outil de jailbreak. Il attaque le système via un exploit – un échec peut entraîner une boucle de démarrage, une restauration et une perte de données, et il affaiblit la sécurité de l’appareil. Ne l’installez que si vous savez exactement ce que vous faites.",
   "To renew, unlock or remove, the iPhone has to be connected and unlocked.":
     "Pour renouveler, activer ou retirer, l’iPhone doit être branché et déverrouillé.",
   "Translations that are missing fall back to English.":
@@ -646,14 +720,22 @@ const dict: Dict = {
     "Les inutilisés sont réutilisés automatiquement quand le quota hebdomadaire est épuisé – ou choisissez-en un lors de l’installation.",
   "Up to date – no newer version on GitHub.":
     "À jour – aucune version plus récente sur GitHub.",
+  "Update":
+    "Mettre à jour",
   "Update check failed: {message}":
     "Échec de la vérification des mises à jour : {message}",
+  "Update store apps while renewing":
+    "Mettre à jour les apps du store lors du renouvellement",
   "Update to {version}":
     "Mettre à jour vers {version}",
   "Updates":
     "Mises à jour",
+  "Updates available":
+    "Mises à jour disponibles",
   "VPN / network":
     "VPN / réseau",
+  "Version":
+    "Version",
   "Version {version} for Linux":
     "Version {version} pour Linux",
   "Version {version} is available":
@@ -678,6 +760,8 @@ const dict: Dict = {
     "Ce que fait ModStaller – en direct. L'historique complet se trouve dans le fichier journal.",
   "What ModStaller has installed. Free accounts: at most 3 apps, valid for 7 days each.":
     "Ce que ModStaller a installé. Comptes gratuits : 3 applications au maximum, valables 7 jours chacune.",
+  "What's new in {version}":
+    "Nouveautés de {version}",
   "What's new?":
     "Quoi de neuf ?",
   "Where ModStaller is installed":
@@ -744,6 +828,8 @@ const dict: Dict = {
     "{available} sur {max} disponibles",
   "{count} accounts signed in":
     "{count} comptes connectés",
+  "{count} apps":
+    "{count} apps",
   "{count} day left":
     "encore {count} jour",
   "{count} days ago":
@@ -768,12 +854,18 @@ const dict: Dict = {
     "{count} point(s) empêchent le sideloading.",
   "{count} point(s) to clear up.":
     "{count} point(s) à régler.",
+  "{count} sources":
+    "{count} sources",
+  "{from} → {to}":
+    "{from} → {to}",
   "{kind} via {via}":
     "{kind} via {via}",
   "{minutes} min ago":
     "il y a {minutes} min",
   "{name} is being renewed in the background. Try again in a moment.":
     "{name} est en cours de renouvellement en arrière-plan. Réessayez dans un instant.",
+  "{name} is downloaded - adjust it and install.":
+    "{name} est téléchargée – ajustez-la et installez-la.",
   "{name} is installed and runs for {days} days.":
     "{name} est installée et fonctionne {days} jours.",
   "{name} is paired.":
@@ -784,6 +876,8 @@ const dict: Dict = {
     "{name} a été renouvelée – de nouveau valable {days} jours.",
   "{percent}% transferred":
     "{percent}% transférés",
+  "{size} freed ({count} IPAs removed).":
+    "{size} libérés ({count} IPA supprimées).",
   "{used} of {max} used":
     "{used} sur {max} utilisés",
   "~/.local/bin is not on your PATH yet – the `modstaller` command works in the terminal after logging in again.":
