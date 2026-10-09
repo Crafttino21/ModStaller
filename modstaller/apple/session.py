@@ -257,7 +257,7 @@ def remember_first_name(teams, adsid: str | None = None) -> str:
 
 
 def login(apple_id: str, password: str, anisette,
-          code_prompt: Callable[[], str] | None = None,
+          code_prompt: Callable[[str], str] | None = None,
           debug: bool = False) -> Session:
     client = GSAClient(anisette, code_prompt=code_prompt, debug=debug)
     session = Session.from_gsa(client.authenticate(apple_id, password),

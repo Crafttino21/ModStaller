@@ -64,6 +64,8 @@ export const ui = $state({
   twoFactor: null as null | ((code: string | null) => void),
   /** Fuer welche Apple-ID der Code gebraucht wird. */
   twoFactorFor: "",
+  /** Wo der Code ankommt: "device" (iPhone) oder "sms" (Textnachricht). */
+  twoFactorVia: "device",
   /** Offene PIN-Rueckfrage beim Koppeln eines Apple TV. */
   pin: null as null | ((pin: string | null) => void),
   /** Welches Apple TV die PIN zeigt. */
@@ -292,7 +294,9 @@ export function closeTask() {
 // -- Backend -----------------------------------------------------------------
 
 handle("prompt.2fa", (params) => new Promise((resolve) => {
-  ui.twoFactorFor = String((params as { appleId?: string } | undefined)?.appleId ?? "");
+  const p = params as { appleId?: string; via?: string } | undefined;
+  ui.twoFactorFor = String(p?.appleId ?? "");
+  ui.twoFactorVia = String(p?.via ?? "device");
   ui.twoFactor = (code) => {
     ui.twoFactor = null;
     resolve(code);

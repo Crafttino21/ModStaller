@@ -9,7 +9,7 @@ Without these headers Apple accepts no login. Two sources:
 * :class:`RemoteV3Provider` - anisette-v3 protocol against a third-party
   server. Fallback only; device identifiers then go to a third party.
 
-This module corrects two things about the ``anisette`` library's behaviour:
+This module corrects three things about the ``anisette`` library's behaviour:
 
 1. Its default ``server_friendly_description`` carries
    ``com.apple.dt.Xcode``, which Apple has rejected with HTTP 503 since
@@ -17,15 +17,22 @@ This module corrects two things about the ``anisette`` library's behaviour:
 2. Its default device config has *hardcoded* IDs shared by every
    installation of the library. We generate our own stable IDs per
    installation.
+3. It takes time zone, locale and client time straight from the OS. On
+   Windows that gives a localized, non-ASCII time zone name
+   ("Mitteleuropäische Sommerzeit") and a client time with both an offset
+   and a ``Z``. These go out as raw HTTP headers during two-factor - see
+   :func:`normalize_headers`.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import threading
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -75,6 +82,82 @@ def _load_or_create_device() -> dict[str, str]:
     }
     write_secret(DEVICE_FILE, json.dumps(device, indent=2).encode())
     return device
+
+
+def forget_device() -> None:
+    """Discards the device identity. Apple treats this machine as a new one
+    and asks for a two-factor code on the next sign-in.
+
+    Drops the in-memory copy as well - otherwise the next :meth:`headers`
+    call would write the old identity straight back to disk.
+    """
+    global _shared_ani
+    with _LOCAL_LOCK:
+        _shared_ani = None
+        for f in (PROVISIONING_FILE, DEVICE_FILE):
+            f.unlink(missing_ok=True)
+
+
+# -- Header hygiene ----------------------------------------------------------
+
+#: What Apple's own clients send: an abbreviation ("CEST") or "GMT+2" -
+#: NSTimeZone.abbreviation, as AltSign uses it.
+_TIMEZONE_OK = re.compile(r"^(?:[A-Z]{2,5}|GMT(?:[+-]\d{1,2}(?::\d{2})?)?)$")
+_LOCALE_OK = re.compile(r"^[a-z]{2,3}(?:_[A-Z]{2})?$")
+_FALLBACK_LOCALE = "en_US"
+_OFFSET_THEN_Z = re.compile(r"[+-]\d{2}:?\d{2}Z$")
+
+
+def _gmt_abbreviation(offset: timedelta) -> str:
+    """NSTimeZone style: "GMT", "GMT+2", "GMT-3:30"."""
+    minutes = round(offset.total_seconds() / 60)
+    if not minutes:
+        return "GMT"
+    sign = "+" if minutes > 0 else "-"
+    hours, rest = divmod(abs(minutes), 60)
+    return f"GMT{sign}{hours}" + (f":{rest:02d}" if rest else "")
+
+
+def _utc_client_time(value: str, now: datetime) -> str:
+    """ISO 8601 in UTC with a trailing ``Z``.
+
+    The library appends ``Z`` to a local time that already carries an
+    offset ("…+02:00Z") - neither local time nor UTC.
+    """
+    raw = str(value).strip()
+    if _OFFSET_THEN_Z.search(raw):
+        raw = raw[:-1]
+    elif raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        parsed = now
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=now.tzinfo)
+    return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def normalize_headers(data: dict, *, now: datetime | None = None) -> dict:
+    """Brings the OS-derived values into the shape Apple's clients send.
+
+    Only what is malformed gets replaced - correct values from a remote
+    server pass through. Every value ends up ASCII: during two-factor these
+    are raw HTTP headers, which ``http.client`` encodes as latin-1. A time
+    zone like "中国标准时间" would not even get out.
+    """
+    now = now or datetime.now().astimezone()
+    out = dict(data)
+    if "X-Apple-I-Client-Time" in out:
+        out["X-Apple-I-Client-Time"] = _utc_client_time(
+            out["X-Apple-I-Client-Time"], now)
+    if not _TIMEZONE_OK.match(str(out.get("X-Apple-I-TimeZone", "GMT"))):
+        out["X-Apple-I-TimeZone"] = _gmt_abbreviation(
+            now.utcoffset() or timedelta(0))
+    if not _LOCALE_OK.match(str(out.get("X-Apple-Locale", _FALLBACK_LOCALE))):
+        out["X-Apple-Locale"] = _FALLBACK_LOCALE
+    return {k: v for k, v in out.items()
+            if not isinstance(v, str) or v.isascii()}
 
 
 #: Escape hatch, in case someone wants to try anyway.
@@ -157,21 +240,29 @@ class LocalProvider:
             ANISETTE_DIR.mkdir(parents=True, exist_ok=True)
             ANISETTE_DIR.chmod(0o700)
 
-            device = _load_or_create_device()
-            # Sanitize the client info right here: then the identity used for
-            # provisioning matches the one we talk with later.
-            device["server_friendly_description"] = clientinfo.sanitize(
-                device["server_friendly_description"]
-            )
-            self._cfg = AnisetteDeviceConfig(**device)
+            self._DeviceConfig = AnisetteDeviceConfig
+            self._cfg = self._device_config()
             self._Anisette = Anisette
             self._ani = self._shared(fresh=False)
 
+    def _device_config(self):
+        """The saved device identity - a new one after :func:`forget_device`."""
+        device = _load_or_create_device()
+        # Sanitize the client info right here: then the identity used for
+        # provisioning matches the one we talk with later.
+        device["server_friendly_description"] = clientinfo.sanitize(
+            device["server_friendly_description"]
+        )
+        return self._DeviceConfig(**device)
+
     def _shared(self, *, fresh: bool):
         """The process-wide instance - loaded from the saved files once, or
-        again after the emulation broke (``fresh``). Call with the lock held."""
+        again after the emulation broke or the identity was discarded
+        (``fresh``). Call with the lock held."""
         global _shared_ani
         if _shared_ani is None or fresh:
+            # Read again: after a forget the old identity must not live on.
+            self._cfg = self._device_config()
             existing = [p for p in (LIBS_FILE, PROVISIONING_FILE) if p.exists()]
             if existing:
                 _shared_ani = self._Anisette.load(
@@ -201,14 +292,27 @@ class LocalProvider:
                     raise
                 self._ani = self._shared(fresh=True)
                 data = self._headers_once()
+        data = normalize_headers(data)
         data["X-MMe-Client-Info"] = self.client_info()
         return data
 
     def _headers_once(self) -> dict[str, str]:
-        self._ani = self._shared(fresh=False)
+        self._ani = self._shared(fresh=self._forgotten_elsewhere())
         data = dict(self._ani.get_data())
         self._persist()
         return data
+
+    @staticmethod
+    def _forgotten_elsewhere() -> bool:
+        """Whether another process discarded the identity - say ``logout
+        --forget-device`` in a terminal while the GUI runs.
+
+        Every provisioning is saved right away, so a provisioned instance
+        whose file is gone means the file was deleted. Saving it again
+        would resurrect exactly the identity the user just threw away.
+        """
+        return (_shared_ani is not None and _shared_ani.is_provisioned
+                and not PROVISIONING_FILE.exists())
 
     def client_info(self) -> str:
         return clientinfo.sanitize(self._cfg.server_friendly_description)
@@ -251,6 +355,7 @@ class RemoteV3Provider:
             raise AppleError(_(
                 "Anisette server {url} not reachable: {error}",
                 url=self._base, error=exc)) from exc
+        data = normalize_headers(data)
         data["X-MMe-Client-Info"] = self.client_info()
         return data
 

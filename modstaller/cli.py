@@ -138,9 +138,11 @@ def _chosen_session(args):
 async def _login(args) -> int:
     import getpass
     from .apple.devservices import DeveloperServices
+    from .apple.gsa import VIA_SMS
     from .apple.session import login
 
-    apple_id = args.apple_id or input("Apple ID: ").strip()
+    # -a/--account names an Apple ID everywhere else - here too.
+    apple_id = args.apple_id or args.account or input("Apple ID: ").strip()
     if not apple_id:
         print("No Apple ID given.", file=sys.stderr)
         return 2
@@ -149,7 +151,10 @@ async def _login(args) -> int:
     print("\nPreparing anisette …", flush=True)
     ani = _anisette()
 
-    def prompt_code() -> str:
+    def prompt_code(via: str) -> str:
+        if via == VIA_SMS:
+            return input("2FA code from the text message to your trusted "
+                         "phone number: ").strip()
         return input("2FA code from your iPhone: ").strip()
 
     print("Signing in to Apple …", flush=True)
@@ -172,10 +177,13 @@ def _logout(args) -> int:
         leaving = list_accounts()
     else:
         one = _chosen_session(args)
-        if one is None:
+        if one is None and not (args.forget_device and not list_accounts()):
             print("Not signed in with that account.", file=sys.stderr)
             return 3
-        leaving = [one]
+        # Nobody signed in, but the identity is to go: exactly the state
+        # after a failed sign-in, which is when the error messages
+        # recommend this.
+        leaving = [one] if one else []
     remaining = len(list_accounts()) - len(leaving)
     if args.forget_device and remaining:
         # Shared by every account - the others would all need a 2FA code.
@@ -187,9 +195,8 @@ def _logout(args) -> int:
         Session.clear(s.adsid)
         print(f"Signed out: {s.label}")
     if args.forget_device:
-        from .apple.anisette import DEVICE_FILE, PROVISIONING_FILE
-        for f in (PROVISIONING_FILE, DEVICE_FILE):
-            f.unlink(missing_ok=True)
+        from .apple.anisette import forget_device
+        forget_device()
         print("Device identity discarded - on the next login Apple will "
               "ask for a 2FA code again.")
     return 0
@@ -562,6 +569,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     log = sub.add_parser("login", help="Sign in to Apple")
     log.add_argument("apple_id", nargs="?", help="Apple ID (prompted otherwise)")
+    # Also after the subcommand, where people put it. SUPPRESS: when left
+    # out here, the global flag's value stays.
+    log.add_argument("--debug", action="store_true", default=argparse.SUPPRESS,
+                     help="trace every step of the sign-in (secrets hidden)")
     log.set_defaults(afunc=_login)
 
     out = sub.add_parser("logout", help="Sign an account out (default: the "

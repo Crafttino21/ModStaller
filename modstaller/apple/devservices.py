@@ -24,9 +24,6 @@ from . import http
 #: Xcode's client ID. The API expects it.
 CLIENT_ID = "XABBG36SBA"
 
-#: Xcode version we claim to be.
-XCODE_VERSION = "11.2 (11B41)"
-
 #: Exactly the Anisette headers developerservices2 expects - a fixed list
 #: rather than "everything starting with X-", so it is clear what belongs
 #: here and what only the sign-in needs.
@@ -185,7 +182,7 @@ class DeveloperServices:
         ani = self._ani.headers()
         headers = {
             "X-Apple-App-Info": "com.apple.gs.xcode.auth",
-            "X-Xcode-Version": XCODE_VERSION,
+            "X-Xcode-Version": http.XCODE_VERSION,
             **self._session.auth_headers,
         }
         headers.update({k: ani[k] for k in _ANISETTE_HEADERS if k in ani})

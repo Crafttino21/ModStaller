@@ -1076,9 +1076,11 @@ async def _login(server: Server, job: Job, params: dict):
     apple_id = _need(params, "appleId").strip()
     password = _need(params, "password")
 
-    def prompt_code() -> str:
-        # With several accounts the code dialog has to say whose code it is.
-        return server.ask_blocking("prompt.2fa", {"appleId": apple_id}) or ""
+    def prompt_code(via: str) -> str:
+        # With several accounts the code dialog has to say whose code it is -
+        # and where to look for it: iPhone or text message.
+        return server.ask_blocking(
+            "prompt.2fa", {"appleId": apple_id, "via": via}) or ""
 
     def run():
         job.log("Preparing Anisette …")
@@ -1105,9 +1107,8 @@ async def _logout(server: Server, job: Job, params: dict):
                            "together with the last account."))
     Session.clear(adsid)
     if forget:
-        from .apple.anisette import DEVICE_FILE, PROVISIONING_FILE
-        for f in (PROVISIONING_FILE, DEVICE_FILE):
-            f.unlink(missing_ok=True)
+        from .apple.anisette import forget_device
+        forget_device()
     return True
 
 

@@ -17,7 +17,9 @@
   <form onsubmit={submit}>
     <div class="icon"><ShieldCheck size={26} /></div>
     <h2>{t("Confirmation code")}</h2>
-    <p class="muted">{t("Apple sent a six-digit code to your iPhone.")}</p>
+    <p class="muted">{ui.twoFactorVia === "sms"
+      ? t("Apple sent a six-digit code by text message to your trusted phone number.")
+      : t("Apple sent a six-digit code to your iPhone.")}</p>
     {#if ui.twoFactorFor}<p class="faint who selectable">{ui.twoFactorFor}</p>{/if}
     <!-- svelte-ignore a11y_autofocus -->
     <input type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code"

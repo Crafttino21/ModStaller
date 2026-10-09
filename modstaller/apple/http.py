@@ -34,6 +34,10 @@ PROTOCOL_VERSION = "QH65B2"
 USER_AGENT_AKD = "akd/1.0 CFNetwork/1494.0.7 Darwin/23.4.0"
 USER_AGENT_XCODE = "Xcode"
 
+#: Xcode version we claim to be - developerservices2 and the two-factor
+#: requests, which Apple attributes to Xcode.
+XCODE_VERSION = "11.2 (11B41)"
+
 #: The signature of the edge rejection: HTTP 503 with a tiny HTML page.
 #: A real outage looks different, so we may tell the two apart.
 _EDGE_REJECT_MAX_BODY = 512

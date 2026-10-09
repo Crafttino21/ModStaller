@@ -72,6 +72,8 @@ const dict: Dict = {
     "Il servizio dispositivi Apple non è in esecuzione",
   "Apple device service missing":
     "Servizio dispositivi Apple mancante",
+  "Apple sent a six-digit code by text message to your trusted phone number.":
+    "Apple ha inviato un codice di sei cifre via SMS al tuo numero di telefono attendibile.",
   "Apple sent a six-digit code to your iPhone.":
     "Apple ha inviato un codice di sei cifre al tuo iPhone.",
   "Applies to the whole program, including the messages that come from the background service.":

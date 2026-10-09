@@ -196,7 +196,7 @@ async def test_login_asks_the_ui_for_the_2fa_code(monkeypatch):
     got = {}
 
     def fake_login(apple_id, password, ani, code_prompt=None, debug=False):
-        got["code"] = code_prompt()
+        got["code"] = code_prompt("sms")
         return type("S", (), {"adsid": "a"})()
 
     class FakeApi:
@@ -218,8 +218,9 @@ async def test_login_asks_the_ui_for_the_2fa_code(monkeypatch):
         msg = await w.next()
         if msg.get("method") == "prompt.2fa":
             break
-    # With several accounts the dialog has to say whose code it is.
-    assert msg["params"] == {"appleId": "a@b.de"}
+    # With several accounts the dialog has to say whose code it is - and
+    # where it went: a text message is not a popup on the iPhone.
+    assert msg["params"] == {"appleId": "a@b.de", "via": "sms"}
     w.send({"jsonrpc": "2.0", "id": msg["id"], "result": "123456"})
 
     reply = await w.reply_to(1)
@@ -301,6 +302,21 @@ async def test_the_device_identity_stays_while_other_accounts_need_it():
     w.call(2, "logout", account="a")
     assert (await w.reply_to(2))["result"] is True
     assert [s.adsid for s in session_mod.list_accounts()] == ["b"]
+
+
+async def test_the_last_account_takes_the_device_identity_along(monkeypatch):
+    """Through anisette.forget_device - deleting the files alone would be
+    undone by this very process on its next status poll."""
+    from modstaller.apple import anisette
+    from modstaller.apple import session as session_mod
+    forgotten = []
+    monkeypatch.setattr(anisette, "forget_device", lambda: forgotten.append(1))
+    session_mod.Session(adsid="a", idms_token="i", identity_token="t",
+                        created_at=1, app_token="x").save()
+    w = Wire()
+    w.call(1, "logout", account="a", forgetDevice=True)
+    assert (await w.reply_to(1))["result"] is True
+    assert forgotten == [1]
 
 
 async def test_status_names_a_missing_usb_service_and_logs_it_once(monkeypatch):

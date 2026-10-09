@@ -111,6 +111,7 @@
   "No expired profiles found.": "Geen verlopen profielen gevonden.",
   "No matching Developer Disk Image found - for very new iOS versions there is none yet. ({error})": "Geen passende Developer Disk Image gevonden - voor heel nieuwe iOS-versies bestaat er nog geen. ({error})",
   "No two-factor code was entered.": "Er is geen tweefactorcode ingevoerd.",
+  "Apple could not send a two-factor code (HTTP {status}).": "Apple kon geen tweefactorcode versturen (HTTP {status}).",
   "No valid sign-in. Run ‘modstaller login’ once.": "Geen geldige aanmelding. Voer ‘modstaller login’ één keer uit.",
   "Not enough App IDs left this week - the app goes under the unused App ID {id}.": "Niet genoeg App-ID's over deze week - de app draait onder de ongebruikte App-ID {id}.",
   "Not mounted. Needed for JIT only; ModStaller mounts it itself when required.": "Niet geladen. Alleen nodig voor JIT; ModStaller laadt hem dan zelf.",

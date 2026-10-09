@@ -7,8 +7,11 @@ Flow:
 2. ``complete`` - we send the SRP proof ``M1``, Apple responds with
                   ``M2`` and ``spd``: a plist encrypted with the session key,
                   containing ``adsid`` and ``GsIdmsToken``.
-3. 2FA, if any  - Apple sends a code to the trusted devices, we validate it
-                  and repeat steps 1-2.
+3. 2FA, if any  - ``Status.au`` says how: ``trustedDeviceSecondaryAuth`` is
+                  a push to the trusted devices, validated over GsService2;
+                  ``secondaryAuth`` a text message to the trusted phone
+                  number, confirmed over a JSON endpoint. Then steps 1-2
+                  again.
 4. ``apptokens``- the login token alone is not enough for
                   developerservices2 ("Your session has expired"). It has to
                   be exchanged for an app-specific token for
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import plistlib
 from base64 import b64encode
 from dataclasses import dataclass
@@ -50,6 +54,18 @@ ERR_INVALID_CODE = -21669
 #: fully confirmed. The wording ("wrong password") is reliably misleading.
 ERR_NOT_FULLY_AUTHENTICATED = -22406
 ERR_TEMPORARILY_BLOCKED = -22411
+
+#: Where Apple sends the two-factor code - what the code prompt is told.
+VIA_DEVICE = "device"
+VIA_SMS = "sms"
+
+_TRUSTED_DEVICE_URL = "https://gsa.apple.com/auth/verify/trusteddevice"
+_VALIDATE_URL = "https://gsa.apple.com/grandslam/GsService2/validate"
+#: Without a trailing slash - with one, Apple answers 405.
+_SMS_URL = "https://gsa.apple.com/auth/verify/phone"
+_SMS_CODE_URL = "https://gsa.apple.com/auth/verify/phone/securitycode"
+#: Apple's first trusted number - the one GrandSlam clients use.
+_PHONE_ID = 1
 
 #: Translated on lookup, not at import time.
 _MESSAGES = {
@@ -141,9 +157,35 @@ def _decrypt_app_token(session_key: bytes, blob: bytes) -> dict:
 #: Fields that must never be printed - not even in diagnostic mode. Key
 #: material, proofs and tokens.
 _NEVER_PRINT = frozenset({
-    "sk", "spd", "M1", "M2", "B", "A2k", "c", "et", "checksum", "s",
+    "sk", "spd", "M1", "M2", "B", "A2k", "c", "et", "checksum", "s", "np",
     "GsIdmsToken", "token", "pet", "adsid", "DsPrsId", "acname", "altDSID",
 })
+
+#: Personal data. Not key material, but debug output ends up pasted into
+#: public bug reports - names, addresses and phone numbers have no business
+#: there.
+_PERSONAL = frozenset({
+    "fn", "ln", "primaryEmail", "alias", "appleId", "phoneNumber",
+    "maskedPhoneNumber", "numberWithDialCode", "obfuscatedNumber",
+    "lastTwoDigits", "custodianUuid",
+})
+
+
+def _shown(key, value) -> str:
+    """One value for :func:`_describe` - hidden wherever it sits.
+
+    Recursive: the token for ``com.apple.gs.appleid.auth`` sits two levels
+    down, inside ``t``.
+    """
+    if key in _NEVER_PRINT or key in _PERSONAL:
+        return (f"<{len(value)} bytes>" if isinstance(value, (bytes, bytearray))
+                else "<hidden>")
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{k}={_shown(k, v)}"
+                               for k, v in sorted(value.items())) + "}"
+    if isinstance(value, list):
+        return "[" + ", ".join(_shown(None, v) for v in value) + "]"
+    return repr(value)
 
 
 def _describe(data: dict, label: str) -> str:
@@ -155,16 +197,7 @@ def _describe(data: dict, label: str) -> str:
     """
     lines = [f"  [{label}] Fields: {', '.join(sorted(data))}"]
     for key in sorted(data):
-        if key in _NEVER_PRINT:
-            value = f"<{len(data[key])} bytes>" if isinstance(
-                data[key], (bytes, bytearray)) else "<hidden>"
-        elif isinstance(data[key], dict):
-            value = "{" + ", ".join(
-                f"{k}={v!r}" if k not in _NEVER_PRINT else f"{k}=<hidden>"
-                for k, v in sorted(data[key].items())) + "}"
-        else:
-            value = repr(data[key])
-        lines.append(f"      {key}: {value[:220]}")
+        lines.append(f"      {key}: {_shown(key, data[key])[:220]}")
     return "\n".join(lines)
 
 
@@ -173,12 +206,14 @@ class GSAClient:
 
     Args:
         anisette: Provider of the attestation headers.
-        code_prompt: Called for the 2FA code. ``None`` means
+        code_prompt: Called for the 2FA code, with where Apple sent it:
+            :data:`VIA_DEVICE` or :data:`VIA_SMS`. ``None`` means
             non-interactive - then :class:`InteractionRequired` is raised
             instead of a daemon blocking on stdin.
     """
 
-    def __init__(self, anisette, code_prompt: Callable[[], str] | None = None,
+    def __init__(self, anisette,
+                 code_prompt: Callable[[str], str] | None = None,
                  debug: bool = False):
         self._ani = anisette
         self._prompt = code_prompt
@@ -246,18 +281,25 @@ class GSAClient:
         spd, srp_key, complete = self._handshake(apple_id, password)
         self._trace(spd, "spd (decrypted)")
 
-        if self._needs_2fa(complete, spd):
+        au = self._second_factor(complete, spd)
+        if au:
+            via = self._SECOND_FACTOR[au]
             if self._debug:
-                print("  -> Apple requires a second confirmation.", flush=True)
-            self._do_two_factor(spd)
+                print(f"  -> Apple requires a second confirmation "
+                      f"(au={au}, via {via}).", flush=True)
+            self._do_two_factor(spd, via)
             # After passing 2FA the handshake starts over - Apple ties the
             # trust to the ADI identity, not to the session.
             spd, srp_key, complete = self._handshake(apple_id, password)
-            if self._needs_2fa(complete, spd):
+            still = self._second_factor(complete, spd)
+            if still:
+                # The au value stays untranslated: it is what a bug report
+                # needs to tell trusted-device from SMS confirmation.
                 raise AppleError(_(
                     "Apple asks for another code after the two-factor "
                     "confirmation. Resetting the provisioning state usually "
-                    "helps: modstaller logout --forget-device"))
+                    "helps: modstaller logout --forget-device")
+                    + f" (au={still})")
 
         adsid, token = spd.get("adsid"), spd.get("GsIdmsToken")
         if not adsid or not token:
@@ -348,13 +390,20 @@ class GSAClient:
 
     # -- Two-factor -------------------------------------------------------
 
-    #: Values with which Apple requests a second confirmation.
-    _SECOND_FACTOR = ("trustedDeviceSecondaryAuth", "secondaryAuth",
-                      "smsSecondaryAuth")
+    #: Values with which Apple requests a second confirmation - and how it
+    #: wants it. ``secondaryAuth`` is the text message to the trusted phone
+    #: number. Answered over the trusted-device route instead, a code still
+    #: lands on the iPhone, but the session is never confirmed: Apple asks
+    #: again on the next handshake.
+    _SECOND_FACTOR = {
+        "trustedDeviceSecondaryAuth": VIA_DEVICE,
+        "secondaryAuth": VIA_SMS,
+        "smsSecondaryAuth": VIA_SMS,
+    }
 
     @classmethod
-    def _needs_2fa(cls, complete: dict, spd: dict) -> bool:
-        """Looks for the 2FA hint everywhere Apple puts it.
+    def _second_factor(cls, complete: dict, spd: dict) -> str | None:
+        """Looks for the 2FA hint everywhere Apple puts it and returns it.
 
         Primarily ``Status.au`` in the ``complete`` response. If that is
         missed, the login appears to succeed but yields an only half-valid
@@ -367,7 +416,11 @@ class GSAClient:
             complete.get("au"),
             spd.get("au"),
         )
-        return any(c in cls._SECOND_FACTOR for c in candidates if c)
+        return next((c for c in candidates if c in cls._SECOND_FACTOR), None)
+
+    @classmethod
+    def _needs_2fa(cls, complete: dict, spd: dict) -> bool:
+        return cls._second_factor(complete, spd) is not None
 
     def _two_factor_headers(self, spd: dict) -> dict[str, str]:
         identity = b64encode(
@@ -378,38 +431,150 @@ class GSAClient:
             "User-Agent": http.USER_AGENT_XCODE,
             "Accept-Language": "en-us",
             "X-Apple-Identity-Token": identity,
+            # As AltSign sends them: Apple attributes this step to Xcode.
+            "X-Apple-App-Info": XCODE_APP,
+            "X-Xcode-Version": http.XCODE_VERSION,
         }
         ani = self._ani.headers()
         headers.update({k: v for k, v in ani.items() if k.startswith("X-")})
         headers["X-MMe-Client-Info"] = clientinfo.sanitize(self._ani.client_info())
         return headers
 
-    def _do_two_factor(self, spd: dict) -> None:
+    @staticmethod
+    def _plist(resp) -> dict | None:
+        """The response body as a plist - ``None`` for anything else (an
+        HTML error page, an empty body, JSON)."""
+        try:
+            parsed = plistlib.loads(resp.content)
+        except Exception:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    def _trace_response(self, resp, label: str, parsed: dict | None) -> None:
+        if not self._debug:
+            return
+        print(f"  [{label}] HTTP {resp.status_code}, "
+              f"{len(resp.content or b'')} bytes", flush=True)
+        if parsed is not None:
+            self._trace(parsed, label)
+
+    def _do_two_factor(self, spd: dict, via: str = VIA_DEVICE) -> None:
         if self._prompt is None:
             raise InteractionRequired(_(
                 "Apple requires a two-factor code, but ModStaller is running "
                 "non-interactively. Run ‘modstaller login’ once."))
-        headers = self._two_factor_headers(spd)
+        if via == VIA_SMS:
+            self._send_sms(spd)
+        else:
+            self._send_to_devices(spd)
 
-        # Send the code to the trusted devices.
-        http.gsa_request(self._session, "GET",
-                         "https://gsa.apple.com/auth/verify/trusteddevice",
-                         client_info=headers["X-MMe-Client-Info"],
-                         headers=headers)
-
-        code = self._prompt().strip()
+        code = self._prompt(via).strip()
         if not code:
             raise AppleError(_("No two-factor code was entered."))
 
+        # Both build their headers afresh: the one-time password from
+        # sending is as old as the time it took to type the code.
+        if via == VIA_SMS:
+            self._confirm_sms(spd, code)
+        else:
+            self._confirm_on_device(spd, code)
+
+    # -- ... via the trusted devices ---------------------------------------
+
+    def _send_to_devices(self, spd: dict) -> None:
+        headers = self._two_factor_headers(spd)
         resp = http.gsa_request(
-            self._session, "GET",
-            "https://gsa.apple.com/grandslam/GsService2/validate",
+            self._session, "GET", _TRUSTED_DEVICE_URL,
+            client_info=headers["X-MMe-Client-Info"], headers=headers)
+        parsed = self._plist(resp)
+        self._trace_response(resp, "trusteddevice", parsed)
+        if resp.status_code >= 400:
+            # Apple's own reason first, if it sent one.
+            self._check(parsed or {})
+            raise AppleError(_(
+                "Apple could not send a two-factor code (HTTP {status}).",
+                status=resp.status_code))
+
+    def _confirm_on_device(self, spd: dict, code: str) -> None:
+        headers = self._two_factor_headers(spd)
+        resp = http.gsa_request(
+            self._session, "GET", _VALIDATE_URL,
             client_info=headers["X-MMe-Client-Info"],
             headers={**headers, "security-code": code})
+        parsed = self._plist(resp)
+        self._trace_response(resp, "validate", parsed)
+        # No plist means no confirmation - whatever the status says. Taking
+        # it for success leads straight to "asks for another code".
+        if parsed is None:
+            raise AppleError(
+                f"2FA validation failed (HTTP {resp.status_code}).")
+        self._check(parsed)
+
+    # -- ... via text message ------------------------------------------------
+
+    def _sms_headers(self, spd: dict) -> dict[str, str]:
+        """The two-factor headers, but JSON: the phone endpoints are not a
+        GrandSlam plist service."""
+        return {**self._two_factor_headers(spd),
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "application/json, text/html"}
+
+    @staticmethod
+    def _sms_body(code: str | None = None) -> bytes:
+        body: dict = {"phoneNumber": {"id": _PHONE_ID}, "mode": "sms"}
+        if code is not None:
+            body["securityCode"] = {"code": code}
+        return json.dumps(body).encode()
+
+    @staticmethod
+    def _json(resp) -> dict | None:
         try:
-            self._check(plistlib.loads(resp.content))
-        except plistlib.InvalidFileException:
-            if resp.status_code >= 400:
-                raise AppleError(
-                    f"2FA validation failed (HTTP {resp.status_code})."
-                ) from None
+            parsed = json.loads(resp.content)
+        except Exception:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    @staticmethod
+    def _service_error(parsed: dict | None) -> str | None:
+        """Apple's own wording from a JSON error (``serviceErrors``)."""
+        errors = (parsed or {}).get("serviceErrors")
+        if not isinstance(errors, list) or not errors \
+                or not isinstance(errors[0], dict):
+            return None
+        parts = [p.strip() for p in (errors[0].get("title"),
+                                     errors[0].get("message"))
+                 if isinstance(p, str) and p.strip()]
+        return ": ".join(dict.fromkeys(parts)) or None
+
+    def _send_sms(self, spd: dict) -> None:
+        headers = self._sms_headers(spd)
+        resp = http.gsa_request(
+            self._session, "PUT", _SMS_URL,
+            client_info=headers["X-MMe-Client-Info"], headers=headers,
+            data=self._sms_body())
+        parsed = self._json(resp)
+        self._trace_response(resp, "verify/phone", parsed)
+        # 423: Apple has sent codes already - the last one still counts.
+        if resp.status_code in (200, 201, 202, 423):
+            return
+        raise AppleError(self._service_error(parsed) or _(
+            "Apple could not send a two-factor code (HTTP {status}).",
+            status=resp.status_code))
+
+    def _confirm_sms(self, spd: dict, code: str) -> None:
+        headers = self._sms_headers(spd)
+        resp = http.gsa_request(
+            self._session, "POST", _SMS_CODE_URL,
+            client_info=headers["X-MMe-Client-Info"], headers=headers,
+            data=self._sms_body(code))
+        parsed = self._json(resp)
+        self._trace_response(resp, "verify/phone/securitycode", parsed)
+        if resp.status_code == 200:
+            return
+        detail = self._service_error(parsed)
+        if detail:
+            raise AppleError(detail)
+        if resp.status_code in (400, 401, 403):
+            raise AppleError(f"{_(_MESSAGES[ERR_INVALID_CODE])} "
+                             f"(HTTP {resp.status_code})")
+        raise AppleError(f"2FA validation failed (HTTP {resp.status_code}).")

@@ -111,6 +111,7 @@
   "No expired profiles found.": "Aucun profil expiré trouvé.",
   "No matching Developer Disk Image found - for very new iOS versions there is none yet. ({error})": "Aucun Developer Disk Image correspondant trouvé - pour les versions d’iOS très récentes, il n’en existe pas encore. ({error})",
   "No two-factor code was entered.": "Aucun code à deux facteurs n’a été saisi.",
+  "Apple could not send a two-factor code (HTTP {status}).": "Apple n’a pas pu envoyer de code à deux facteurs (HTTP {status}).",
   "No valid sign-in. Run ‘modstaller login’ once.": "Aucune connexion valide. Lancez « modstaller login » une fois.",
   "Not enough App IDs left this week - the app goes under the unused App ID {id}.": "Pas assez d’App ID restants cette semaine - l’app utilise l’App ID inutilisé {id}.",
   "Not mounted. Needed for JIT only; ModStaller mounts it itself when required.": "Non monté. Nécessaire uniquement pour le JIT ; ModStaller le monte lui-même le cas échéant.",
