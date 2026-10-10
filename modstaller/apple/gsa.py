@@ -8,10 +8,11 @@ Flow:
                   ``M2`` and ``spd``: a plist encrypted with the session key,
                   containing ``adsid`` and ``GsIdmsToken``.
 3. 2FA, if any  - ``Status.au`` says how: ``trustedDeviceSecondaryAuth`` is
-                  a push to the trusted devices, validated over GsService2;
-                  ``secondaryAuth`` a text message to the trusted phone
-                  number, confirmed over a JSON endpoint. Then steps 1-2
-                  again.
+                  a push to the trusted devices, validated over GsService2,
+                  then steps 1-2 again. ``secondaryAuth`` is a text message
+                  to the trusted phone number over Apple's web sign-in; the
+                  session it confirms goes straight to step 4, with steps
+                  1-2 again only as the fallback.
 4. ``apptokens``- the login token alone is not enough for
                   developerservices2 ("Your session has expired"). It has to
                   be exchanged for an app-specific token for
@@ -31,6 +32,8 @@ import plistlib
 from base64 import b64encode
 from dataclasses import dataclass
 from typing import Callable
+
+import requests
 
 from ..errors import AppleError, InteractionRequired
 from ..i18n import _
@@ -61,11 +64,20 @@ VIA_SMS = "sms"
 
 _TRUSTED_DEVICE_URL = "https://gsa.apple.com/auth/verify/trusteddevice"
 _VALIDATE_URL = "https://gsa.apple.com/grandslam/GsService2/validate"
+#: The web sign-in Apple names with au=secondaryAuth.
+_AUTH_URL = "https://gsa.apple.com/auth"
 #: Without a trailing slash - with one, Apple answers 405.
 _SMS_URL = "https://gsa.apple.com/auth/verify/phone"
 _SMS_CODE_URL = "https://gsa.apple.com/auth/verify/phone/securitycode"
-#: Apple's first trusted number - the one GrandSlam clients use.
+_TRUST_URL = "https://gsa.apple.com/auth/2sv/trust"
+#: Apple's first trusted number - when the sign-in page names none.
 _PHONE_ID = 1
+#: serviceErrors that refuse a *new* text message - the last code still
+#: counts (as isideload handles them).
+_CODE_STILL_VALID = frozenset({"-22979", "-22981"})
+#: Session markers of the web sign-in, by lower-case name.
+_WEB_SESSION_HEADERS = {"x-apple-id-session-id": "X-Apple-ID-Session-Id",
+                        "scnt": "scnt"}
 
 #: Translated on lookup, not at import time.
 _MESSAGES = {
@@ -86,6 +98,15 @@ _HINTS = {
         "attempts extend the block."
     ),
 }
+
+
+class GSAStatusError(AppleError):
+    """A non-zero ``Status.ec`` - with the code, so callers can tell a
+    pending confirmation from a block."""
+
+    def __init__(self, message: str, code: int):
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass
@@ -188,6 +209,18 @@ def _shown(key, value) -> str:
     return repr(value)
 
 
+def _identity_tag(headers: dict) -> str:
+    """A short fingerprint of the device a request speaks for.
+
+    Shows in a trace whether every step - handshake, code, handshake again -
+    was the same device to Apple; a changing identity makes Apple ask for a
+    code over and over. The hash reveals none of the identifiers.
+    """
+    parts = [str(headers.get(k, "")) for k in
+             ("X-Mme-Device-Id", "X-Apple-I-MD-M", "X-Apple-I-MD-LU")]
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:8]
+
+
 def _describe(data: dict, label: str) -> str:
     """Describes a response without revealing its content.
 
@@ -219,6 +252,8 @@ class GSAClient:
         self._prompt = code_prompt
         self._debug = debug
         self._session = http.gsa_session()
+        #: Session markers of Apple's web sign-in (SMS route), echoed back.
+        self._web_session: dict[str, str] = {}
 
     def _trace(self, data: dict, label: str) -> None:
         if self._debug:
@@ -241,8 +276,12 @@ class GSAClient:
         ci = clientinfo.sanitize(self._ani.client_info())
         clientinfo.assert_safe(ci, where="GSA")
 
+        cpd = self._cpd()
+        if self._debug:
+            print(f"  [{params.get('o', '?')}] device {_identity_tag(cpd)}",
+                  flush=True)
         body = {"Header": {"Version": "1.0.1"},
-                "Request": {"cpd": self._cpd(), **params}}
+                "Request": {"cpd": cpd, **params}}
         # gsa_request ensures a fresh connection: Apple's edge lets only one
         # request to GsService2 through per TCP connection, and "complete"
         # would otherwise be the second.
@@ -271,8 +310,8 @@ class GSAClient:
                    status.get("em") or _("GSA error {code}", code=code))
             hint = _HINTS.get(code)
             hint = _(hint) if hint else None
-            raise AppleError(f"{msg} (Code {code})"
-                             + (f"\n\n{hint}" if hint else ""))
+            raise GSAStatusError(f"{msg} (Code {code})"
+                                 + (f"\n\n{hint}" if hint else ""), code)
         return resp
 
     # -- Flow --------------------------------------------------------------
@@ -288,9 +327,14 @@ class GSAClient:
                 print(f"  -> Apple requires a second confirmation "
                       f"(au={au}, via {via}).", flush=True)
             self._do_two_factor(spd, via)
+            if via == VIA_SMS:
+                confirmed = self._confirmed_session(spd)
+                if confirmed:
+                    return confirmed
             # After passing 2FA the handshake starts over - Apple ties the
             # trust to the ADI identity, not to the session.
             spd, srp_key, complete = self._handshake(apple_id, password)
+            self._trace(spd, "spd (after 2FA)")
             still = self._second_factor(complete, spd)
             if still:
                 # The au value stays untranslated: it is what a bug report
@@ -300,7 +344,29 @@ class GSAClient:
                     "confirmation. Resetting the provisioning state usually "
                     "helps: modstaller logout --forget-device")
                     + f" (au={still})")
+        return self._result(spd)
 
+    def _confirmed_session(self, spd: dict) -> GSAResult | None:
+        """After a text-message confirmation: the session it confirmed.
+
+        The SMS route runs over Apple's web sign-in (``gsa.apple.com/auth``),
+        which confirms the session it was started for. A fresh handshake
+        can come back asking for a code all over again (issue #3, and the
+        same loop in other GrandSlam clients). So the confirmed session gets
+        the token exchange first; only if Apple turns it down does the
+        handshake start over.
+        """
+        try:
+            return self._result(spd)
+        except GSAStatusError as exc:
+            if exc.code == ERR_TEMPORARILY_BLOCKED:
+                raise
+            if self._debug:
+                print(f"  -> Confirmed session not accepted (Code {exc.code})"
+                      f" - signing in again.", flush=True)
+            return None
+
+    def _result(self, spd: dict) -> GSAResult:
         adsid, token = spd.get("adsid"), spd.get("GsIdmsToken")
         if not adsid or not token:
             raise AppleError(_("GSA returned no adsid/GsIdmsToken - "
@@ -450,11 +516,24 @@ class GSAClient:
             return None
         return parsed if isinstance(parsed, dict) else None
 
-    def _trace_response(self, resp, label: str, parsed: dict | None) -> None:
+    def _trace_response(self, resp, label: str, parsed: dict | None,
+                        sent: dict | None = None) -> None:
+        """Status, which headers and cookies Apple handed out (names only),
+        the device the request spoke for, and the redacted body."""
         if not self._debug:
             return
-        print(f"  [{label}] HTTP {resp.status_code}, "
-              f"{len(resp.content or b'')} bytes", flush=True)
+        names = sorted(k for k in (resp.headers or {})
+                       if k.lower().startswith(("x-apple", "scnt")))
+        cookies = sorted(c.name for c in getattr(resp, "cookies", None) or ())
+        line = (f"  [{label}] HTTP {resp.status_code}, "
+                f"{len(resp.content or b'')} bytes")
+        if sent is not None:
+            line += f", device {_identity_tag(sent)}"
+        if names:
+            line += f"\n      response headers: {', '.join(names)}"
+        if cookies:
+            line += f"\n      cookies: {', '.join(cookies)}"
+        print(line, flush=True)
         if parsed is not None:
             self._trace(parsed, label)
 
@@ -464,7 +543,8 @@ class GSAClient:
                 "Apple requires a two-factor code, but ModStaller is running "
                 "non-interactively. Run ‘modstaller login’ once."))
         if via == VIA_SMS:
-            self._send_sms(spd)
+            phone_id = self._trusted_phone_id(spd)
+            self._send_sms(spd, phone_id)
         else:
             self._send_to_devices(spd)
 
@@ -475,7 +555,8 @@ class GSAClient:
         # Both build their headers afresh: the one-time password from
         # sending is as old as the time it took to type the code.
         if via == VIA_SMS:
-            self._confirm_sms(spd, code)
+            self._confirm_sms(spd, code, phone_id)
+            self._trust_device(spd)
         else:
             self._confirm_on_device(spd, code)
 
@@ -487,7 +568,7 @@ class GSAClient:
             self._session, "GET", _TRUSTED_DEVICE_URL,
             client_info=headers["X-MMe-Client-Info"], headers=headers)
         parsed = self._plist(resp)
-        self._trace_response(resp, "trusteddevice", parsed)
+        self._trace_response(resp, "trusteddevice", parsed, headers)
         if resp.status_code >= 400:
             # Apple's own reason first, if it sent one.
             self._check(parsed or {})
@@ -502,7 +583,7 @@ class GSAClient:
             client_info=headers["X-MMe-Client-Info"],
             headers={**headers, "security-code": code})
         parsed = self._plist(resp)
-        self._trace_response(resp, "validate", parsed)
+        self._trace_response(resp, "validate", parsed, headers)
         # No plist means no confirmation - whatever the status says. Taking
         # it for success leads straight to "asks for another code".
         if parsed is None:
@@ -511,20 +592,42 @@ class GSAClient:
         self._check(parsed)
 
     # -- ... via text message ------------------------------------------------
+    #
+    # This is Apple's web sign-in (gsa.apple.com/auth), not GrandSlam: JSON,
+    # session markers in headers, errors as "serviceErrors". The order -
+    # load the page, send, confirm - follows isideload, whose SMS route is
+    # known to get through to a signed-in session.
 
     def _sms_headers(self, spd: dict) -> dict[str, str]:
-        """The two-factor headers, but JSON: the phone endpoints are not a
-        GrandSlam plist service."""
         return {**self._two_factor_headers(spd),
-                "Content-Type": "application/json; charset=utf-8",
-                "Accept": "application/json, text/html"}
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": http.USER_AGENT_AKD,
+                **self._web_session}
+
+    def _web_request(self, spd: dict, method: str, url: str, label: str,
+                     body: dict | None = None) -> tuple:
+        headers = self._sms_headers(spd)
+        resp = http.gsa_request(
+            self._session, method, url,
+            client_info=headers["X-MMe-Client-Info"], headers=headers,
+            data=None if body is None else json.dumps(body).encode())
+        # The web sign-in ties its steps together with these two headers -
+        # a browser sends back what it was given.
+        for key, value in (resp.headers or {}).items():
+            canonical = _WEB_SESSION_HEADERS.get(key.lower())
+            if canonical:
+                self._web_session[canonical] = value
+        parsed = self._json(resp)
+        self._trace_response(resp, label, parsed, headers)
+        return resp, parsed
 
     @staticmethod
-    def _sms_body(code: str | None = None) -> bytes:
-        body: dict = {"phoneNumber": {"id": _PHONE_ID}, "mode": "sms"}
+    def _sms_body(phone_id: int, code: str | None = None) -> dict:
+        body: dict = {"phoneNumber": {"id": phone_id}, "mode": "sms"}
         if code is not None:
             body["securityCode"] = {"code": code}
-        return json.dumps(body).encode()
+        return body
 
     @staticmethod
     def _json(resp) -> dict | None:
@@ -535,8 +638,8 @@ class GSAClient:
         return parsed if isinstance(parsed, dict) else None
 
     @staticmethod
-    def _service_error(parsed: dict | None) -> str | None:
-        """Apple's own wording from a JSON error (``serviceErrors``)."""
+    def _service_error(parsed: dict | None) -> tuple[str, str] | None:
+        """Apple's code and wording from a JSON error (``serviceErrors``)."""
         errors = (parsed or {}).get("serviceErrors")
         if not isinstance(errors, list) or not errors \
                 or not isinstance(errors[0], dict):
@@ -544,37 +647,52 @@ class GSAClient:
         parts = [p.strip() for p in (errors[0].get("title"),
                                      errors[0].get("message"))
                  if isinstance(p, str) and p.strip()]
-        return ": ".join(dict.fromkeys(parts)) or None
+        return str(errors[0].get("code", "")), ": ".join(dict.fromkeys(parts))
 
-    def _send_sms(self, spd: dict) -> None:
-        headers = self._sms_headers(spd)
-        resp = http.gsa_request(
-            self._session, "PUT", _SMS_URL,
-            client_info=headers["X-MMe-Client-Info"], headers=headers,
-            data=self._sms_body())
-        parsed = self._json(resp)
-        self._trace_response(resp, "verify/phone", parsed)
-        # 423: Apple has sent codes already - the last one still counts.
-        if resp.status_code in (200, 201, 202, 423):
+    def _trusted_phone_id(self, spd: dict) -> int:
+        """Loads the sign-in page Apple named in ``au``, as Apple's own
+        client does first. Its JSON lists the trusted numbers with the ids
+        the phone endpoints expect. Falls back to the first number."""
+        _resp, parsed = self._web_request(spd, "GET", _AUTH_URL, "auth")
+        numbers = [n for n in (parsed or {}).get("trustedPhoneNumbers") or ()
+                   if isinstance(n, dict) and isinstance(n.get("id"), int)]
+        texts = [n for n in numbers if n.get("pushMode") == "sms"]
+        return (texts or numbers or [{"id": _PHONE_ID}])[0]["id"]
+
+    def _send_sms(self, spd: dict, phone_id: int) -> None:
+        resp, parsed = self._web_request(spd, "PUT", _SMS_URL, "verify/phone",
+                                         self._sms_body(phone_id))
+        # 412: a challenge is already active. 423: codes were sent already.
+        # Either way, the last code that arrived still counts.
+        if 200 <= resp.status_code < 300 or resp.status_code in (412, 423):
             return
-        raise AppleError(self._service_error(parsed) or _(
+        error = self._service_error(parsed)
+        if error and error[0] in _CODE_STILL_VALID:
+            return
+        raise AppleError((error and error[1]) or _(
             "Apple could not send a two-factor code (HTTP {status}).",
             status=resp.status_code))
 
-    def _confirm_sms(self, spd: dict, code: str) -> None:
-        headers = self._sms_headers(spd)
-        resp = http.gsa_request(
-            self._session, "POST", _SMS_CODE_URL,
-            client_info=headers["X-MMe-Client-Info"], headers=headers,
-            data=self._sms_body(code))
-        parsed = self._json(resp)
-        self._trace_response(resp, "verify/phone/securitycode", parsed)
-        if resp.status_code == 200:
+    def _confirm_sms(self, spd: dict, code: str, phone_id: int) -> None:
+        resp, parsed = self._web_request(
+            spd, "POST", _SMS_CODE_URL, "verify/phone/securitycode",
+            self._sms_body(phone_id, code))
+        if 200 <= resp.status_code < 300:
             return
-        detail = self._service_error(parsed)
-        if detail:
-            raise AppleError(detail)
+        error = self._service_error(parsed)
+        if error and error[1]:
+            raise AppleError(error[1])
         if resp.status_code in (400, 401, 403):
             raise AppleError(f"{_(_MESSAGES[ERR_INVALID_CODE])} "
                              f"(HTTP {resp.status_code})")
         raise AppleError(f"2FA validation failed (HTTP {resp.status_code}).")
+
+    def _trust_device(self, spd: dict) -> None:
+        """Asks the web sign-in to trust this device - the step a browser
+        takes after the code. Best effort: the code is confirmed either way,
+        and what Apple answers ends up in the trace."""
+        try:
+            self._web_request(spd, "GET", _TRUST_URL, "2sv/trust")
+        except (AppleError, requests.RequestException) as exc:
+            if self._debug:
+                print(f"  [2sv/trust] failed: {exc}", flush=True)

@@ -12,17 +12,20 @@ import plistlib
 import pytest
 
 from modstaller.apple import anisette, clientinfo
-from modstaller.apple.gsa import VIA_SMS, XCODE_APP, GSAClient, _describe
+from modstaller.apple.gsa import (
+    ERR_NOT_FULLY_AUTHENTICATED, ERR_TEMPORARILY_BLOCKED, VIA_SMS, XCODE_APP,
+    GSAClient, GSAResult, GSAStatusError, _describe,
+)
 from modstaller.errors import AppleError
 
 SPD = {"adsid": "000123-00-abc", "GsIdmsToken": "secret-token"}
 
 
 class _FakeResponse:
-    def __init__(self, status: int, content: bytes = b""):
+    def __init__(self, status: int, content: bytes = b"", headers=None):
         self.status_code = status
         self.content = content
-        self.headers: dict = {}
+        self.headers: dict = headers or {}
 
 
 class _Replay:
@@ -153,6 +156,27 @@ def test_the_second_factor_is_named():
 # -- Text message (au=secondaryAuth) ----------------------------------------
 
 
+def _ok(body: bytes = b"{}", **headers):
+    return _FakeResponse(200, body, headers)
+
+
+def _secondary_auth_client(monkeypatch, *, token_exchange):
+    """A client whose first handshake asks for a text message; counts the
+    handshakes and hands the token exchange to ``token_exchange``."""
+    client = _client()
+    handshakes = []
+
+    def handshake(apple_id, password):
+        handshakes.append(1)
+        return ({**SPD, "sk": b"k", "c": b"c"}, b"key",
+                {"Status": {"au": "secondaryAuth"}})
+
+    client._handshake = handshake
+    client._do_two_factor = lambda spd, via: None
+    monkeypatch.setattr(client, "_fetch_app_token", token_exchange)
+    return client, handshakes
+
+
 def test_secondary_auth_goes_the_text_message_route():
     """Issue #3: answered over the trusted-device route, a code still lands
     on the iPhone - but Apple asks again on every handshake."""
@@ -161,48 +185,133 @@ def test_secondary_auth_goes_the_text_message_route():
     pending = ({**SPD}, b"key", {"Status": {"au": "secondaryAuth"}})
     client._handshake = lambda apple_id, password: pending
     client._do_two_factor = lambda spd, via: seen.append(via)
+    client._confirmed_session = lambda spd: None
     with pytest.raises(AppleError, match="au=secondaryAuth"):
         client.authenticate("someone@example.com", "pw")
     assert seen == [VIA_SMS]
 
 
-def test_a_text_message_code_is_requested_and_confirmed_as_json():
+def test_the_session_a_text_message_confirmed_is_used_directly(monkeypatch):
+    """Issue #3 with rc.2: code accepted, yet a fresh handshake asks again.
+    The session the code confirmed goes to the token exchange first."""
+    client, handshakes = _secondary_auth_client(
+        monkeypatch, token_exchange=lambda spd, adsid, token: "app-token")
+    result = client.authenticate("someone@example.com", "pw")
+    assert isinstance(result, GSAResult) and result.app_token == "app-token"
+    assert len(handshakes) == 1, "no second handshake needed"
+
+
+def test_a_confirmed_session_apple_turns_down_falls_back_to_signing_in(
+        monkeypatch):
+    def pending(spd, adsid, token):
+        raise GSAStatusError("not fully authenticated",
+                             ERR_NOT_FULLY_AUTHENTICATED)
+
+    client, handshakes = _secondary_auth_client(monkeypatch,
+                                                token_exchange=pending)
+    with pytest.raises(AppleError, match="au=secondaryAuth"):
+        client.authenticate("someone@example.com", "pw")
+    assert len(handshakes) == 2
+
+
+def test_a_block_is_not_answered_with_another_attempt(monkeypatch):
+    """-22411 grows with every attempt - no second handshake on top."""
+    def blocked(spd, adsid, token):
+        raise GSAStatusError("blocked", ERR_TEMPORARILY_BLOCKED)
+
+    client, handshakes = _secondary_auth_client(monkeypatch,
+                                                token_exchange=blocked)
+    with pytest.raises(GSAStatusError):
+        client.authenticate("someone@example.com", "pw")
+    assert len(handshakes) == 1
+
+
+def test_a_text_message_goes_load_send_confirm_trust():
     import json
     asked = []
     client = GSAClient(_Anisette(),
                        code_prompt=lambda via: asked.append(via) or "654321")
-    client._session = _Replay(_FakeResponse(200, b"{}"),
-                              _FakeResponse(200, b"{}"))
+    client._session = _Replay(_ok(), _ok(), _ok(), _ok())
     client._do_two_factor(SPD, VIA_SMS)
 
-    send, confirm = client._session.sent
-    assert send["url"].endswith("/auth/verify/phone")
+    load, send, confirm, trust = client._session.sent
+    assert (load["method"], load["url"]) == ("GET", "https://gsa.apple.com/auth")
+    assert (send["method"], send["url"]) == (
+        "PUT", "https://gsa.apple.com/auth/verify/phone")
     assert json.loads(send["data"]) == {"phoneNumber": {"id": 1}, "mode": "sms"}
     assert confirm["url"].endswith("/auth/verify/phone/securitycode")
     assert json.loads(confirm["data"])["securityCode"] == {"code": "654321"}
-    assert confirm["headers"]["Content-Type"].startswith("application/json")
+    assert trust["url"].endswith("/auth/2sv/trust")
+    assert confirm["headers"]["Content-Type"] == "application/json"
+    assert confirm["headers"]["User-Agent"].startswith("akd/")
     assert send["headers"]["X-Apple-I-MD"] != confirm["headers"]["X-Apple-I-MD"]
     assert asked == [VIA_SMS], "the prompt must say where to look for the code"
 
 
-def test_codes_already_sent_are_not_an_error():
-    """423: Apple has sent codes already - the last one still counts."""
-    client = _client(_FakeResponse(423, b"{}"), _FakeResponse(200, b"{}"))
+def test_the_number_comes_from_the_sign_in_page():
+    import json
+    page = json.dumps({"trustedPhoneNumbers": [
+        {"id": 2, "pushMode": "voice"}, {"id": 3, "pushMode": "sms"}]}).encode()
+    client = _client(_ok(page), _ok(), _ok(), _ok())
+    client._do_two_factor(SPD, VIA_SMS)
+    _load, send, confirm, _trust = client._session.sent
+    assert json.loads(send["data"])["phoneNumber"] == {"id": 3}
+    assert json.loads(confirm["data"])["phoneNumber"] == {"id": 3}
+
+
+def test_the_web_sign_in_gets_its_session_markers_back():
+    client = _client(_ok(**{"X-Apple-ID-Session-Id": "sid", "scnt": "s1"}),
+                     _ok(scnt="s2"), _ok(), _ok())
+    client._do_two_factor(SPD, VIA_SMS)
+    _load, send, confirm, _trust = client._session.sent
+    assert send["headers"]["X-Apple-ID-Session-Id"] == "sid"
+    assert send["headers"]["scnt"] == "s1"
+    assert confirm["headers"]["scnt"] == "s2", "always the latest one"
+
+
+@pytest.mark.parametrize("refusal", [
+    _FakeResponse(423, b"{}"),
+    _FakeResponse(412, b"{}"),
+    _FakeResponse(400, b'{"serviceErrors":[{"code":"-22979",'
+                       b'"title":"Too many codes","message":"Wait."}]}'),
+])
+def test_a_refused_new_text_message_still_asks_for_the_last_code(refusal):
+    """Apple won't send another one, but the last code still counts."""
+    asked = []
+    client = GSAClient(_Anisette(),
+                       code_prompt=lambda via: asked.append(via) or "1")
+    client._session = _Replay(_ok(), refusal, _ok(), _ok())
+    client._do_two_factor(SPD, VIA_SMS)
+    assert asked == [VIA_SMS]
+
+
+def test_a_failed_trust_step_does_not_fail_the_sign_in():
+    client = _client(_ok(), _ok(), _ok(), _FakeResponse(404, b""))
     client._do_two_factor(SPD, VIA_SMS)
 
 
 def test_a_wrong_text_message_code_shows_apples_words():
     body = b'{"serviceErrors":[{"code":"-21669","title":"Incorrect Code",' \
            b'"message":"Incorrect verification code."}]}'
-    client = _client(_FakeResponse(200, b"{}"), _FakeResponse(400, body))
+    client = _client(_ok(), _ok(), _FakeResponse(400, body))
     with pytest.raises(AppleError, match="Incorrect verification code"):
         client._do_two_factor(SPD, VIA_SMS)
 
 
 def test_a_text_message_that_could_not_be_sent_says_so():
-    client = _client(_FakeResponse(500, b"<html/>"))
+    client = _client(_ok(), _FakeResponse(500, b"<html/>"))
     with pytest.raises(AppleError, match="HTTP 500"):
         client._do_two_factor(SPD, VIA_SMS)
+
+
+def test_the_trace_names_headers_and_device_but_not_their_values(capsys):
+    client = _client(_ok(**{"X-Apple-ID-Session-Id": "SECRET-SID"}),
+                     _ok(), _ok(), _ok(), debug=True)
+    client._do_two_factor(SPD, VIA_SMS)
+    out = capsys.readouterr().out
+    assert "X-Apple-ID-Session-Id" in out and "SECRET-SID" not in out
+    assert "[verify/phone/securitycode] HTTP 200" in out
+    assert out.count(", device ") == 4
 
 
 # -- Debug output that ends up in public bug reports --------------------------
