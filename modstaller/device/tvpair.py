@@ -66,6 +66,21 @@ async def browse(timeout: float = BROWSE_TIMEOUT) -> list[dict]:
     return out
 
 
+def _tlv(ts, *items) -> bytes:
+    """A pairing TLV from ``(type, data)`` pairs.
+
+    pymobiledevice3 builds it from dicts up to 11.31, where
+    ``PairingDataComponentTLV8`` is a construct ``Struct``. Since 11.32 it
+    is a class whose instances are built - a dict there fails with "'dict'
+    object has no attribute 'build'".
+    """
+    item = getattr(ts, "PairingDataComponentTLV8", None)
+    if not isinstance(item, type):
+        return ts.PairingDataComponentTLVBuf.build(
+            [{"type": t, "data": d} for t, d in items])
+    return ts.PairingDataComponentTLVBuf.build([item(t, d) for t, d in items])
+
+
 def _pin_pairing_class():
     from pymobiledevice3.exceptions import PairingError
     from pymobiledevice3.remote import tunnel_service as ts
@@ -82,10 +97,8 @@ def _pin_pairing_class():
             self._on_step = on_step
 
         async def _request_pair_consent(self):
-            tlv = ts.PairingDataComponentTLVBuf.build([
-                {"type": ts.PairingDataComponentType.METHOD, "data": b"\x00"},
-                {"type": ts.PairingDataComponentType.STATE, "data": b"\x01"},
-            ])
+            tlv = _tlv(ts, (ts.PairingDataComponentType.METHOD, b"\x00"),
+                       (ts.PairingDataComponentType.STATE, b"\x01"))
             import platform
             await self._send_pairing_data({
                 "data": tlv, "kind": "setupManualPairing",
