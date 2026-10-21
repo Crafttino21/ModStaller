@@ -135,12 +135,28 @@ async def run_checks() -> list[Check]:
         ani = anisette_mod.build(settings.anisette_provider,
                                  settings.anisette_server)
         ci = ani.client_info()
-        if clientinfo.is_safe(ci):
-            checks.append(Check(label, True,
-                                _("com.apple.akd (accepted by GSA)")))
-        else:
+        host = settings.anisette_server.split("//", 1)[-1].split("/", 1)[0]
+        if not clientinfo.is_safe(ci):
             checks.append(Check(label, False,
                                 _("would trigger HTTP 503: {info}", info=ci)))
+        elif settings.anisette_provider == "local":
+            # Runs fine, Apple refuses it anyway (issue #4) - green here
+            # would point away from the cause.
+            checks.append(Check(
+                label, False,
+                _("Apple refuses the local emulation's anisette data since "
+                  "October 2026."),
+                hint=_('in config.toml: anisette_provider = "remote"')))
+        elif host in anisette_mod.LEGACY_SERVERS:
+            checks.append(Check(
+                label, False,
+                _("this server hands out Android anisette data, which Apple "
+                  "refuses since October 2026."),
+                hint=_('in config.toml: anisette_server = "{url}"',
+                       url=anisette_mod.DEFAULT_SERVER)))
+        else:
+            checks.append(Check(label, True,
+                                _("com.apple.akd (accepted by GSA)")))
     except Exception as exc:
         checks.append(Check(label, False, str(exc)))
 

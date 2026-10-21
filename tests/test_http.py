@@ -117,28 +117,19 @@ def test_sanitize_keeps_hardware_but_replaces_identifier():
     assert "MacBookPro13,2" in out, "hardware identity must be preserved"
 
 
-def test_sign_in_claims_android_like_the_anisette_data():
-    """-80045 since 2026-10-12: macOS next to Android anisette is refused."""
-    assert (clientinfo.for_auth(clientinfo.DEFAULT_CLIENT_INFO)
-            == clientinfo.ANDROID_CLIENT_INFO)
-    assert clientinfo.for_auth(XCODE_CI) == clientinfo.ANDROID_CLIENT_INFO
-    assert clientinfo.for_auth(None) == clientinfo.ANDROID_CLIENT_INFO
-    assert clientinfo.is_safe(clientinfo.ANDROID_CLIENT_INFO)
-    assert clientinfo.looks_well_formed(clientinfo.ANDROID_CLIENT_INFO)
-
-
-def test_a_server_naming_its_own_platform_is_believed():
-    windows = ("<PC> <Windows;6.2.9200/SP0.0;W> "
-               "<com.apple.AuthKit/1 (com.apple.akd/1.0)>")
-    assert clientinfo.for_auth(windows) == windows
-
-
 def test_503_with_small_body_is_diagnosed_not_retried():
     """Apple's edge rejection looks like an outage. It isn't one."""
     page = (b"<html><head><title>503</title></head><body>"
             b"<center>Apple</center></body></html>")
     with pytest.raises(AnisetteClientInfoRejected):
         http.check_edge_rejection(_FakeResponse(503, page), XCODE_CI)
+
+
+def test_503_for_a_harmless_client_info_blames_the_anisette_data():
+    """Issue #4 with rc.5: the client info had no Xcode in it."""
+    with pytest.raises(AnisetteClientInfoRejected, match="anisette data"):
+        http.check_edge_rejection(_FakeResponse(503, b"<html/>"),
+                                  clientinfo.DEFAULT_CLIENT_INFO)
 
 
 def test_503_with_large_body_passes_through():

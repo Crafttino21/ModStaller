@@ -19,14 +19,11 @@ only one call site leaves the others broken. That is why this one module
 exists - plus :func:`assert_safe` as a transport guard that stops any stray
 value locally, before it even goes out.
 
-Since 2026-10-12 Apple also answers the very first sign-in request with
-``ec=-80045`` ("This action cannot be completed at this time") when the
-client info claims macOS. The anisette data comes from an emulated *Android*
-ADI - locally from the ``anisette`` library as well as from every
-anisette-v3 server - and Apple now checks that the two fit together. So the
-sign-in claims Android (:func:`for_auth`), as iloader/isideload do since
-2.3.7/0.4.5. Provisioning keeps the macOS value: the URL bag Apple hands out
-for an Android client info is the wrong one.
+Since October 2026 the client info also has to fit the anisette data
+behind it. Android anisette data is refused either way: next to a macOS
+client info with -80045, next to an Android one with this same HTTP 503
+(1.4.0-rc.5, issue #4). The anisette-v3 server therefore names the client
+info - see ``anisette.RemoteV3Provider``.
 """
 
 from __future__ import annotations
@@ -47,15 +44,6 @@ DEFAULT_CLIENT_INFO = (
     "<MacBookPro13,2> <macOS;13.1;22C65> "
     f"<com.apple.AuthKit/1 ({AKD_IDENTIFIER})>"
 )
-
-#: What GSA gets to see during sign-in - matching the Android ADI.
-ANDROID_CLIENT_INFO = (
-    "<Pixel 7> <Android;14;UQ1A.240205.002> "
-    f"<com.apple.AuthKit/1 ({AKD_IDENTIFIER})>"
-)
-
-#: The OS bracket of a client info that claims macOS.
-_MACOS = re.compile(r"<macOS;")
 
 #: Expected shape: <model> <OS;version;build> <com.apple.AuthKit/N (app/ver)>
 _SHAPE = re.compile(
@@ -85,20 +73,6 @@ def sanitize(client_info: str | None) -> str:
         # Unexpected shape - better the known-good default than a 503.
         return DEFAULT_CLIENT_INFO
     return replaced
-
-
-def for_auth(client_info: str | None) -> str:
-    """The client info for sign-in and the developer API.
-
-    A macOS claim becomes :data:`ANDROID_CLIENT_INFO` - Apple rejects it
-    next to Android anisette data with -80045. Anything else (say an
-    anisette server that already names its own platform) only gets
-    :func:`sanitize`.
-    """
-    cleaned = sanitize(client_info)
-    if _MACOS.search(cleaned):
-        return ANDROID_CLIENT_INFO
-    return cleaned
 
 
 def is_safe(client_info: str | None) -> bool:

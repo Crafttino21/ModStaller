@@ -34,17 +34,21 @@ def test_windows_without_localappdata_falls_back_to_the_profile():
     assert cfg == Path("C:/Users/u/AppData/Local/modstaller")
 
 
-def test_anisette_stays_local_by_default(monkeypatch):
-    """On every platform: device identifiers stay on the machine."""
+def test_anisette_comes_from_a_server_by_default(monkeypatch):
+    """Since October 2026 Apple refuses the local emulation (issue #4)."""
+    from modstaller.apple import anisette
+
     for posix in (True, False):
         monkeypatch.setattr(config, "POSIX", posix)
-        assert config.Settings().anisette_provider == "local"
+        settings = config.Settings()
+        assert settings.anisette_provider == "remote"
+        assert settings.anisette_server == anisette.DEFAULT_SERVER
 
 
-def test_the_config_file_can_switch_to_a_server(tmp_path):
+def test_the_config_file_can_switch_back_to_local(tmp_path):
     f = tmp_path / "config.toml"
-    f.write_text('anisette_provider = "remote"\n')
-    assert config.Settings.load(f).anisette_provider == "remote"
+    f.write_text('anisette_provider = "local"\n')
+    assert config.Settings.load(f).anisette_provider == "local"
 
 
 @pytest.mark.skipif(not config.POSIX, reason="Unix permissions only exist on POSIX")

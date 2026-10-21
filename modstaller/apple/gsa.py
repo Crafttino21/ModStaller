@@ -102,9 +102,11 @@ _HINTS = {
     ),
     ERR_DEVICE_REJECTED: (
         "Apple does not accept this device identity (anisette). Since "
-        "October 2026 Apple rejects sign-ins whose device details do not "
-        "fit together. Update ModStaller, then run: modstaller logout --all "
-        "--forget-device and sign in again."
+        "October 2026 that is the case for the local emulation and for the "
+        "older anisette servers. Use a current anisette server - in "
+        "config.toml: anisette_provider = \"remote\" and anisette_server = "
+        "\"https://mac-ani.jkcoxson.com\" - then run: modstaller logout "
+        "--all --forget-device and sign in again."
     ),
 }
 
@@ -281,6 +283,15 @@ class GSAClient:
         cpd.update(self._ani.headers())
         return cpd
 
+    def _user_agent(self) -> str:
+        """The user agent that fits the client info - an anisette server
+        names both."""
+        named = getattr(self._ani, "user_agent", None)
+        return named() if named else http.USER_AGENT_AKD
+
+    def _ani_is_remote(self) -> bool:
+        return getattr(self._ani, "name", "") == "remote"
+
     def _request(self, params: dict) -> dict:
         ci = clientinfo.sanitize(self._ani.client_info())
         clientinfo.assert_safe(ci, where="GSA")
@@ -296,7 +307,8 @@ class GSAClient:
         # would otherwise be the second.
         resp = http.gsa_request(
             self._session, "POST", http.GSA_URL, client_info=ci,
-            headers={"X-MMe-Client-Info": ci}, data=plistlib.dumps(body),
+            headers={"X-MMe-Client-Info": ci, "User-Agent": self._user_agent()},
+            data=plistlib.dumps(body),
         )
         resp.raise_for_status()
         try:
@@ -513,7 +525,10 @@ class GSAClient:
         headers = {
             "Content-Type": "text/x-xml-plist",
             "Accept": "text/x-xml-plist",
-            "User-Agent": http.USER_AGENT_XCODE,
+            # An anisette server names the user agent that fits its device;
+            # isideload sends it here too.
+            "User-Agent": (self._user_agent() if self._ani_is_remote()
+                           else http.USER_AGENT_XCODE),
             "Accept-Language": "en-us",
             "X-Apple-Identity-Token": identity,
             # As AltSign sends them: Apple attributes this step to Xcode.

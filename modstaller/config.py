@@ -145,11 +145,12 @@ def read_secret(path: Path) -> bytes:
 class Settings:
     """What may go into config.toml. No secrets."""
 
-    #: "local" uses the ADI libraries on this machine, "remote" an
-    #: anisette-v3 server. Local is the default - on Windows too - so that
-    #: no device identifiers leave the system.
-    anisette_provider: str = "local"
-    anisette_server: str = "https://ani.sidestore.io"
+    #: "remote" uses an anisette-v3 server, "local" the ADI libraries on this
+    #: machine. Remote is the default since 1.4.0-rc.6: Apple refuses the
+    #: local emulation's (Android) anisette data since October 2026 - see
+    #: ``apple/anisette.py``. Must match ``anisette.DEFAULT_SERVER``.
+    anisette_provider: str = "remote"
+    anisette_server: str = "https://mac-ani.jkcoxson.com"
     default_udid: str | None = None
     default_team_id: str | None = None
     #: Free accounts: profiles expire after 7 days; renew from this point on.

@@ -14,6 +14,7 @@ dependencies = [
     "anisette>=1.2.4",
     "cryptography>=43",
     "requests>=2.31",
+    "websockets>=13",
     "quickjs-ng>=0.16",
 ]
 

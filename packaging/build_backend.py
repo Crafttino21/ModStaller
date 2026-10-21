@@ -56,6 +56,9 @@ COMMON = [
     "--collect-all", "anisette",
     "--collect-all", "unicorn",
     "--collect-all", "quickjs",
+    # websockets loads its submodules lazily - the anisette-v3 provisioning
+    # (websockets.sync.client) would otherwise be missing from the build.
+    "--collect-submodules", "websockets",
     "--recursive-copy-metadata", "modstaller",
 ]
 

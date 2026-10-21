@@ -163,6 +163,17 @@ def check_edge_rejection(response: requests.Response, client_info: str) -> None:
         return
     if len(response.content) > _EDGE_REJECT_MAX_BODY:
         return
+    if clientinfo.is_safe(client_info):
+        # No Xcode in it - then it is the device behind the client info
+        # that Apple turns away (issue #4).
+        raise AnisetteClientInfoRejected(_(
+            "Apple rejected the request at the edge (HTTP 503, {size} "
+            "bytes). The client info is fine ({sent}), so Apple refuses the "
+            "anisette data behind it. Since October 2026 that is the case "
+            "for the local emulation and for the older anisette servers - "
+            "use a current one (anisette_server in config.toml, default "
+            "https://mac-ani.jkcoxson.com).",
+            size=len(response.content), sent=client_info))
     raise AnisetteClientInfoRejected(_(
         "Apple rejected the request at the edge (HTTP 503, {size} bytes). "
         "That is not an outage but a rejection of the client info string. "

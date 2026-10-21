@@ -592,6 +592,20 @@ replaces the identifier with `com.apple.akd` and refuses, in
     com.apple.dt.Xcode  ->  HTTP 503, 190 B  (rejected at the edge)
     com.apple.akd/1.0   ->  HTTP 404          (got through)
 
+**Android anisette is refused (October 2026).** Up to 1.4.0-rc.5 ModStaller
+computed the anisette data locally, by emulating the ADI from Apple's Android
+app. Since mid-October 2026 Apple refuses that - and the older anisette
+servers, which run the same Android ADI. Next to a macOS client info the very
+first sign-in request fails with `-80045` ("This action cannot be completed
+at this time"), next to an Android one Apple answers HTTP 503 at the edge.
+Anisette servers running a Mac or Windows ADI still get through, so
+ModStaller now speaks the full anisette-v3 protocol (provisioning over a
+WebSocket; the requests to Apple go out from here) and uses such a server by
+default. `modstaller doctor` flags the local emulation and the old servers.
+
+    local emulation, macOS client info  ->  ec=-80045, hsc=500
+    mac-ani.jkcoxson.com                ->  gets through to the account check
+
 **Apple's private CA.** `gsa.apple.com` is signed by "Apple Server
 Authentication CA", not a public CA, so the system trust store fails every
 connection. The chain lives in `modstaller/apple/certs/apple-gsa-ca.pem` -
@@ -720,7 +734,13 @@ Your Apple password is never stored and never transmitted: SRP-6a proves
 knowledge of it without sending it. All secrets are stored under
 `~/.local/share/modstaller/` with mode 0600 inside 0700 directories.
 
-ModStaller only talks to Apple's servers and your own devices. JavaScript
+ModStaller talks to Apple's servers, your own devices and one anisette
+server (default `https://mac-ani.jkcoxson.com`). The anisette server computes
+Apple's device attestation; it never sees your Apple ID or password, but it
+does see a device identity and your IP address. You can name another one in
+`config.toml` (`anisette_server = "…"`), or switch back to the local emulation
+with `anisette_provider = "local"` - which Apple currently refuses, see
+*Pitfalls solved here*. JavaScript
 that an app sends for JIT runs in an isolated QuickJS context whose only
 capabilities are the debugger commands for that app's own process.
 
@@ -736,8 +756,10 @@ communication),
 [anisette](https://pypi.org/project/anisette/) (Apple anisette data) and
 [quickjs-ng](https://github.com/quickjs-ng/quickjs) (JIT extensions). The JIT
 protocol follows [StikDebug](https://github.com/StikDebug/StikDebug); the
-GSA findings build on [SideStore](https://github.com/SideStore) and
-[OpenTagViewer](https://github.com/parawanderer/OpenTagViewer).
+GSA findings build on [SideStore](https://github.com/SideStore),
+[OpenTagViewer](https://github.com/parawanderer/OpenTagViewer) and
+[isideload](https://github.com/nab138/isideload); the default anisette server
+is run by [jkcoxson](https://github.com/jkcoxson).
 
 ## License
 

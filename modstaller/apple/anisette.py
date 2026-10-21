@@ -2,12 +2,21 @@
 
 Without these headers Apple accepts no login. Two sources:
 
-* :class:`LocalProvider` (default) - runs Apple's ADI libraries
+* :class:`RemoteV3Provider` (default) - anisette-v3 protocol against a
+  third-party server. The server computes the attestation; the Apple ID and
+  password never reach it, but it does see a device identity and the IP
+  address.
+* :class:`LocalProvider` - runs Apple's ADI libraries
   (``libstoreservicescore.so``, ``libCoreADI.so`` from the Apple Music APK)
   locally in an ARM emulation. Nothing leaves the machine. On Windows this
   requires Control Flow Guard to be off - see :func:`local_supported`.
-* :class:`RemoteV3Provider` - anisette-v3 protocol against a third-party
-  server. Fallback only; device identifiers then go to a third party.
+
+Local was the default up to 1.4.0-rc.5. Since mid-October 2026 Apple
+refuses anisette data from an emulated *Android* ADI - which is what the
+local emulation and the older anisette servers produce: with a macOS client
+info the first sign-in request fails with -80045, with an Android one Apple
+answers HTTP 503 at the edge (issue #4; iloader 2.3.7-2.3.9 went the same
+way). Servers running a Mac or Windows ADI still get through.
 
 This module corrects three things about the ``anisette`` library's behaviour:
 
@@ -34,7 +43,7 @@ import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from ..config import (ANISETTE_DIR, CONFIG_FILE, POSIX, read_secret,
                       write_secret)
@@ -48,6 +57,22 @@ from . import clientinfo
 PROVISIONING_FILE = ANISETTE_DIR / "provisioning.bin"
 LIBS_FILE = ANISETTE_DIR / "libs.bin"
 DEVICE_FILE = ANISETTE_DIR / "device.json"
+#: Per anisette server: the identifier this machine provisioned with and the
+#: adi.pb the server handed back. Like PROVISIONING_FILE, Apple ties the 2FA
+#: trust to it.
+REMOTE_STATE_FILE = ANISETTE_DIR / "remote_v3.json"
+
+#: The anisette server ModStaller uses unless config.toml names another -
+#: a Mac ADI, iloader's default since 2.3.9.
+DEFAULT_SERVER = "https://mac-ani.jkcoxson.com"
+
+#: Servers that still hand out Android anisette data, which Apple rejects
+#: since October 2026 (the list iloader 2.3.10 dropped).
+LEGACY_SERVERS = frozenset({
+    "ani.sidestore.io", "ani.stikstore.app", "ani.sidestore.app",
+    "ani.sidestore.zip", "ani.846969.xyz", "ani.neoarz.xyz", "ani.xu30.top",
+    "anisette.wedotstud.io",
+})
 
 
 #: The local emulation is one ARM VM (Unicorn) over one set of ADI files.
@@ -62,6 +87,7 @@ _shared_ani = None
 class AnisetteProvider(Protocol):
     def headers(self) -> dict[str, str]: ...
     def client_info(self) -> str: ...
+    def user_agent(self) -> str: ...
 
 
 def _load_or_create_device() -> dict[str, str]:
@@ -94,7 +120,7 @@ def forget_device() -> None:
     global _shared_ani
     with _LOCAL_LOCK:
         _shared_ani = None
-        for f in (PROVISIONING_FILE, DEVICE_FILE):
+        for f in (PROVISIONING_FILE, DEVICE_FILE, REMOTE_STATE_FILE):
             f.unlink(missing_ok=True)
 
 
@@ -228,7 +254,7 @@ class LocalProvider:
                 "not set that flag - otherwise an Anisette server helps. "
                 "In {config}:\n"
                 '  anisette_provider = "remote"\n'
-                '  anisette_server = "https://ani.sidestore.io"',
+                '  anisette_server = "https://mac-ani.jkcoxson.com"',
                 config=CONFIG_FILE))
         from anisette import Anisette
         from anisette._device import AnisetteDeviceConfig
@@ -315,54 +341,279 @@ class LocalProvider:
                 and not PROVISIONING_FILE.exists())
 
     def client_info(self) -> str:
-        # The library provisions with the device config as it is (macOS);
-        # only what goes to GSA afterwards claims Android.
-        return clientinfo.for_auth(self._cfg.server_friendly_description)
+        return clientinfo.sanitize(self._cfg.server_friendly_description)
+
+    def user_agent(self) -> str:
+        from .http import USER_AGENT_AKD
+        return USER_AGENT_AKD
+
+
+#: Where Apple's URL bag names the provisioning endpoints - and where they
+#: are should it not answer.
+_URL_BAG = "https://gsa.apple.com/grandslam/GsService2/lookup"
+_START_PROVISIONING = ("https://gsa.apple.com/grandslam/MidService/"
+                       "startMachineProvisioning")
+_FINISH_PROVISIONING = ("https://gsa.apple.com/grandslam/MidService/"
+                        "finishMachineProvisioning")
+#: The URL bag depends on the client info it is asked with; for this one
+#: Apple hands out the right one (isideload does the same).
+_URL_BAG_CLIENT_INFO = ("<Mac15,7> <macOS;27.0;26A5378j> "
+                        "<com.apple.AuthKit/1 (com.apple.akd/1.0)>")
+
+#: One provisioning at a time - two at once would each write a state.
+_REMOTE_LOCK = threading.RLock()
 
 
 class RemoteV3Provider:
-    """anisette-v3 protocol against a third-party server."""
+    """anisette-v3 protocol against a third-party server.
+
+    The server runs the ADI; this side keeps its state. Provisioning goes
+    over a WebSocket (``/v3/provisioning_session``): the server asks for an
+    identifier, then for Apple's ``spim``, then for ``ptm``/``tk`` - the
+    requests to Apple go out from *here*, the server only computes. At the
+    end it hands back ``adi_pb``, which every later ``/v3/get_headers``
+    sends along. Same flow as isideload and SideStore.
+    """
 
     name = "remote"
 
-    def __init__(self, base_url: str, timeout: float = 20.0) -> None:
+    def __init__(self, base_url: str, timeout: float = 20.0,
+                 connect: Callable | None = None) -> None:
         import requests
 
         self._base = base_url.rstrip("/")
         self._timeout = timeout
         self._session = requests.Session()
-        self._client_info: str | None = None
+        self._info: dict[str, str] | None = None
+        #: Opens the provisioning WebSocket - replaceable for tests.
+        self._connect = connect or _connect_websocket
 
-    def client_info(self) -> str:
-        # *Ask* the server for its client info instead of guessing it -
-        # then Apple's next change won't catch us out again.
-        if self._client_info is None:
+    # -- What the server claims to be ------------------------------------
+
+    def _client_data(self) -> dict[str, str]:
+        # *Ask* the server instead of guessing: client info and user agent
+        # must fit the ADI it runs, and Apple checks that.
+        if self._info is None:
             try:
                 r = self._session.get(f"{self._base}/v3/client_info",
                                       timeout=self._timeout)
                 r.raise_for_status()
-                raw = r.json().get("client_info")
-            except Exception:
-                raw = None
-            self._client_info = clientinfo.for_auth(raw)
-        return self._client_info
+                data = r.json()
+                raw = data["client_info"]
+            except Exception as exc:
+                raise AppleError(_(
+                    "Anisette server {url} not reachable: {error}",
+                    url=self._base, error=exc)) from exc
+            from .http import USER_AGENT_AKD
+            self._info = {
+                "client_info": clientinfo.sanitize(raw),
+                "user_agent": str(data.get("user_agent") or USER_AGENT_AKD),
+            }
+        return self._info
+
+    def client_info(self) -> str:
+        return self._client_data()["client_info"]
+
+    def user_agent(self) -> str:
+        return self._client_data()["user_agent"]
+
+    # -- Headers ---------------------------------------------------------
 
     def headers(self) -> dict[str, str]:
+        with _REMOTE_LOCK:
+            state = self._state() or self._provision()
+            data = self._get_headers(state)
+            if data is None:
+                # -45061: the server no longer knows this provisioning.
+                self._drop_state()
+                state = self._provision()
+                data = self._get_headers(state)
+            if data is None:
+                raise AppleError(_(
+                    "Anisette server {url} does not accept its own "
+                    "provisioning. Try another anisette server.",
+                    url=self._base))
+        # Only what isideload sends - the rest of the usual set is not needed
+        # for these servers.
+        return {
+            "X-Apple-I-MD": data["X-Apple-I-MD"],
+            "X-Apple-I-MD-M": data["X-Apple-I-MD-M"],
+            "X-Mme-Device-Id": _device_id(state),
+            "X-MMe-Client-Info": self.client_info(),
+        }
+
+    def _get_headers(self, state: dict) -> dict | None:
+        """The attestation - ``None`` if the server says -45061."""
         try:
-            r = self._session.get(f"{self._base}/v3/get_headers",
-                                  timeout=self._timeout)
+            r = self._session.post(
+                f"{self._base}/v3/get_headers", timeout=self._timeout,
+                json={"identifier": state["identifier"],
+                      "adi_pb": state["adi_pb"]})
             r.raise_for_status()
-            data = {k: v for k, v in r.json().items() if k.lower() != "result"}
+            data = r.json()
         except Exception as exc:
             raise AppleError(_(
                 "Anisette server {url} not reachable: {error}",
                 url=self._base, error=exc)) from exc
-        data = normalize_headers(data)
-        data["X-MMe-Client-Info"] = self.client_info()
-        return data
+        if data.get("result") == "Headers":
+            return data
+        message = str(data.get("message") or data.get("result") or data)
+        if "-45061" in message:
+            return None
+        raise AppleError(_(
+            "Anisette server {url} returned no headers: {error}",
+            url=self._base, error=message))
+
+    # -- State -----------------------------------------------------------
+
+    def _all_states(self) -> dict:
+        try:
+            data = json.loads(read_secret(REMOTE_STATE_FILE))
+        except (FileNotFoundError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _state(self) -> dict | None:
+        state = self._all_states().get(self._base)
+        if (isinstance(state, dict) and state.get("identifier")
+                and state.get("adi_pb")):
+            return state
+        return None
+
+    def _save_state(self, state: dict | None) -> None:
+        states = self._all_states()
+        if state is None:
+            states.pop(self._base, None)
+        else:
+            states[self._base] = state
+        ANISETTE_DIR.mkdir(parents=True, exist_ok=True)
+        write_secret(REMOTE_STATE_FILE, json.dumps(states, indent=2).encode())
+
+    def _drop_state(self) -> None:
+        self._save_state(None)
+
+    # -- Provisioning ----------------------------------------------------
+
+    def _provision(self) -> dict:
+        from base64 import b64encode
+
+        identifier = b64encode(secrets.token_bytes(16)).decode()
+        headers = self._provisioning_headers(identifier)
+        start, finish = self._provisioning_urls()
+        url = (self._base.replace("https://", "wss://", 1)
+               .replace("http://", "ws://", 1) + "/v3/provisioning_session")
+        try:
+            ws = self._connect(url, self._timeout)
+        except Exception as exc:
+            raise AppleError(_(
+                "Anisette server {url} not reachable: {error}",
+                url=self._base, error=exc)) from exc
+        with ws:
+            while True:
+                try:
+                    message = json.loads(ws.recv(timeout=self._timeout))
+                except AppleError:
+                    raise
+                except Exception as exc:
+                    raise AppleError(_(
+                        "Anisette server {url} broke off the provisioning: "
+                        "{error}", url=self._base, error=exc)) from exc
+                result = message.get("result")
+                if result == "GiveIdentifier":
+                    ws.send(json.dumps({"identifier": identifier}))
+                elif result == "GiveStartProvisioningData":
+                    resp = self._apple(start, {}, headers)
+                    ws.send(json.dumps({"spim": resp["spim"]}))
+                elif result == "GiveEndProvisioningData":
+                    resp = self._apple(finish, {"cpim": message["cpim"]},
+                                       headers)
+                    ws.send(json.dumps({"ptm": resp["ptm"],
+                                        "tk": resp["tk"]}))
+                elif result == "ProvisioningSuccess":
+                    state = {"identifier": identifier,
+                             "adi_pb": message["adi_pb"]}
+                    self._save_state(state)
+                    return state
+                else:
+                    raise AppleError(_(
+                        "Anisette server {url} could not provision this "
+                        "device: {error}", url=self._base,
+                        error=message.get("message") or result))
+
+    def _provisioning_headers(self, identifier: str) -> dict[str, str]:
+        from .gsa import XCODE_APP
+
+        state = {"identifier": identifier}
+        return {
+            "Content-Type": "text/x-xml-plist",
+            "Accept": "text/x-xml-plist",
+            "User-Agent": self.user_agent(),
+            "X-MMe-Client-Info": self.client_info(),
+            "X-Apple-I-MD-LU": _local_user(state),
+            "X-Mme-Device-Id": _device_id(state),
+            "X-Apple-App-Info": XCODE_APP,
+        }
+
+    def _provisioning_urls(self) -> tuple[str, str]:
+        import plistlib
+
+        from . import http
+        try:
+            resp = http.gsa_request(
+                http.gsa_session(), "GET", _URL_BAG,
+                client_info=_URL_BAG_CLIENT_INFO,
+                headers={"X-MMe-Client-Info": _URL_BAG_CLIENT_INFO})
+            urls = plistlib.loads(resp.content)["urls"]
+            return urls["midStartProvisioning"], urls["midFinishProvisioning"]
+        except Exception:
+            return _START_PROVISIONING, _FINISH_PROVISIONING
+
+    def _apple(self, url: str, request: dict, headers: dict) -> dict:
+        """One provisioning step at Apple - from here, not from the server."""
+        import plistlib
+
+        from . import http
+        resp = http.gsa_request(
+            http.gsa_session(), "POST", url,
+            client_info=headers["X-MMe-Client-Info"], headers=headers,
+            data=plistlib.dumps({"Header": {}, "Request": request}))
+        try:
+            body = plistlib.loads(resp.content)["Response"]
+        except Exception as exc:
+            raise AppleError(
+                f"Unexpected provisioning response (HTTP {resp.status_code}): "
+                f"{resp.content[:200]!r}") from exc
+        status = body.get("Status") or {}
+        if status.get("ec"):
+            raise AppleError(_(
+                "Apple refused the device provisioning: {error}",
+                error=f"{status.get('em') or ''} (Code {status['ec']})".strip()))
+        return body
 
 
-def build(provider: str = "local", server: str = "") -> AnisetteProvider:
+def _identifier_bytes(state: dict) -> bytes:
+    from base64 import b64decode
+    return b64decode(state["identifier"])
+
+
+def _device_id(state: dict) -> str:
+    """X-Mme-Device-Id: the identifier as a UUID, as isideload sends it."""
+    return str(uuid.UUID(bytes=_identifier_bytes(state)))
+
+
+def _local_user(state: dict) -> str:
+    """X-Apple-I-MD-LU during provisioning: SHA-256 of the identifier."""
+    import hashlib
+    return hashlib.sha256(_identifier_bytes(state)).hexdigest()
+
+
+def _connect_websocket(url: str, timeout: float):
+    from websockets.sync.client import connect
+    return connect(url, open_timeout=timeout, close_timeout=5)
+
+
+def build(provider: str = "remote",
+          server: str = DEFAULT_SERVER) -> AnisetteProvider:
     """Builds the configured provider. 'local' does not silently fall back to
     'remote' - whoever chose local doesn't want to send data anywhere."""
     if provider == "local":
