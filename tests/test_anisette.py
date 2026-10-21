@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from modstaller.apple import anisette
+from modstaller.apple import anisette, clientinfo
 from modstaller.errors import AppleError
 
 
@@ -287,3 +287,13 @@ def test_the_local_provider_hands_out_normalized_headers(fake_library,
     headers = anisette.LocalProvider().headers()
     assert all(v.isascii() for v in headers.values())
     assert headers["X-Apple-I-Client-Time"] == "2026-10-09T21:39:28Z"
+
+
+def test_gsa_hears_android_but_the_library_provisions_as_macos(fake_library):
+    """The URL bag for an Android client info is the wrong one - so only
+    what goes to GSA after provisioning claims Android."""
+    provider = anisette.LocalProvider()
+    assert provider.client_info() == clientinfo.ANDROID_CLIENT_INFO
+    assert (provider.headers()["X-MMe-Client-Info"]
+            == clientinfo.ANDROID_CLIENT_INFO)
+    assert "<macOS;" in anisette._shared_ani.cfg.server_friendly_description

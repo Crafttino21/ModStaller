@@ -13,8 +13,9 @@ import pytest
 
 from modstaller.apple import anisette, clientinfo
 from modstaller.apple.gsa import (
-    ERR_NOT_FULLY_AUTHENTICATED, ERR_TEMPORARILY_BLOCKED, VIA_SMS, XCODE_APP,
-    GSAClient, GSAResult, GSAStatusError, _describe,
+    ERR_DEVICE_REJECTED, ERR_NOT_FULLY_AUTHENTICATED, ERR_TEMPORARILY_BLOCKED,
+    VIA_DEVICE, VIA_SMS, XCODE_APP, GSAClient, GSAResult, GSAStatusError,
+    _describe,
 )
 from modstaller.errors import AppleError
 
@@ -140,7 +141,7 @@ def test_asking_again_after_two_factor_names_what_apple_wants():
     client = _client()
     pending = ({**SPD}, b"key", {"Status": {"au": "trustedDeviceSecondaryAuth"}})
     client._handshake = lambda apple_id, password: pending
-    client._do_two_factor = lambda spd, via: None
+    client._do_two_factor = lambda spd, via, sent=False: None
     with pytest.raises(AppleError) as exc:
         client.authenticate("someone@example.com", "pw")
     assert "au=trustedDeviceSecondaryAuth" in str(exc.value)
@@ -151,6 +152,60 @@ def test_the_second_factor_is_named():
     assert GSAClient._second_factor(
         {"Status": {"au": "smsSecondaryAuth"}}, {}) == "smsSecondaryAuth"
     assert GSAClient._second_factor({"Status": {"au": "other"}}, {}) is None
+
+
+def test_a_rejected_device_gets_a_hint_not_just_apples_words():
+    """Issue #4: -80045 on the first request, before any password check."""
+    with pytest.raises(GSAStatusError) as exc:
+        GSAClient._check({"Status": {
+            "ec": ERR_DEVICE_REJECTED,
+            "em": "This action cannot be completed at this time."}})
+    assert exc.value.code == ERR_DEVICE_REJECTED
+    assert "-80045" in str(exc.value)
+    assert "forget-device" in str(exc.value)
+
+
+# -- Code already pushed (hsc=409, no au) -----------------------------------
+
+
+def test_a_409_without_au_is_a_code_already_on_the_way():
+    assert GSAClient._second_factor({"Status": {"hsc": 409}}, {}) is not None
+    assert GSAClient._second_factor({"Status": {"hsc": 200}}, {}) is None
+    # An explicit au wins - issue #3 had hsc=409 *with* au=secondaryAuth.
+    assert GSAClient._second_factor(
+        {"Status": {"hsc": 409, "au": "secondaryAuth"}}, {}) == "secondaryAuth"
+
+
+def test_a_pushed_code_is_confirmed_without_requesting_another():
+    """Requesting one more is answered with HTTP 403 (isideload#27)."""
+    seen = []
+    client = GSAClient(_Anisette(),
+                       code_prompt=lambda via: seen.append(via) or "123456")
+    client._session = _Replay(_FakeResponse(200, _plist(ec=0)))
+    client._do_two_factor(SPD, VIA_DEVICE, sent=True)
+    assert seen == [VIA_DEVICE]
+    assert [s["url"] for s in client._session.sent] == [
+        "https://gsa.apple.com/grandslam/GsService2/validate"]
+
+
+def test_a_pushed_code_signs_in_again_afterwards(monkeypatch):
+    calls, handshakes = [], []
+
+    def handshake(apple_id, password):
+        handshakes.append(1)
+        status = {"hsc": 409} if len(handshakes) == 1 else {"hsc": 200}
+        return ({**SPD, "sk": b"k", "c": b"c"}, b"key", {"Status": status})
+
+    client = _client()
+    client._handshake = handshake
+    client._do_two_factor = (
+        lambda spd, via, sent=False: calls.append((via, sent)))
+    monkeypatch.setattr(client, "_fetch_app_token",
+                        lambda spd, adsid, token: "app-token")
+    result = client.authenticate("someone@example.com", "pw")
+    assert result.app_token == "app-token"
+    assert calls == [(VIA_DEVICE, True)]
+    assert len(handshakes) == 2
 
 
 # -- Text message (au=secondaryAuth) ----------------------------------------
@@ -172,7 +227,7 @@ def _secondary_auth_client(monkeypatch, *, token_exchange):
                 {"Status": {"au": "secondaryAuth"}})
 
     client._handshake = handshake
-    client._do_two_factor = lambda spd, via: None
+    client._do_two_factor = lambda spd, via, sent=False: None
     monkeypatch.setattr(client, "_fetch_app_token", token_exchange)
     return client, handshakes
 
@@ -184,7 +239,7 @@ def test_secondary_auth_goes_the_text_message_route():
     client = _client()
     pending = ({**SPD}, b"key", {"Status": {"au": "secondaryAuth"}})
     client._handshake = lambda apple_id, password: pending
-    client._do_two_factor = lambda spd, via: seen.append(via)
+    client._do_two_factor = lambda spd, via, sent=False: seen.append(via)
     client._confirmed_session = lambda spd: None
     with pytest.raises(AppleError, match="au=secondaryAuth"):
         client.authenticate("someone@example.com", "pw")

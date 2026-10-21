@@ -57,6 +57,9 @@ ERR_INVALID_CODE = -21669
 #: fully confirmed. The wording ("wrong password") is reliably misleading.
 ERR_NOT_FULLY_AUTHENTICATED = -22406
 ERR_TEMPORARILY_BLOCKED = -22411
+#: Since 2026-10-12, on the very first request: Apple does not accept the
+#: device the request speaks for - see :mod:`.clientinfo`.
+ERR_DEVICE_REJECTED = -80045
 
 #: Where Apple sends the two-factor code - what the code prompt is told.
 VIA_DEVICE = "device"
@@ -96,6 +99,12 @@ _HINTS = {
         "Apple is temporarily blocking this account, usually after several "
         "failed attempts in quick succession. Wait about an hour; further "
         "attempts extend the block."
+    ),
+    ERR_DEVICE_REJECTED: (
+        "Apple does not accept this device identity (anisette). Since "
+        "October 2026 Apple rejects sign-ins whose device details do not "
+        "fit together. Update ModStaller, then run: modstaller logout --all "
+        "--forget-device and sign in again."
     ),
 }
 
@@ -278,8 +287,8 @@ class GSAClient:
 
         cpd = self._cpd()
         if self._debug:
-            print(f"  [{params.get('o', '?')}] device {_identity_tag(cpd)}",
-                  flush=True)
+            print(f"  [{params.get('o', '?')}] device {_identity_tag(cpd)}, "
+                  f"client {ci}", flush=True)
         body = {"Header": {"Version": "1.0.1"},
                 "Request": {"cpd": cpd, **params}}
         # gsa_request ensures a fresh connection: Apple's edge lets only one
@@ -326,7 +335,7 @@ class GSAClient:
             if self._debug:
                 print(f"  -> Apple requires a second confirmation "
                       f"(au={au}, via {via}).", flush=True)
-            self._do_two_factor(spd, via)
+            self._do_two_factor(spd, via, sent=au == self._PUSHED)
             if via == VIA_SMS:
                 confirmed = self._confirmed_session(spd)
                 if confirmed:
@@ -456,6 +465,11 @@ class GSAClient:
 
     # -- Two-factor -------------------------------------------------------
 
+    #: Not an ``au`` value of Apple's: ``Status.hsc`` 409 with no ``au`` at
+    #: all. Apple has then already pushed a code to the trusted devices -
+    #: requesting another one is answered with HTTP 403 (isideload#27).
+    _PUSHED = "hsc409"
+
     #: Values with which Apple requests a second confirmation - and how it
     #: wants it. ``secondaryAuth`` is the text message to the trusted phone
     #: number. Answered over the trusted-device route instead, a code still
@@ -465,6 +479,7 @@ class GSAClient:
         "trustedDeviceSecondaryAuth": VIA_DEVICE,
         "secondaryAuth": VIA_SMS,
         "smsSecondaryAuth": VIA_SMS,
+        _PUSHED: VIA_DEVICE,
     }
 
     @classmethod
@@ -477,12 +492,16 @@ class GSAClient:
         "Enter the correct password", which points in completely the wrong
         direction.
         """
+        status = complete.get("Status") or {}
         candidates = (
-            (complete.get("Status") or {}).get("au"),
+            status.get("au"),
             complete.get("au"),
             spd.get("au"),
         )
-        return next((c for c in candidates if c in cls._SECOND_FACTOR), None)
+        au = next((c for c in candidates if c in cls._SECOND_FACTOR), None)
+        if au is None and status.get("hsc") == 409:
+            return cls._PUSHED
+        return au
 
     @classmethod
     def _needs_2fa(cls, complete: dict, spd: dict) -> bool:
@@ -537,7 +556,9 @@ class GSAClient:
         if parsed is not None:
             self._trace(parsed, label)
 
-    def _do_two_factor(self, spd: dict, via: str = VIA_DEVICE) -> None:
+    def _do_two_factor(self, spd: dict, via: str = VIA_DEVICE,
+                       sent: bool = False) -> None:
+        """``sent``: Apple already pushed the code - only confirm it."""
         if self._prompt is None:
             raise InteractionRequired(_(
                 "Apple requires a two-factor code, but ModStaller is running "
@@ -545,7 +566,7 @@ class GSAClient:
         if via == VIA_SMS:
             phone_id = self._trusted_phone_id(spd)
             self._send_sms(spd, phone_id)
-        else:
+        elif not sent:
             self._send_to_devices(spd)
 
         code = self._prompt(via).strip()

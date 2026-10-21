@@ -315,7 +315,9 @@ class LocalProvider:
                 and not PROVISIONING_FILE.exists())
 
     def client_info(self) -> str:
-        return clientinfo.sanitize(self._cfg.server_friendly_description)
+        # The library provisions with the device config as it is (macOS);
+        # only what goes to GSA afterwards claims Android.
+        return clientinfo.for_auth(self._cfg.server_friendly_description)
 
 
 class RemoteV3Provider:
@@ -342,7 +344,7 @@ class RemoteV3Provider:
                 raw = r.json().get("client_info")
             except Exception:
                 raw = None
-            self._client_info = clientinfo.sanitize(raw)
+            self._client_info = clientinfo.for_auth(raw)
         return self._client_info
 
     def headers(self) -> dict[str, str]:
