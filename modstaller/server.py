@@ -328,8 +328,14 @@ class _Action:
 
 def _error_kind(exc: BaseException) -> dict | None:
     """What kind of error it was - for clients that act on it without a
-    person reading the message, like the refresh in the tray."""
-    from .errors import ModStallerError
+    person reading the message, like the refresh in the tray.
+
+    A certificate conflict also names the certificates in the way - the
+    interface offers to revoke one and try again."""
+    from .errors import CertificateConflict, ModStallerError
+    if isinstance(exc, CertificateConflict):
+        return {"kind": type(exc).__name__, "exitCode": exc.exit_code,
+                "certificates": [_cert_dict(c) for c in exc.certificates]}
     if isinstance(exc, ModStallerError):
         return {"kind": type(exc).__name__, "exitCode": exc.exit_code}
     if describe(exc) is not None:          # network trouble, see describe()
@@ -686,7 +692,10 @@ async def _status(server: Server, job: Job, params: dict):
     for account in accounts:
         if not account.first_name:
             _look_up_first_name(server, account.adsid)
-    st = Status(apps=store.all_installs(), logged_in=session is not None)
+    # An expired session is no sign-in: the interface then offers the form
+    # again instead of failing on every call.
+    st = Status(apps=store.all_installs(),
+                logged_in=session is not None and not session.expired)
     try:
         local = await discovery.usbmux_refs()
         usb_service = "ok"
@@ -842,6 +851,7 @@ async def _install(server: Server, job: Job, params: dict):
             path, account=_account_param(params),
             strip_extensions=False if keep else None,
             revoke_conflicting_cert=bool(params.get("revokeConflictingCert")),
+            revoke_cert=_text_param(params, "revokeCertificate") or "",
             display_name=_text_param(params, "displayName"),
             bundle_id=_text_param(params, "bundleId"),
             icon=icon, keep_extensions=_keep_param(params),
@@ -974,6 +984,7 @@ async def _refresh(server: Server, job: Job, params: dict):
     results = await job.isolated(lambda: refresh(
         only=params.get("bundleId"), threshold_days=params.get("threshold"),
         store_updates=bool(params.get("storeUpdates")),
+        revoke_cert=_text_param(params, "revokeCertificate") or "",
         progress=job.progress, on_step=job.log))
     return [_outcome_dict(o) for o in results]
 
@@ -1023,7 +1034,7 @@ def _anisette():
 def _account_dict(session, active: str | None) -> dict:
     return {"adsid": session.adsid, "appleId": session.apple_id,
             "firstName": session.first_name, "label": session.label,
-            "active": session.adsid == active}
+            "active": session.adsid == active, "expired": session.expired}
 
 
 def _look_up_first_name(server: Server, adsid: str) -> None:
@@ -1529,7 +1540,9 @@ async def _store_install(server: Server, job: Job, params: dict):
     try:
         outcome = await job.isolated(lambda: install(
             path, account=_account_param(params), udid=_udid_param(params),
-            store_origin=origin, progress=job.progress, on_step=job.log))
+            store_origin=origin,
+            revoke_cert=_text_param(params, "revokeCertificate") or "",
+            progress=job.progress, on_step=job.log))
     finally:
         server.apple_cache.clear()
     return _outcome_dict(outcome)

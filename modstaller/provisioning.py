@@ -12,12 +12,14 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from .apple.devservices import AppID, DeveloperServices, Profile, Team
 from .config import PROFILES_DIR, write_secret
 from .i18n import _
 from .errors import (
     APP_ID_QUOTA_EXCEEDED, APP_ID_UNAVAILABLE, AppleAPIError, AppleError,
+    CertificateConflict,
 )
 from .signing import csr as csrmod
 
@@ -110,7 +112,9 @@ def pick_team(teams: list[Team], preferred: str | None = None) -> Team:
 
 def ensure_certificate(api: DeveloperServices, team: Team,
                        machine_name: str,
-                       *, revoke_conflicting: bool = False) -> tuple[Path, str]:
+                       *, revoke_conflicting: bool = False,
+                       revoke: str = "",
+                       say: Callable[[str], None] = print) -> tuple[Path, str]:
     """Returns a PKCS#12 identity for zsign.
 
     The order matters, because Apple allows only very few development
@@ -120,6 +124,12 @@ def ensure_certificate(api: DeveloperServices, team: Team,
     2. Otherwise check whether Apple already holds a certificate for *our*
        key - then just reassemble it without touching the quota.
     3. Only then request a new one.
+
+    Making room happens in step 3 only, so nothing is revoked while a
+    certificate of our own is still there: ``revoke_conflicting`` revokes
+    every foreign certificate, ``revoke`` (serial or certificate ID) just
+    the one the user picked after a :class:`CertificateConflict`. ``say``
+    reports what gets revoked.
     """
     existing = csrmod.load_p12(team.team_id)
     if existing:
@@ -141,7 +151,9 @@ def ensure_certificate(api: DeveloperServices, team: Team,
         csrmod.save_keypair(team.team_id, keypair)
 
     if revoke_conflicting:
-        _revoke_foreign_certificates(api, team, keypair)
+        _revoke_foreign_certificates(api, team, keypair, say)
+    elif revoke:
+        _revoke_certificate(api, team, keypair, revoke, say)
 
     try:
         cert = api.submit_csr(
@@ -151,13 +163,13 @@ def ensure_certificate(api: DeveloperServices, team: Team,
             machine_name=machine_name,
         )
     except AppleAPIError as exc:
-        listing = ""
+        in_the_way = []
         try:
-            listing = "\n".join(f"    {c}"
-                                for c in api.list_certificates(team.team_id))
+            in_the_way = api.list_certificates(team.team_id)
         except Exception:
             pass
-        raise AppleError(
+        listing = "\n".join(f"    {c}" for c in in_the_way)
+        message = (
             _("Apple issued no certificate: {error}", error=exc) + "\n\n"
             + (_("Existing certificates:\n{listing}", listing=listing)
                + "\n\n" if listing else "")
@@ -168,7 +180,12 @@ def ensure_certificate(api: DeveloperServices, team: Team,
                 "Make room with:  modstaller install "
                 "--revoke-conflicting-cert …\n"
                 "Careful: apps signed with the revoked certificate will no "
-                "longer start.")) from exc
+                "longer start."))
+        # None of them is ours (step 2 would have found it) - so they are
+        # what stands in the way.
+        if in_the_way:
+            raise CertificateConflict(message, in_the_way) from exc
+        raise AppleError(message) from exc
 
     # Apple does not always include the content right away - the
     # certificate is issued anyway and then shows up in the list.
@@ -215,7 +232,7 @@ def _fetch_own_certificate(api: DeveloperServices, team: Team,
 
 
 def _revoke_foreign_certificates(api: DeveloperServices, team: Team,
-                                 keypair) -> None:
+                                 keypair, say: Callable[[str], None]) -> None:
     """Makes room for a certificate of our own.
 
     Free accounts may hold only one development certificate, and a foreign
@@ -228,11 +245,30 @@ def _revoke_foreign_certificates(api: DeveloperServices, team: Team,
     for cert in api.list_certificates(team.team_id):
         if cert.content and _belongs_to(bytes(cert.content), keypair):
             continue
-        print(_("  Revoking foreign certificate: {cert}", cert=cert))
+        say(_("  Revoking foreign certificate: {cert}", cert=cert))
         try:
             api.revoke_certificate(team.team_id, cert.serial)
         except Exception as exc:
-            print(_("    could not be revoked: {error}", error=exc))
+            say(_("    could not be revoked: {error}", error=exc))
+
+
+def _revoke_certificate(api: DeveloperServices, team: Team, keypair,
+                        wanted: str, say: Callable[[str], None]) -> None:
+    """Revokes the one certificate the user picked to make room.
+
+    Gone already (revoked elsewhere in the meantime) is fine - the room is
+    there either way. Our own is never revoked, whatever was asked for.
+    Unlike the sweep above, a failure is raised: the request that follows
+    would only run into the same wall again.
+    """
+    for cert in api.list_certificates(team.team_id):
+        if wanted not in (cert.serial, cert.cert_id):
+            continue
+        if cert.content and _belongs_to(bytes(cert.content), keypair):
+            return
+        say(_("  Revoking foreign certificate: {cert}", cert=cert))
+        api.revoke_certificate(team.team_id, cert.serial)
+        return
 
 
 def _machine_id() -> str:

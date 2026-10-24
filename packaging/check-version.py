@@ -11,7 +11,10 @@ Refuses what would break updates:
   would reach nobody;
 * pre-releases other than ``-alpha.N``, ``-beta.N`` or ``-rc.N``. In SemVer
   ``beta5`` is one word and sorts *after* every ``beta.N`` - after
-  ``1.2.1-beta5`` a ``1.2.1-beta.6`` would count as older.
+  ``1.2.1-beta5`` a ``1.2.1-beta.6`` would count as older;
+* a version without an entry in gui/src/lib/whatsnew.json - the interface
+  shows it after the update ("What's new"). Pre-releases share the entry of
+  their X.Y.Z.
 
 Compared against the Git tags (``v*``, fetch them first) and the version in
 gui/package.json. Exit 0: fine, 1: refused (the reason is printed), 2: usage.
@@ -26,6 +29,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+#: What the interface shows after an update - one entry per X.Y.Z.
+WHATS_NEW = ROOT / "gui" / "src" / "lib" / "whatsnew.json"
 
 #: What a new release may be called.
 STRICT = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?$")
@@ -101,6 +106,28 @@ def check(version: str, released: list[str]) -> list[str]:
     return []
 
 
+def missing_whats_new(version: str, path: Path = WHATS_NEW) -> list[str]:
+    """Why the update to ``version`` would bring no "What's new" - empty if
+    gui/src/lib/whatsnew.json has an entry for its X.Y.Z."""
+    m = STRICT.match(version)
+    if not m:
+        return []                   # check() already says what is wrong
+    core = f"{m[1]}.{m[2]}.{m[3]}"
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        entries = []
+    if not isinstance(entries, list):
+        entries = []
+    if any(isinstance(e, dict) and e.get("version") == core and e.get("items")
+           for e in entries):
+        return []
+    return [f"Fuer {core} fehlt ein Eintrag in gui/src/lib/whatsnew.json - "
+            "das Popup \"Was ist neu\" nach dem Update haette nichts zu zeigen.",
+            "Eintrag mit \"version\": \"" + core + "\" und \"items\" anlegen, die "
+            "Texte in gui/src/lib/locale/*.ts uebersetzen."]
+
+
 class _Key:
     """Sort key from :func:`compare`."""
 
@@ -127,7 +154,7 @@ def main() -> int:
     if len(sys.argv) != 2:
         print("Aufruf: check-version.py X.Y.Z", file=sys.stderr)
         return 2
-    problems = check(sys.argv[1], released_versions())
+    problems = check(sys.argv[1], released_versions()) + missing_whats_new(sys.argv[1])
     for line in problems:
         print(line, file=sys.stderr)
     return 1 if problems else 0

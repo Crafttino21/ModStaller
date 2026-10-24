@@ -46,6 +46,8 @@ export interface Account {
   label: string;
   /** Neue Installationen signieren mit diesem Account. */
   active: boolean;
+  /** Apple hat die Sitzung abgelehnt - neu anmelden. */
+  expired: boolean;
 }
 
 /** Woher eine App auf dem iPhone stammt - aus ihrer Signatur abgeleitet. */

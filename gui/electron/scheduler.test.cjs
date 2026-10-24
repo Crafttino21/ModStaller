@@ -131,6 +131,12 @@ test("what a person has to fix is reported right away", () => {
   assert.equal(r.notify, "failed");
 });
 
+test("a certificate conflict is reported right away - not as a sign-in", () => {
+  const a = app(10 * H);
+  const r = s.onRefreshResult(s.emptyMemory(), a, { code: -32000, data: { kind: "CertificateConflict" } }, NOW);
+  assert.equal(r.notify, "failed");
+});
+
 test("rate limits wait longer", () => {
   const a = app(10 * H);
   const r = s.onRefreshResult(s.emptyMemory(), a, { code: -32000, data: { kind: "AppleRateLimited" } }, NOW);

@@ -52,6 +52,13 @@
   let loginStep = $state("");
   let loginError = $state("");
 
+  /** Der aktive Account, dessen Sitzung Apple abgelehnt hat. */
+  const expiredAccount = $derived(accounts.find((a) => a.active && a.expired) ?? null);
+  // Seine Apple-ID gleich eintragen - neu anmelden heisst: nur das Passwort.
+  $effect(() => {
+    if (!loggedIn && expiredAccount?.appleId && !appleId && !loggingIn) appleId = expiredAccount.appleId;
+  });
+
   async function login(e: Event) {
     e.preventDefault();
     loggingIn = true;
@@ -178,6 +185,9 @@
       <p class="muted">{adding
         ? t("It becomes the active account for new installs. Apps keep renewing with the account that installed them.")
         : t("An ordinary, free Apple ID is enough. Apple then asks for a code on your iPhone.")}</p>
+      {#if expiredAccount && !adding}
+        <div class="banner warn small"><TriangleAlert size={16} color="var(--warn)" /><div class="grow">{t("Apple ended the session of {account}. Sign in again to keep installing and renewing.", { account: expiredAccount.label })}</div></div>
+      {/if}
       <div class="field">
         <label for="aid">Apple ID</label>
         <input id="aid" type="email" autocomplete="username" bind:value={appleId} disabled={loggingIn} />

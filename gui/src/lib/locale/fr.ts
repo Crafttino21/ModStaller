@@ -32,6 +32,8 @@ const dict: Dict = {
     "Tout",
   "All areas":
     "Tous les domaines",
+  "All changes on GitHub":
+    "Toutes les modifications sur GitHub",
   "All sources":
     "Toutes les sources",
   "All {max} app slots of the free profile are taken – iOS will refuse a further app. Remove one first:":
@@ -72,6 +74,10 @@ const dict: Dict = {
     "Le service d’appareils Apple est arrêté",
   "Apple device service missing":
     "Service d’appareils Apple manquant",
+  "Apple ended the session of {account}. Sign in again to keep installing and renewing.":
+    "Apple a mis fin à la session de {account}. Reconnectez-vous pour continuer à installer et renouveler.",
+  "Apple issues no further development certificate: all slots in this account are taken by certificates from other tools, which ModStaller cannot use. Revoke one to make room – ModStaller then requests its own.":
+    "Apple n’émet plus de certificat de développement : tous les emplacements de ce compte sont occupés par des certificats d’autres outils, que ModStaller ne peut pas utiliser. Révoquez-en un pour faire de la place – ModStaller demandera alors le sien.",
   "Apple sent a six-digit code by text message to your trusted phone number.":
     "Apple a envoyé un code à six chiffres par SMS à votre numéro de téléphone de confiance.",
   "Apple sent a six-digit code to your iPhone.":
@@ -120,6 +126,8 @@ const dict: Dict = {
     "Impossible de la conserver – son ID n’appartient pas à l’app.",
   "Certificate revoked.":
     "Certificat révoqué.",
+  "Certificate slots full? Instead of pointing to the command line, ModStaller now lets you pick which certificate of another tool to revoke – and tries again right away.":
+    "Plus de place pour les certificats ? Au lieu de renvoyer à la ligne de commande, ModStaller vous laisse désormais choisir quel certificat d’un autre outil révoquer – et réessaie aussitôt.",
   "Change icon":
     "Changer l’icône",
   "Charging … {level} %":
@@ -266,6 +274,8 @@ const dict: Dict = {
     "Journal complet :",
   "Go to device":
     "Aller à l’appareil",
+  "Got it":
+    "Compris",
   "Hello, {name}!":
     "Bonjour, {name} !",
   "How ModStaller behaves on this computer.":
@@ -532,6 +542,8 @@ const dict: Dict = {
     "Réutiliser un App ID inutilisé…",
   "Revoke":
     "Révoquer",
+  "Revoke and try again":
+    "Révoquer et réessayer",
   "Revoke certificate?":
     "Révoquer le certificat ?",
   "Runs on":
@@ -630,6 +642,8 @@ const dict: Dict = {
     "Démarrage …",
   "Starts in the tray after you log in, without a window.":
     "Démarre dans la barre système après la connexion, sans fenêtre.",
+  "Still signs in after Apple’s latest change: since mid-October 2026, Apple refuses the anisette data that nearly every free sideloader relied on, and their sign-in failed with “This action cannot be completed at this time. (-80045)”. ModStaller now gets its anisette data from a server running a Mac ADI (by default mac-ani.jkcoxson.com), which Apple still accepts – your Apple ID and password never go there.":
+    "La connexion fonctionne toujours après le dernier changement d’Apple : depuis mi-octobre 2026, Apple refuse les données anisette sur lesquelles reposaient presque tous les sideloaders gratuits, dont la connexion échouait avec « This action cannot be completed at this time. (-80045) ». ModStaller obtient désormais ses données anisette d’un serveur doté d’un ADI Mac (par défaut mac-ani.jkcoxson.com), qu’Apple accepte toujours – votre identifiant Apple et votre mot de passe n’y sont jamais envoyés.",
   "Still to do: {what}":
     "Reste à faire : {what}",
   "Store":
@@ -678,6 +692,8 @@ const dict: Dict = {
     "L’appareil connecté.",
   "The iPhone is plugged in but locked or not paired.":
     "L’iPhone est branché mais verrouillé ou non appairé.",
+  "The name is the computer or device that requested it.":
+    "Le nom est celui de l’ordinateur ou de l’appareil qui l’a demandé.",
   "The next one frees up around {date}.":
     "Le prochain se libère vers le {date}.",
   "The session is discarded. Installed apps keep running but can only be renewed after signing in again.":
@@ -752,6 +768,8 @@ const dict: Dict = {
     "VPN / réseau",
   "Version":
     "Version",
+  "Version {version}":
+    "Version {version}",
   "Version {version} for Linux":
     "Version {version} pour Linux",
   "Version {version} is available":
@@ -776,14 +794,20 @@ const dict: Dict = {
     "Ce que fait ModStaller – en direct. L'historique complet se trouve dans le fichier journal.",
   "What ModStaller has installed. Free accounts: at most 3 apps, valid for 7 days each.":
     "Ce que ModStaller a installé. Comptes gratuits : 3 applications au maximum, valables 7 jours chacune.",
+  "What's new in ModStaller {version}":
+    "Nouveautés de ModStaller {version}",
   "What's new in {version}":
     "Nouveautés de {version}",
   "What's new?":
     "Quoi de neuf ?",
+  "When Apple ends the session, ModStaller takes you back to the sign-in form – with your Apple ID already filled in.":
+    "Quand Apple met fin à la session, ModStaller vous ramène au formulaire de connexion – avec votre identifiant Apple déjà rempli.",
   "Where ModStaller is installed":
     "Où ModStaller est installé",
   "Whether an app depends on it cannot be determined without a connected iPhone.":
     "Impossible de déterminer si une application en dépend sans iPhone connecté.",
+  "Which certificate may go?":
+    "Quel certificat peut être révoqué ?",
   "Wi-Fi":
     "Wi-Fi",
   "Wi-Fi is off. The iPhone is only reachable over the cable again.":
@@ -824,6 +848,8 @@ const dict: Dict = {
     "a expiré",
   "hours before expiry. If your iPhone is not connected then, ModStaller asks for it and renews as soon as it is.":
     "heures avant l’expiration. Si votre iPhone n’est pas branché à ce moment-là, ModStaller le demande et renouvelle dès qu’il l’est.",
+  "iOS 27: IPAs whose extensions were removed no longer fail with “Failed to unarchive journal entry data”.":
+    "iOS 27 : les IPA dont des extensions ont été retirées n’échouent plus avec « Failed to unarchive journal entry data ».",
   "in use":
     "utilisé",
   "injected dylibs":

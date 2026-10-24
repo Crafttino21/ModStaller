@@ -47,6 +47,10 @@ class Session:
     #: The Apple ID, to tell accounts apart. Sessions from older versions
     #: don't have it until the next sign-in.
     apple_id: str = ""
+    #: Apple turned the token down ("Your session has expired"). The session
+    #: stays on disk - its Apple ID fills in the next sign-in - but no longer
+    #: counts as signed in.
+    expired: bool = False
 
     @property
     def age(self) -> float:
@@ -54,7 +58,7 @@ class Session:
 
     @property
     def probably_valid(self) -> bool:
-        return self.age < SESSION_MAX_AGE and self.usable
+        return self.age < SESSION_MAX_AGE and self.usable and not self.expired
 
     @property
     def usable(self) -> bool:
@@ -91,6 +95,15 @@ class Session:
         if not index["active"]:
             index["active"] = self.adsid
             _write_index(index)
+
+    def mark_expired(self) -> None:
+        """Apple turned the token down. Without this mark the session is
+        offered again and again - every call failing the same way, with no
+        way back to the sign-in."""
+        self.expired = True
+        # Signed out in the meantime? Then don't bring it back.
+        if _account_file(self.adsid).exists():
+            self.save()
 
     @classmethod
     def load(cls, adsid: str | None = None) -> "Session | None":

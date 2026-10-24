@@ -1,5 +1,14 @@
 # ModStaller
 
+> [!IMPORTANT]
+> **ModStaller still signs in after Apple's October 2026 change.** Since
+> mid-October 2026 Apple refuses the anisette data that nearly every free
+> sideloader relied on, and their sign-in failed with *"This action cannot be
+> completed at this time. (-80045)"*. ModStaller 1.4.0-rc.6 and later get the
+> anisette data from an anisette-v3 server running a Mac ADI, which Apple still
+> accepts - your Apple ID and password never go there. Details under
+> [Pitfalls solved here](#pitfalls-solved-here).
+
 A multi-platform iOS sideloader. ModStaller takes an IPA, signs it with a
 development certificate from your own Apple account and installs it on your
 iPhone - no Mac, no jailbreak, no paid developer account required. It also

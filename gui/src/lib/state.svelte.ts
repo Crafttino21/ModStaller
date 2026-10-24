@@ -9,8 +9,9 @@
 
 import { call, failAll, handle, on, onReady, RpcError, start, type Call } from "./rpc";
 import { locale, t } from "./i18n.svelte";
+import { markSeen, readSeen, releasesUpTo, unseen, type Release } from "./whatsnew";
 import type {
-  BackendExit, DaemonState, DeviceCheck, LogEntry, Status, StoreOrigin, StoreUpdate, UpdateState,
+  BackendExit, Cert, DaemonState, DeviceCheck, LogEntry, Status, StoreOrigin, StoreUpdate, UpdateState,
 } from "./types";
 
 export type View = "overview" | "install" | "store" | "apps" | "account" | "device" | "log" | "system" | "settings";
@@ -29,6 +30,11 @@ export interface Task {
   tone: "ok" | "warn";
   open: boolean;
   call: Call<unknown>;
+  /** Apple stellt kein Zertifikat aus, weil fremde alle Plaetze belegen -
+   *  das sind sie. Der Nutzer waehlt eins zum Widerrufen. */
+  conflict: Cert[] | null;
+  /** Denselben Vorgang noch einmal starten, mit zusaetzlichen Parametern. */
+  retry: (extra: object) => void;
 }
 
 export interface Confirm {
@@ -82,6 +88,8 @@ export const ui = $state({
   storeUpdates: [] as StoreUpdate[],
   /** Neue Version aus den GitHub-Releases (nur in der AppImage). */
   update: { state: "unsupported" } as UpdateState,
+  /** Das Popup "Was ist neu" - offen mit diesen Eintraegen. */
+  whatsNew: null as Release[] | null,
   /** Was der Hintergrund (Tray) gerade tut - etwa eine App erneuern. */
   daemon: { refreshing: null } as DaemonState,
   /** iPhone-Check: fuer welches Geraet (key) und mit welchem Ergebnis. */
@@ -182,6 +190,7 @@ export async function refreshStatus(force = false) {
   try {
     ui.status = await call<Status>("status", { refresh: force, udid: ui.selectedUdid ?? undefined });
     autoCheck();
+    checkWhatsNew();
   } catch {
     // Beim naechsten Durchlauf erneut - ein einzelner Aussetzer ist kein Zustand.
   } finally {
@@ -255,6 +264,8 @@ export function runTask<T>(
     kind, title, log: [], pct: null, state: "running",
     message: "", notes: [], tone: "ok", open: true,
     call: null as unknown as Call<unknown>,
+    conflict: null,
+    retry: (extra) => runTask(kind, title, method, { ...params, ...extra }, describe),
   });
   task.call = start<T>(method, params, {
     onLog: (text) => task.log.push(...text.split("\n").filter((l) => l.trim())),
@@ -275,6 +286,15 @@ export function runTask<T>(
       const cancelled = err instanceof RpcError && err.cancelled;
       task.state = cancelled ? "cancelled" : "error";
       task.message = cancelled ? t("Cancelled.") : errorText(err);
+      if (err instanceof RpcError && err.data?.kind === "CertificateConflict" && err.data.certificates?.length) {
+        // Statt der Befehlszeilen-Hinweise des Backends: gleich hier waehlen
+        // lassen. Das braucht eine Entscheidung - also auch aus dem
+        // Hintergrund wieder aufmachen.
+        task.conflict = err.data.certificates;
+        task.message = t("Apple issues no further development certificate: all slots in this account are taken by certificates from other tools, which ModStaller cannot use. Revoke one to make room – ModStaller then requests its own.");
+        task.open = true;
+        return;
+      }
       if (!task.open) toast(`${title}: ${task.message}`, cancelled ? "warn" : "bad", 8000);
     },
   ).finally(async () => {
@@ -416,8 +436,42 @@ export function restartBackend() {
 
 // -- Updates -----------------------------------------------------------------
 
-window.updates.get().then((s) => (ui.update = s));
+window.updates.get().then((s) => {
+  ui.update = s;
+  checkWhatsNew();
+});
 window.updates.onState((s) => (ui.update = s));
+
+// -- Was ist neu -------------------------------------------------------------
+//
+// Nach einem Update einmal zeigen, was die neue Version bringt (whatsnew.ts).
+
+let whatsNewChecked = false;
+
+/** Einmal pro Start, sobald die laufende Version und der Status da sind. */
+function checkWhatsNew() {
+  const current = ui.update.current;
+  if (whatsNewChecked || !current || !ui.status) return;
+  whatsNewChecked = true;
+  const seen = readSeen();
+  // Ohne Vermerk: frisch installiert - oder ein Update von einer Version vor
+  // diesem Popup. Das zweite erkennt man an dem, was schon da ist.
+  const updated = seen !== null || ui.status.accounts.length > 0 || ui.status.apps.length > 0;
+  const list = updated ? unseen(current, seen) : [];
+  if (list.length) ui.whatsNew = list;
+  else markSeen(current);
+}
+
+/** Von Hand, etwa unter "System": der Eintrag der laufenden Version. */
+export function showWhatsNew() {
+  const list = releasesUpTo(ui.update.current ?? "");
+  if (list.length) ui.whatsNew = list.slice(0, 1);
+}
+
+export function closeWhatsNew() {
+  if (ui.update.current) markSeen(ui.update.current);
+  ui.whatsNew = null;
+}
 
 // -- Store-Updates -----------------------------------------------------------
 //

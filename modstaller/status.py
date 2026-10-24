@@ -96,7 +96,9 @@ async def gather_status() -> Status:
     from .apple.session import Session
     from .state import store
 
-    st = Status(apps=store.all_installs(), logged_in=Session.load() is not None)
+    session = Session.load()
+    st = Status(apps=store.all_installs(),
+                logged_in=session is not None and not session.expired)
     await device_status(st)
     return st
 

@@ -32,6 +32,8 @@ const dict: Dict = {
     "Todo",
   "All areas":
     "Todas las áreas",
+  "All changes on GitHub":
+    "Todos los cambios en GitHub",
   "All sources":
     "Todas las fuentes",
   "All {max} app slots of the free profile are taken – iOS will refuse a further app. Remove one first:":
@@ -72,6 +74,10 @@ const dict: Dict = {
     "El servicio de dispositivos Apple no se está ejecutando",
   "Apple device service missing":
     "Falta el servicio de dispositivos Apple",
+  "Apple ended the session of {account}. Sign in again to keep installing and renewing.":
+    "Apple ha cerrado la sesión de {account}. Vuelve a iniciar sesión para seguir instalando y renovando.",
+  "Apple issues no further development certificate: all slots in this account are taken by certificates from other tools, which ModStaller cannot use. Revoke one to make room – ModStaller then requests its own.":
+    "Apple no emite ningún otro certificado de desarrollo: todos los huecos de esta cuenta están ocupados por certificados de otras herramientas, que ModStaller no puede usar. Revoca uno para hacer sitio y ModStaller solicitará el suyo propio.",
   "Apple sent a six-digit code by text message to your trusted phone number.":
     "Apple ha enviado un código de seis dígitos por SMS a tu número de teléfono de confianza.",
   "Apple sent a six-digit code to your iPhone.":
@@ -120,6 +126,8 @@ const dict: Dict = {
     "No se puede conservar: su ID no pertenece a la app.",
   "Certificate revoked.":
     "Certificado revocado.",
+  "Certificate slots full? Instead of pointing to the command line, ModStaller now lets you pick which certificate of another tool to revoke – and tries again right away.":
+    "¿Huecos de certificados llenos? En lugar de remitir a la línea de comandos, ModStaller ahora te deja elegir qué certificado de otra herramienta revocar, y lo vuelve a intentar al momento.",
   "Change icon":
     "Cambiar el icono",
   "Charging … {level} %":
@@ -266,6 +274,8 @@ const dict: Dict = {
     "Registro completo:",
   "Go to device":
     "Ir al dispositivo",
+  "Got it":
+    "Entendido",
   "Hello, {name}!":
     "¡Hola, {name}!",
   "How ModStaller behaves on this computer.":
@@ -532,6 +542,8 @@ const dict: Dict = {
     "Reutilizar un App ID sin usar…",
   "Revoke":
     "Revocar",
+  "Revoke and try again":
+    "Revocar y reintentar",
   "Revoke certificate?":
     "¿Revocar el certificado?",
   "Runs on":
@@ -630,6 +642,8 @@ const dict: Dict = {
     "Iniciando …",
   "Starts in the tray after you log in, without a window.":
     "Se inicia en la bandeja al iniciar sesión, sin ventana.",
+  "Still signs in after Apple’s latest change: since mid-October 2026, Apple refuses the anisette data that nearly every free sideloader relied on, and their sign-in failed with “This action cannot be completed at this time. (-80045)”. ModStaller now gets its anisette data from a server running a Mac ADI (by default mac-ani.jkcoxson.com), which Apple still accepts – your Apple ID and password never go there.":
+    "El inicio de sesión sigue funcionando tras el último cambio de Apple: desde mediados de octubre de 2026, Apple rechaza los datos anisette de los que dependían casi todos los sideloaders gratuitos, y su inicio de sesión fallaba con «This action cannot be completed at this time. (-80045)». ModStaller obtiene ahora sus datos anisette de un servidor con un ADI de Mac (por defecto mac-ani.jkcoxson.com), que Apple sigue aceptando; tu ID de Apple y tu contraseña nunca llegan allí.",
   "Still to do: {what}":
     "Queda por hacer: {what}",
   "Store":
@@ -678,6 +692,8 @@ const dict: Dict = {
     "El dispositivo conectado.",
   "The iPhone is plugged in but locked or not paired.":
     "El iPhone está conectado pero bloqueado o no emparejado.",
+  "The name is the computer or device that requested it.":
+    "El nombre es el del ordenador o dispositivo que lo solicitó.",
   "The next one frees up around {date}.":
     "El siguiente se libera hacia el {date}.",
   "The session is discarded. Installed apps keep running but can only be renewed after signing in again.":
@@ -752,6 +768,8 @@ const dict: Dict = {
     "VPN / red",
   "Version":
     "Versión",
+  "Version {version}":
+    "Versión {version}",
   "Version {version} for Linux":
     "Versión {version} para Linux",
   "Version {version} is available":
@@ -776,14 +794,20 @@ const dict: Dict = {
     "Lo que hace ModStaller, en directo. El historial completo está en el archivo de registro.",
   "What ModStaller has installed. Free accounts: at most 3 apps, valid for 7 days each.":
     "Lo que ModStaller ha instalado. Cuentas gratuitas: 3 apps como máximo, válidas 7 días cada una.",
+  "What's new in ModStaller {version}":
+    "Novedades de ModStaller {version}",
   "What's new in {version}":
     "Novedades de {version}",
   "What's new?":
     "¿Qué hay de nuevo?",
+  "When Apple ends the session, ModStaller takes you back to the sign-in form – with your Apple ID already filled in.":
+    "Cuando Apple cierra la sesión, ModStaller te lleva de vuelta al formulario de inicio de sesión, con tu ID de Apple ya rellenado.",
   "Where ModStaller is installed":
     "Dónde se instala ModStaller",
   "Whether an app depends on it cannot be determined without a connected iPhone.":
     "Sin un iPhone conectado no se puede saber si alguna app depende de él.",
+  "Which certificate may go?":
+    "¿Qué certificado se puede revocar?",
   "Wi-Fi":
     "Wi-Fi",
   "Wi-Fi is off. The iPhone is only reachable over the cable again.":
@@ -824,6 +848,8 @@ const dict: Dict = {
     "ha caducado",
   "hours before expiry. If your iPhone is not connected then, ModStaller asks for it and renews as soon as it is.":
     "horas antes de caducar. Si tu iPhone no está conectado en ese momento, ModStaller lo pide y renueva en cuanto lo esté.",
+  "iOS 27: IPAs whose extensions were removed no longer fail with “Failed to unarchive journal entry data”.":
+    "iOS 27: las IPA a las que se les quitaron extensiones ya no fallan con «Failed to unarchive journal entry data».",
   "in use":
     "en uso",
   "injected dylibs":

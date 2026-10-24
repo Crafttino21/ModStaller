@@ -6,6 +6,7 @@
   import PinDialog from "./components/PinDialog.svelte";
   import PairTvDialog from "./components/PairTvDialog.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
+  import WhatsNew from "./components/WhatsNew.svelte";
   import Toasts from "./components/Toasts.svelte";
   import BackendDown from "./components/BackendDown.svelte";
   import Overview from "./views/Overview.svelte";
@@ -69,6 +70,8 @@
 {#if ui.pin}<PinDialog />{/if}
 {#if ui.pairingOpen}<PairTvDialog />{/if}
 {#if ui.confirm}<ConfirmDialog />{/if}
+<!-- Wartet, bis kein anderer Dialog mehr offen ist - die gehen vor. -->
+{#if ui.whatsNew && !ui.task?.open && !ui.twoFactor && !ui.pin && !ui.pairingOpen && !ui.confirm}<WhatsNew />{/if}
 <Toasts />
 
 <style>

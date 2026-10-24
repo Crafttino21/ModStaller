@@ -4,7 +4,8 @@
 export const CANCELLED = -32800;
 
 export class RpcError extends Error {
-  constructor(public code: number, message: string) {
+  /** `data` vom Backend: welche Art Fehler (`kind`) und was dazugehoert. */
+  constructor(public code: number, message: string, public data?: Record<string, any>) {
     super(message);
   }
   get cancelled() {
@@ -60,7 +61,7 @@ window.backend.onMessage((msg) => {
   const p = pending.get(msg.id);
   if (!p) return;
   pending.delete(msg.id);
-  if (msg.error) p.reject(new RpcError(msg.error.code, msg.error.message));
+  if (msg.error) p.reject(new RpcError(msg.error.code, msg.error.message, msg.error.data));
   else p.resolve(msg.result);
 });
 

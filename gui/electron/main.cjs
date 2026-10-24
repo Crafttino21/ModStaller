@@ -53,7 +53,9 @@ const BUSY_METHODS = new Set([
 let win = null;
 let backend = null;
 let updater = null;
-let updateState = { state: "unsupported" };
+// Die laufende Version von Anfang an dabei - auch ohne Updater: die
+// Oberflaeche zeigt danach "Was ist neu".
+let updateState = { state: "unsupported", current: app.getVersion() };
 let logFile = null;
 
 /**

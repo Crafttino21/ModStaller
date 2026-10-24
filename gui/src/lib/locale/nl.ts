@@ -32,6 +32,8 @@ const dict: Dict = {
     "Alles",
   "All areas":
     "Alle onderdelen",
+  "All changes on GitHub":
+    "Alle wijzigingen op GitHub",
   "All sources":
     "Alle bronnen",
   "All {max} app slots of the free profile are taken – iOS will refuse a further app. Remove one first:":
@@ -72,6 +74,10 @@ const dict: Dict = {
     "Apple-apparaatdienst draait niet",
   "Apple device service missing":
     "Apple-apparaatdienst ontbreekt",
+  "Apple ended the session of {account}. Sign in again to keep installing and renewing.":
+    "Apple heeft de sessie van {account} beëindigd. Log opnieuw in om te blijven installeren en vernieuwen.",
+  "Apple issues no further development certificate: all slots in this account are taken by certificates from other tools, which ModStaller cannot use. Revoke one to make room – ModStaller then requests its own.":
+    "Apple geeft geen extra ontwikkelcertificaat meer uit: alle plekken in dit account zijn bezet door certificaten van andere tools, die ModStaller niet kan gebruiken. Trek er één in om ruimte te maken – ModStaller vraagt dan zijn eigen certificaat aan.",
   "Apple sent a six-digit code by text message to your trusted phone number.":
     "Apple heeft een code van zes cijfers per sms naar je vertrouwde telefoonnummer gestuurd.",
   "Apple sent a six-digit code to your iPhone.":
@@ -120,6 +126,8 @@ const dict: Dict = {
     "Kan niet worden behouden – de ID hoort niet bij de app.",
   "Certificate revoked.":
     "Certificaat ingetrokken.",
+  "Certificate slots full? Instead of pointing to the command line, ModStaller now lets you pick which certificate of another tool to revoke – and tries again right away.":
+    "Certificaatplekken vol? In plaats van naar de opdrachtregel te verwijzen, laat ModStaller je nu kiezen welk certificaat van een andere tool wordt ingetrokken – en probeert het meteen opnieuw.",
   "Change icon":
     "Pictogram wijzigen",
   "Charging … {level} %":
@@ -266,6 +274,8 @@ const dict: Dict = {
     "Volledig logboek:",
   "Go to device":
     "Naar het apparaat",
+  "Got it":
+    "Begrepen",
   "Hello, {name}!":
     "Hallo, {name}!",
   "How ModStaller behaves on this computer.":
@@ -532,6 +542,8 @@ const dict: Dict = {
     "Ongebruikte App-ID hergebruiken …",
   "Revoke":
     "Intrekken",
+  "Revoke and try again":
+    "Intrekken en opnieuw proberen",
   "Revoke certificate?":
     "Certificaat intrekken?",
   "Runs on":
@@ -630,6 +642,8 @@ const dict: Dict = {
     "Bezig met starten …",
   "Starts in the tray after you log in, without a window.":
     "Start na het inloggen in het systeemvak, zonder venster.",
+  "Still signs in after Apple’s latest change: since mid-October 2026, Apple refuses the anisette data that nearly every free sideloader relied on, and their sign-in failed with “This action cannot be completed at this time. (-80045)”. ModStaller now gets its anisette data from a server running a Mac ADI (by default mac-ani.jkcoxson.com), which Apple still accepts – your Apple ID and password never go there.":
+    "Inloggen werkt nog steeds na de laatste wijziging van Apple: sinds half oktober 2026 weigert Apple de anisette-gegevens waar bijna alle gratis sideloaders op vertrouwden, en hun inlogpoging mislukte met ‘This action cannot be completed at this time. (-80045)’. ModStaller haalt zijn anisette-gegevens nu van een server met een Mac-ADI (standaard mac-ani.jkcoxson.com), die Apple nog steeds accepteert – je Apple ID en wachtwoord komen daar nooit.",
   "Still to do: {what}":
     "Nog te doen: {what}",
   "Store":
@@ -678,6 +692,8 @@ const dict: Dict = {
     "Het verbonden apparaat.",
   "The iPhone is plugged in but locked or not paired.":
     "De iPhone is aangesloten maar vergrendeld of niet gekoppeld.",
+  "The name is the computer or device that requested it.":
+    "De naam is die van de computer of het apparaat dat het heeft aangevraagd.",
   "The next one frees up around {date}.":
     "De volgende komt rond {date} vrij.",
   "The session is discarded. Installed apps keep running but can only be renewed after signing in again.":
@@ -752,6 +768,8 @@ const dict: Dict = {
     "VPN / netwerk",
   "Version":
     "Versie",
+  "Version {version}":
+    "Versie {version}",
   "Version {version} for Linux":
     "Versie {version} voor Linux",
   "Version {version} is available":
@@ -776,14 +794,20 @@ const dict: Dict = {
     "Wat ModStaller doet – live. De volledige geschiedenis staat in het logbestand.",
   "What ModStaller has installed. Free accounts: at most 3 apps, valid for 7 days each.":
     "Wat ModStaller heeft geïnstalleerd. Gratis accounts: hoogstens 3 apps, elk 7 dagen geldig.",
+  "What's new in ModStaller {version}":
+    "Nieuw in ModStaller {version}",
   "What's new in {version}":
     "Nieuw in {version}",
   "What's new?":
     "Wat is er nieuw?",
+  "When Apple ends the session, ModStaller takes you back to the sign-in form – with your Apple ID already filled in.":
+    "Als Apple de sessie beëindigt, brengt ModStaller je terug naar het inlogformulier – met je Apple ID al ingevuld.",
   "Where ModStaller is installed":
     "Waar ModStaller wordt geïnstalleerd",
   "Whether an app depends on it cannot be determined without a connected iPhone.":
     "Zonder aangesloten iPhone valt niet vast te stellen of er een app van afhangt.",
+  "Which certificate may go?":
+    "Welk certificaat mag weg?",
   "Wi-Fi":
     "Wifi",
   "Wi-Fi is off. The iPhone is only reachable over the cable again.":
@@ -824,6 +848,8 @@ const dict: Dict = {
     "is verlopen",
   "hours before expiry. If your iPhone is not connected then, ModStaller asks for it and renews as soon as it is.":
     "uur voor het verlopen. Is je iPhone dan niet aangesloten, dan vraagt ModStaller erom en vernieuwt zodra hij er is.",
+  "iOS 27: IPAs whose extensions were removed no longer fail with “Failed to unarchive journal entry data”.":
+    "iOS 27: IPA’s waaruit extensies zijn verwijderd, mislukken niet meer met ‘Failed to unarchive journal entry data’.",
   "in use":
     "in gebruik",
   "injected dylibs":

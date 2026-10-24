@@ -1,0 +1,11 @@
+[
+  {
+    "version": "1.4.0",
+    "highlight": "Still signs in after Apple’s latest change: since mid-October 2026, Apple refuses the anisette data that nearly every free sideloader relied on, and their sign-in failed with “This action cannot be completed at this time. (-80045)”. ModStaller now gets its anisette data from a server running a Mac ADI (by default mac-ani.jkcoxson.com), which Apple still accepts – your Apple ID and password never go there.",
+    "items": [
+      "Certificate slots full? Instead of pointing to the command line, ModStaller now lets you pick which certificate of another tool to revoke – and tries again right away.",
+      "iOS 27: IPAs whose extensions were removed no longer fail with “Failed to unarchive journal entry data”.",
+      "When Apple ends the session, ModStaller takes you back to the sign-in form – with your Apple ID already filled in."
+    ]
+  }
+]

@@ -87,6 +87,18 @@ class AppleAPIError(AppleError):
                          or _("Apple error {code}", code=code))
 
 
+class CertificateConflict(AppleError):
+    """Apple issues no new development certificate: the account's slots are
+    taken by certificates whose private keys live with other tools.
+
+    ``certificates`` are those, so the interface can offer to revoke one and
+    try again instead of pointing at the command line."""
+
+    def __init__(self, message: str, certificates: list):
+        super().__init__(message)
+        self.certificates = certificates
+
+
 # --- Error codes we handle specifically -------------------------------------
 # The numbers are Apple's, the consequences ours.
 
@@ -95,6 +107,7 @@ INVALID_CSR = 3250
 APP_ID_QUOTA_EXCEEDED = 9120        # Free: 10 App IDs per week used up
 APP_ID_UNAVAILABLE = 9401           # identifier belongs to another account
 CERTIFICATE_NOT_FOUND = 7252        # DELETE on an already deleted certificate
+SESSION_EXPIRED = 1100              # "Your session has expired"
 
 #: Codes we wave through as success instead of raising an error.
 BENIGN_CODES = frozenset({DEVICE_ALREADY_REGISTERED, CERTIFICATE_NOT_FOUND})
@@ -116,6 +129,10 @@ REMEDIES: dict[int, str] = {
     INVALID_CSR: (
         "Apple rejected the certificate signing request. The key is "
         "regenerated and submitted once more."
+    ),
+    SESSION_EXPIRED: (
+        "Sign in again - on the Apple account page, or with "
+        "modstaller login."
     ),
 }
 

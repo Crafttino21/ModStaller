@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { CircleCheck, CircleX, CircleDashed, RefreshCw, LoaderCircle } from "@lucide/svelte";
+  import { CircleCheck, CircleX, CircleDashed, RefreshCw, LoaderCircle, Sparkles } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
-  import { errorText, ui } from "../lib/state.svelte";
+  import { errorText, showWhatsNew, ui } from "../lib/state.svelte";
   import { call } from "../lib/rpc";
   import { t } from "../lib/i18n.svelte";
+  import { releasesUpTo } from "../lib/whatsnew";
   import type { Check } from "../lib/types";
 
   let checks = $state<Check[] | null>(null);
@@ -32,6 +33,7 @@
 
   const problems = $derived(checks?.filter((c) => !c.ok && c.kind === "problem").length ?? 0);
   const todos = $derived(checks?.filter((c) => !c.ok && c.kind === "todo").length ?? 0);
+  const hasNews = $derived(releasesUpTo(ui.update.current ?? "").length > 0);
 </script>
 
 <PageHeader title={t("System check")} subtitle={t("Is everything here that ModStaller needs?")}>
@@ -82,6 +84,9 @@
       {:else}{t("Version {version} is available – see bottom left.", { version: ui.update.version ?? "" })}{/if}
     </div>
   </div>
+  {#if hasNews}
+    <button class="btn sm ghost" onclick={showWhatsNew}><Sparkles size={14} /> {t("What's new?")}</button>
+  {/if}
   {#if ui.update.state !== "unsupported"}
     <button class="btn sm" disabled={ui.update.state === "checking" || ui.update.state === "downloading"}
             onclick={() => window.updates.check()}>

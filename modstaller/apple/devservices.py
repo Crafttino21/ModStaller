@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..errors import (
-    APP_ID_QUOTA_EXCEEDED, APP_ID_UNAVAILABLE, BENIGN_CODES,
+    APP_ID_QUOTA_EXCEEDED, APP_ID_UNAVAILABLE, BENIGN_CODES, SESSION_EXPIRED,
     AppleAPIError, AppleError, remedy_for,
 )
 from ..i18n import _
@@ -192,6 +192,7 @@ class DeveloperServices:
         resp = self._http.post(url, data=plistlib.dumps(body),
                                headers=headers, timeout=45)
         if resp.status_code in (401, 403):
+            self._session.mark_expired()
             raise AppleError(_(
                 "Apple rejected the sign-in (HTTP {status}). Please sign in "
                 "again: modstaller login", status=resp.status_code))
@@ -202,7 +203,15 @@ class DeveloperServices:
             raise AppleError(
                 f"Unreadable response from {action}: {resp.content[:200]!r}"
             ) from exc
-        return self._check(data, action)
+        try:
+            return self._check(data, action)
+        except AppleAPIError as exc:
+            # Otherwise the status keeps calling the account signed in and
+            # every later call fails the same way - with no way back to the
+            # sign-in form.
+            if exc.code == SESSION_EXPIRED:
+                self._session.mark_expired()
+            raise
 
     @staticmethod
     def _check(data: dict, action: str) -> dict:

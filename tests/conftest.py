@@ -24,6 +24,19 @@ def _private_accounts(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _private_device_identity(tmp_path, monkeypatch):
+    """The Apple device identity (anisette). A test that reaches a real
+    provider must never rewrite - or discard - the one Apple trusts."""
+    from modstaller.apple import anisette
+    folder = tmp_path / "secrets" / "anisette"
+    monkeypatch.setattr(anisette, "ANISETTE_DIR", folder)
+    monkeypatch.setattr(anisette, "PROVISIONING_FILE", folder / "provisioning.bin")
+    monkeypatch.setattr(anisette, "LIBS_FILE", folder / "libs.bin")
+    monkeypatch.setattr(anisette, "DEVICE_FILE", folder / "device.json")
+    monkeypatch.setattr(anisette, "_shared_ani", None)
+
+
+@pytest.fixture(autouse=True)
 def _private_devices(tmp_path, monkeypatch):
     """Known devices and their pair records - and no background search."""
     monkeypatch.setattr(registry, "DEVICES_FILE", tmp_path / "devices.json")

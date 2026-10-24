@@ -104,6 +104,7 @@ async def install(
     settings: Settings | None = None,
     strip_extensions: bool | None = None,
     revoke_conflicting_cert: bool = False,
+    revoke_cert: str = "",
     bundle_id: str | None = None,
     renewing: "store.InstallRecord | None" = None,
     display_name: str | None = None,
@@ -133,6 +134,10 @@ async def install(
     or ``strip_extensions`` as before); ``spare_app_id`` puts the app under
     an existing, unused App ID. A ``bundle_id`` given without ``renewing``
     is the editor's own choice.
+
+    ``revoke_cert`` (serial or certificate ID): the certificate the user
+    picked to make room after a :class:`~.errors.CertificateConflict` -
+    revoked only if a new certificate really has to be requested.
     """
     settings = settings or Settings.load()
 
@@ -189,7 +194,8 @@ async def install(
         # 5. Certificate.
         on_step("\n" + _("Obtaining the certificate …"))
         p12, password = ensure_certificate(
-            api, team, dev.name, revoke_conflicting=revoke_conflicting_cert)
+            api, team, dev.name, revoke_conflicting=revoke_conflicting_cert,
+            revoke=revoke_cert, say=on_step)
 
         # 6. Which extensions stay. On free accounts each costs an App ID
         #    from a quota of ten per week - so by default none do; the app
@@ -255,16 +261,25 @@ async def install(
                                     existing=existing)
             ext_profiles.append(fetch_profile(api, team, ext_app))
 
-        # 8. Sign. Only some extensions stay: unpack without the others and
-        #    let zsign sign the folder.
+        # 8. Sign. Only some extensions stay - or the FairPlay manifest
+        #    names bundles that will not be there: unpack without the
+        #    extensions that go, clear the manifest and let zsign sign the
+        #    folder.
+        from .signing.prepare import stale_sinf_paths, unpack_without
         out = OUT_DIR / f"{new_id}.ipa"
         on_step("\nSigning …")
         started = time.time()
         source = info.path
         unpacked: Path | None = None
-        if keep and drop:
-            from .signing.prepare import unpack_without
-            unpacked = unpack_without(info.path, info.app_dir, drop, WORK_DIR)
+        removed = drop + (["Watch"] if info.has_watch else [])
+        stale = stale_sinf_paths(info.path, info.app_dir, removed)
+        if stale:
+            on_step("  " + _("Clearing {count} FairPlay reference(s) to bundles that "
+                             "are not in the app - iOS would refuse the install "
+                             "otherwise.", count=len(stale)))
+        if (keep and drop) or stale:
+            unpacked = unpack_without(info.path, info.app_dir, removed, WORK_DIR,
+                                      stale_sinf=stale)
             source = unpacked
         try:
             sign(SignRequest(
@@ -332,6 +347,7 @@ async def refresh(
     threshold_days: float | None = None,
     only: str | None = None,
     store_updates: bool = False,
+    revoke_cert: str = "",
     progress: Callable[[int], None] | None = None,
     on_step: Callable[[str], None] = _say,
 ) -> list[InstallOutcome]:
@@ -342,6 +358,9 @@ async def refresh(
     Those can differ (a recycled App ID, a newer IPA with a new ID), and a
     different ID is a second app to iOS: installed next to the old one, with
     none of its data.
+
+    ``revoke_cert``: as for :func:`install`. Only the first app that needs a
+    new certificate revokes it; the ones after it find that one locally.
 
     ``store_updates``: an app from the store is brought to the newest version
     its source offers on the way - same bundle ID, so the data stays. If the
@@ -393,7 +412,7 @@ async def refresh(
             icon=(Path(rec.icon_path) if rec.icon_path
                   and Path(rec.icon_path).is_file() else None),
             keep_extensions=rec.kept_extensions,
-            store_origin=origin,
+            store_origin=origin, revoke_cert=revoke_cert,
             progress=progress, on_step=on_step,
         )
         if origin and origin["version"] != rec.store_version:

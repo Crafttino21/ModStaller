@@ -23,8 +23,11 @@ const UPDATE_IDLE_SECONDS = 10 * 60;
 const UPDATE_REFRESH_MARGIN = 2 * HOUR;
 
 /** Fehler, die ein Mensch beheben muss - gleich melden, nicht erst beim
- *  zweiten Mal. */
-const NEEDS_PERSON = new Set(["NotPaired", "DeveloperModeDisabled", "SigningError", "UsbServiceUnavailable"]);
+ *  zweiten Mal. Ein Zertifikatskonflikt etwa: welches fremde Zertifikat
+ *  weichen darf, entscheidet der Nutzer in der Oberflaeche. */
+const NEEDS_PERSON = new Set([
+  "NotPaired", "DeveloperModeDisabled", "SigningError", "UsbServiceUnavailable", "CertificateConflict",
+]);
 /** Die Anmeldung ist abgelaufen oder verlangt 2FA. */
 const NEEDS_SIGN_IN = new Set(["InteractionRequired", "AppleError"]);
 
