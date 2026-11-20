@@ -609,7 +609,27 @@ def _local_user(state: dict) -> str:
 
 def _connect_websocket(url: str, timeout: float):
     from websockets.sync.client import connect
-    return connect(url, open_timeout=timeout, close_timeout=5)
+    tls = {"ssl": _tls_context()} if url.startswith("wss://") else {}
+    return connect(url, open_timeout=timeout, close_timeout=5, **tls)
+
+
+def _tls_context():
+    """The system's CAs plus certifi's - what the HTTP half (requests)
+    trusts too.
+
+    The Linux build carries the OpenSSL of the Ubuntu it is built on, which
+    looks for CAs under /usr/lib/ssl. Arch and CachyOS have nothing there:
+    the default context trusted no one, and the provisioning WebSocket failed
+    with CERTIFICATE_VERIFY_FAILED while the HTTP requests went through
+    (issue #6)."""
+    import ssl
+    ctx = ssl.create_default_context()
+    try:
+        import certifi
+    except ImportError:      # requests without certifi (distro-patched)
+        return ctx
+    ctx.load_verify_locations(certifi.where())
+    return ctx
 
 
 def build(provider: str = "remote",

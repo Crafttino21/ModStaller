@@ -146,6 +146,29 @@ def test_apple_hears_the_servers_device_not_ours(remote):
         assert headers["X-Mme-Device-Id"]
 
 
+def test_the_websocket_trusts_certifi_without_system_cas(monkeypatch):
+    """Issue #6: the Linux build's OpenSSL (Ubuntu's) finds no CAs on Arch
+    or CachyOS. The provisioning WebSocket must still verify the server -
+    against certifi's roots, as the HTTP requests do."""
+    import ssl
+
+    from websockets.sync import client
+
+    monkeypatch.setattr(ssl.SSLContext, "load_default_certs",
+                        lambda self, purpose=None: None)
+    seen = []
+    monkeypatch.setattr(client, "connect",
+                        lambda url, **kwargs: seen.append(kwargs) or "ws")
+
+    assert anisette._connect_websocket("wss://ani.example/v3/x", 5) == "ws"
+    ctx = seen[0]["ssl"]
+    assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname
+    assert ctx.get_ca_certs()
+
+    anisette._connect_websocket("ws://ani.example/v3/x", 5)
+    assert "ssl" not in seen[1]       # websockets refuses ssl= for ws://
+
+
 def test_a_second_run_does_not_provision_again(remote):
     first = remote.headers()
     again = anisette.RemoteV3Provider(SERVER, connect=remote._connect)
