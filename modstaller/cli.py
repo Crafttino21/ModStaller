@@ -123,7 +123,7 @@ def _usb_setup(args) -> int:
 def _anisette():
     from .apple import anisette as anisette_mod
     s = config.Settings.load()
-    return anisette_mod.build(s.anisette_provider, s.anisette_server)
+    return anisette_mod.from_settings(s)
 
 
 def _chosen_session(args):

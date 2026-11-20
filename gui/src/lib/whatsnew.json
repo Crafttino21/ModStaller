@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.1",
+    "highlight": "Signs in again after Apple’s November change: the anisette servers still introduce themselves as a Mac with macOS 10.12, which Apple no longer accepts properly. Depending on the account, sign-in failed with -23782, ended with “This action cannot be completed at this time”, or Apple asked for a new code after every two-factor confirmation. ModStaller now introduces itself as a current Mac – after the update, Apple asks for a two-factor code one more time.",
+    "items": [
+      "Linux: signing in no longer fails with “CERTIFICATE_VERIFY_FAILED” on Arch, CachyOS and other distributions."
+    ]
+  },
+  {
     "version": "1.4.0",
     "highlight": "Still signs in after Apple’s latest change: since mid-October 2026, Apple refuses the anisette data that nearly every free sideloader relied on, and their sign-in failed with “This action cannot be completed at this time. (-80045)”. ModStaller now gets its anisette data from a server running a Mac ADI (by default mac-ani.jkcoxson.com), which Apple still accepts – your Apple ID and password never go there.",
     "items": [

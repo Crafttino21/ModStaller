@@ -132,8 +132,7 @@ async def run_checks() -> list[Check]:
     try:
         from .apple import anisette as anisette_mod
         from .apple import clientinfo
-        ani = anisette_mod.build(settings.anisette_provider,
-                                 settings.anisette_server)
+        ani = anisette_mod.from_settings(settings)
         ci = ani.client_info()
         host = settings.anisette_server.split("//", 1)[-1].split("/", 1)[0]
         if not clientinfo.is_safe(ci):

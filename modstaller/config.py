@@ -151,6 +151,12 @@ class Settings:
     #: ``apple/anisette.py``. Must match ``anisette.DEFAULT_SERVER``.
     anisette_provider: str = "remote"
     anisette_server: str = "https://mac-ani.jkcoxson.com"
+    #: What to tell Apple instead of what the anisette server names (empty:
+    #: the server's, or a current Mac if its own is outdated - see
+    #: ``apple/clientinfo.py``). Only for when Apple changes the rules
+    #: before an update is out; the two have to fit together.
+    anisette_client_info: str = ""
+    anisette_user_agent: str = ""
     default_udid: str | None = None
     default_team_id: str | None = None
     #: Free accounts: profiles expire after 7 days; renew from this point on.

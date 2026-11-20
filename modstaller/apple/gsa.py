@@ -29,6 +29,7 @@ import hashlib
 import hmac
 import json
 import plistlib
+import re
 from base64 import b64encode
 from dataclasses import dataclass
 from typing import Callable
@@ -200,7 +201,14 @@ _PERSONAL = frozenset({
     "fn", "ln", "primaryEmail", "alias", "appleId", "phoneNumber",
     "maskedPhoneNumber", "numberWithDialCode", "obfuscatedNumber",
     "lastTwoDigits", "custodianUuid",
+    # Since November 2026 (macOS 27 identity): phone numbers in h2ps/lh,
+    # and the date of birth.
+    "h2ps", "pn", "lh", "birthDD", "birthMM", "yob",
 })
+
+#: The safety net for fields Apple adds later: a phone number (a run of
+#: seven digits) or an e-mail address stays hidden under any name.
+_LOOKS_PERSONAL = re.compile(r"\d{7}|@")
 
 
 def _shown(key, value) -> str:
@@ -209,7 +217,8 @@ def _shown(key, value) -> str:
     Recursive: the token for ``com.apple.gs.appleid.auth`` sits two levels
     down, inside ``t``.
     """
-    if key in _NEVER_PRINT or key in _PERSONAL:
+    if (key in _NEVER_PRINT or key in _PERSONAL
+            or (isinstance(value, str) and _LOOKS_PERSONAL.search(value))):
         return (f"<{len(value)} bytes>" if isinstance(value, (bytes, bytearray))
                 else "<hidden>")
     if isinstance(value, dict):
@@ -281,6 +290,10 @@ class GSAClient:
             "svct": "iCloud",
         }
         cpd.update(self._ani.headers())
+        if self._ani_is_remote():
+            # As isideload: the routing info goes with the two-factor
+            # requests only, not into the handshake.
+            cpd.pop("X-Apple-I-MD-RINFO", None)
         return cpd
 
     def _user_agent(self) -> str:
@@ -635,10 +648,13 @@ class GSAClient:
     # known to get through to a signed-in session.
 
     def _sms_headers(self, spd: dict) -> dict[str, str]:
+        # The user agent has to fit the client info, as everywhere else: an
+        # anisette server's own, as isideload sends it here too. A fixed
+        # macOS 14 one next to a 10.12 client info got HTTP 403.
         return {**self._two_factor_headers(spd),
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "User-Agent": http.USER_AGENT_AKD,
+                "User-Agent": self._user_agent(),
                 **self._web_session}
 
     def _web_request(self, spd: dict, method: str, url: str, label: str,

@@ -355,11 +355,6 @@ _START_PROVISIONING = ("https://gsa.apple.com/grandslam/MidService/"
                        "startMachineProvisioning")
 _FINISH_PROVISIONING = ("https://gsa.apple.com/grandslam/MidService/"
                         "finishMachineProvisioning")
-#: The URL bag depends on the client info it is asked with; for this one
-#: Apple hands out the right one (isideload does the same).
-_URL_BAG_CLIENT_INFO = ("<Mac15,7> <macOS;27.0;26A5378j> "
-                        "<com.apple.AuthKit/1 (com.apple.akd/1.0)>")
-
 #: One provisioning at a time - two at once would each write a state.
 _REMOTE_LOCK = threading.RLock()
 
@@ -378,13 +373,18 @@ class RemoteV3Provider:
     name = "remote"
 
     def __init__(self, base_url: str, timeout: float = 20.0,
-                 connect: Callable | None = None) -> None:
+                 connect: Callable | None = None, *,
+                 client_info: str = "", user_agent: str = "") -> None:
         import requests
 
         self._base = base_url.rstrip("/")
         self._timeout = timeout
         self._session = requests.Session()
         self._info: dict[str, str] | None = None
+        #: config.toml's anisette_client_info / anisette_user_agent - for
+        #: when Apple moves the goalposts again before an update is out.
+        self._override = {"client_info": client_info.strip(),
+                          "user_agent": user_agent.strip()}
         #: Opens the provisioning WebSocket - replaceable for tests.
         self._connect = connect or _connect_websocket
 
@@ -405,10 +405,23 @@ class RemoteV3Provider:
                     "Anisette server {url} not reachable: {error}",
                     url=self._base, error=exc)) from exc
             from .http import USER_AGENT_AKD
-            self._info = {
+            info = {
                 "client_info": clientinfo.sanitize(raw),
                 "user_agent": str(data.get("user_agent") or USER_AGENT_AKD),
             }
+            if clientinfo.outdated_mac(info["client_info"]):
+                # The servers all still report macOS 10.12.6, which Apple
+                # no longer confirms properly (issues #3, #7) - a current
+                # Mac in its place. User agent included: the two have to
+                # fit together, or the edge answers 503 (AltStore #1851).
+                info = {"client_info": clientinfo.CURRENT_MAC,
+                        "user_agent": clientinfo.CURRENT_MAC_USER_AGENT}
+            if self._override["client_info"]:
+                info["client_info"] = clientinfo.sanitize(
+                    self._override["client_info"])
+            if self._override["user_agent"]:
+                info["user_agent"] = self._override["user_agent"]
+            self._info = info
         return self._info
 
     def client_info(self) -> str:
@@ -433,14 +446,19 @@ class RemoteV3Provider:
                     "Anisette server {url} does not accept its own "
                     "provisioning. Try another anisette server.",
                     url=self._base))
-        # Only what isideload sends - the rest of the usual set is not needed
-        # for these servers.
-        return {
+        # What isideload sends - the rest of the usual set is not needed for
+        # these servers. The routing info only for the two-factor requests
+        # (GSA keeps it out of the handshake): without it Apple accepts the
+        # code but does not trust the device - the next handshake asks again.
+        headers = {
             "X-Apple-I-MD": data["X-Apple-I-MD"],
             "X-Apple-I-MD-M": data["X-Apple-I-MD-M"],
             "X-Mme-Device-Id": _device_id(state),
             "X-MMe-Client-Info": self.client_info(),
         }
+        if data.get("X-Apple-I-MD-RINFO"):
+            headers["X-Apple-I-MD-RINFO"] = str(data["X-Apple-I-MD-RINFO"])
+        return headers
 
     def _get_headers(self, state: dict) -> dict | None:
         """The attestation - ``None`` if the server says -45061."""
@@ -476,7 +494,12 @@ class RemoteV3Provider:
     def _state(self) -> dict | None:
         state = self._all_states().get(self._base)
         if (isinstance(state, dict) and state.get("identifier")
-                and state.get("adi_pb")):
+                and state.get("adi_pb")
+                # Provisioned as another device (up to 1.4.0: as the
+                # server's macOS 10.12.6) - Apple would hear two different
+                # ones. It has to change at the provisioning, not only in
+                # the sign-in (AltStore #1864).
+                and state.get("client_info") == self.client_info()):
             return state
         return None
 
@@ -531,7 +554,8 @@ class RemoteV3Provider:
                                         "tk": resp["tk"]}))
                 elif result == "ProvisioningSuccess":
                     state = {"identifier": identifier,
-                             "adi_pb": message["adi_pb"]}
+                             "adi_pb": message["adi_pb"],
+                             "client_info": headers["X-MMe-Client-Info"]}
                     self._save_state(state)
                     return state
                 else:
@@ -558,11 +582,14 @@ class RemoteV3Provider:
         import plistlib
 
         from . import http
+        # The URL bag depends on the client info it is asked with - the one
+        # the provisioning goes out with (isideload 326e562).
+        ci = self.client_info()
         try:
             resp = http.gsa_request(
-                http.gsa_session(), "GET", _URL_BAG,
-                client_info=_URL_BAG_CLIENT_INFO,
-                headers={"X-MMe-Client-Info": _URL_BAG_CLIENT_INFO})
+                http.gsa_session(), "GET", _URL_BAG, client_info=ci,
+                headers={"X-MMe-Client-Info": ci,
+                         "User-Agent": self.user_agent()})
             urls = plistlib.loads(resp.content)["urls"]
             return urls["midStartProvisioning"], urls["midFinishProvisioning"]
         except Exception:
@@ -632,16 +659,27 @@ def _tls_context():
     return ctx
 
 
-def build(provider: str = "remote",
-          server: str = DEFAULT_SERVER) -> AnisetteProvider:
+def build(provider: str = "remote", server: str = DEFAULT_SERVER, *,
+          client_info: str = "", user_agent: str = "") -> AnisetteProvider:
     """Builds the configured provider. 'local' does not silently fall back to
-    'remote' - whoever chose local doesn't want to send data anywhere."""
+    'remote' - whoever chose local doesn't want to send data anywhere.
+
+    ``client_info`` / ``user_agent``: what to tell Apple instead of what the
+    anisette server names (remote only)."""
     if provider == "local":
         return LocalProvider()
     if provider == "remote":
         if not server:
             raise AppleError(_("anisette_provider = ‘remote’, but no "
                                "anisette_server is configured."))
-        return RemoteV3Provider(server)
+        return RemoteV3Provider(server, client_info=client_info,
+                                user_agent=user_agent)
     raise AppleError(_("Unknown anisette_provider: {provider!r}",
                        provider=provider))
+
+
+def from_settings(settings) -> AnisetteProvider:
+    """The provider config.toml asks for."""
+    return build(settings.anisette_provider, settings.anisette_server,
+                 client_info=settings.anisette_client_info,
+                 user_agent=settings.anisette_user_agent)

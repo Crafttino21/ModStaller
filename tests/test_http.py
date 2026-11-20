@@ -117,6 +117,34 @@ def test_sanitize_keeps_hardware_but_replaces_identifier():
     assert "MacBookPro13,2" in out, "hardware identity must be preserved"
 
 
+def test_sanitize_spells_the_os_the_way_the_edge_lets_through():
+    """<macOS;…> gets HTTP 503 at the edge since November 2026
+    (AltStore #1875, iloader 2.4.1) - Apple's own frameworks say Mac OS X."""
+    out = clientinfo.sanitize("<Mac17,3> <macOS;27.2;26B123> "
+                              "<com.apple.AuthKit/1 (com.apple.akd/1.0)>")
+    assert out == ("<Mac17,3> <Mac OS X;27.2;26B123> "
+                   "<com.apple.AuthKit/1 (com.apple.akd/1.0)>")
+    assert "<macOS;" not in clientinfo.sanitize(XCODE_CI)
+    assert "<macOS;" not in clientinfo.sanitize(None)
+    assert "<macOS;" not in clientinfo.CURRENT_MAC
+
+
+@pytest.mark.parametrize("info, outdated", [
+    ("<MacBookPro13,3> <Mac OS X;10.12.6;16G29> <com.apple.AuthKit/1 "
+     "(com.apple.akd/1.0)>", True),
+    ("<MacBookPro13,2> <macOS;13.0;22A380> <x>", True),
+    ("<MacBookPro13,2> <Mac OS X;13.1;22C65> <x>", False),
+    (clientinfo.CURRENT_MAC, False),
+    # Not a Mac - a Windows ADI keeps its own.
+    ("<PC> <Windows;6.2(0,0);9200> <com.apple.AuthKit/1 "
+     "(com.apple.iCloud/7.21)>", False),
+    ("<Pixel 7> <Android;14;UQ1A.240205.002> <x>", False),
+    ("garbage", False),
+])
+def test_an_outdated_mac_is_recognised(info, outdated):
+    assert clientinfo.outdated_mac(info) is outdated
+
+
 def test_503_with_small_body_is_diagnosed_not_retried():
     """Apple's edge rejection looks like an outage. It isn't one."""
     page = (b"<html><head><title>503</title></head><body>"
@@ -176,6 +204,23 @@ def test_describe_never_leaks_secrets():
     assert "trustedDeviceSecondaryAuth" in out, "diagnostics must stay useful"
     assert "harmless" in out
     assert "<hidden>" in out or "bytes>" in out
+
+
+def test_describe_hides_personal_data_apple_added_later():
+    """The spd of a macOS 27 sign-in carries the trusted phone number in
+    h2ps and lh, and the date of birth - debug output ends up in public
+    issues. Fields nobody knows yet are caught by what they look like."""
+    out = _describe({
+        "h2ps": [{"pid": "1", "pn": "4930123456789"}],
+        "lh": ["4930123456789"],
+        "birthDD": 1, "birthMM": 1, "yob": 1990,
+        "someNewField": "+49 30 1234567", "otherNewField": "a@example.com",
+        "ptxid": "9bffd38a-4a13-41b9-8742-e40e2ffb7059", "ageOfMajority": 16,
+    }, "spd")
+    assert "4930123456789" not in out and "1234567" not in out
+    assert "1990" not in out and "example.com" not in out
+    assert "9bffd38a-4a13-41b9-8742-e40e2ffb7059" in out
+    assert "ageOfMajority: 16" in out
 
 
 # -- The first name for the greeting -----------------------------------------

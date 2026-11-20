@@ -615,6 +615,25 @@ default. `modstaller doctor` flags the local emulation and the old servers.
     local emulation, macOS client info  ->  ec=-80045, hsc=500
     mac-ani.jkcoxson.com                ->  gets through to the account check
 
+**The servers' Mac is too old (November 2026).** Every public anisette
+server introduces itself as a MacBook Pro with macOS 10.12.6. Apple answers
+some accounts with `-23782` ("A Mac with macOS version 10.13 or later is
+required"), and confirms the others by text message instead of on a trusted
+device - the code is accepted, and the next handshake asks for one again
+(au=`secondaryAuth`). Since 1.4.1 ModStaller introduces itself as a current
+Mac instead, from the provisioning on, with the user agent that belongs to
+it. The OS has to be spelled `Mac OS X`, as Apple's own frameworks do:
+
+    <Mac OS X;10.12.6;16G29>  ->  gets through, but see above
+    <macOS;27.2;26B123>       ->  HTTP 503, 190 B  (rejected at the edge)
+    <Mac OS X;27.2;26B123>    ->  gets through
+
+Should Apple move the goalposts again before an update is out, `config.toml`
+can override both (they have to fit together):
+
+    anisette_client_info = "<Mac17,3> <Mac OS X;27.2;26B123> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
+    anisette_user_agent = "akd/1.0 CFNetwork/3896.200.61 Darwin/27.2.0"
+
 **Apple's private CA.** `gsa.apple.com` is signed by "Apple Server
 Authentication CA", not a public CA, so the system trust store fails every
 connection. The chain lives in `modstaller/apple/certs/apple-gsa-ca.pem` -

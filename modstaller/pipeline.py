@@ -178,8 +178,7 @@ async def install(
         session = Session.load(account)
         if session is None:
             raise AppleError("Not signed in. First run: modstaller login")
-        ani = anisette_mod.build(settings.anisette_provider,
-                                 settings.anisette_server)
+        ani = anisette_mod.from_settings(settings)
         api = DeveloperServices(session, ani, platform=dev.platform)
 
         teams = api.list_teams()

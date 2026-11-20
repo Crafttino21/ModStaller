@@ -1028,7 +1028,7 @@ async def _jit(server: Server, job: Job, params: dict):
 def _anisette():
     from .apple import anisette as anisette_mod
     s = config.Settings.load()
-    return anisette_mod.build(s.anisette_provider, s.anisette_server)
+    return anisette_mod.from_settings(s)
 
 
 def _account_dict(session, active: str | None) -> dict:

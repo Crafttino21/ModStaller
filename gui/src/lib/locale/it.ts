@@ -326,6 +326,8 @@ const dict: Dict = {
     "Ometti tutte le estensioni",
   "Leaving the beta channel keeps the installed beta until a newer stable version is out.":
     "Uscendo dal canale beta, la beta installata resta finché non esce una versione stabile più recente.",
+  "Linux: signing in no longer fails with “CERTIFICATE_VERIFY_FAILED” on Arch, CachyOS and other distributions.":
+    "Linux: l’accesso non fallisce più con «CERTIFICATE_VERIFY_FAILED» su Arch, CachyOS e altre distribuzioni.",
   "List apps":
     "Elenca app",
   "Live":
@@ -608,6 +610,8 @@ const dict: Dict = {
     "Uscita effettuata.",
   "Signed-in accounts":
     "Account collegati",
+  "Signs in again after Apple’s November change: the anisette servers still introduce themselves as a Mac with macOS 10.12, which Apple no longer accepts properly. Depending on the account, sign-in failed with -23782, ended with “This action cannot be completed at this time”, or Apple asked for a new code after every two-factor confirmation. ModStaller now introduces itself as a current Mac – after the update, Apple asks for a two-factor code one more time.":
+    "L’accesso funziona di nuovo dopo la modifica di Apple di novembre: i server anisette si presentano ancora come un Mac con macOS 10.12, che Apple non accetta più correttamente. A seconda dell’account, l’accesso falliva con -23782, terminava con «This action cannot be completed at this time» oppure Apple chiedeva un nuovo codice dopo ogni conferma a due fattori. Ora ModStaller si presenta come un Mac recente: dopo l’aggiornamento Apple chiederà ancora una volta un codice a due fattori.",
   "Siri & Shortcuts":
     "Siri e Comandi rapidi",
   "Size":

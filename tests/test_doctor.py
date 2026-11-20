@@ -23,7 +23,7 @@ class FakeAnisette:
 @pytest.fixture
 def no_anisette(monkeypatch):
     monkeypatch.setattr("modstaller.apple.anisette.build",
-                        lambda provider, server="": FakeAnisette())
+                        lambda provider, server="", **kw: FakeAnisette())
 
 
 @pytest.fixture
@@ -79,7 +79,7 @@ async def test_the_anisette_check_names_the_configured_source(
 async def test_a_broken_anisette_source_is_a_check_and_not_an_exception(
         monkeypatch, no_devices):
     """On Windows LocalProvider raises - that must stay a single line."""
-    def boom(provider, server=""):
+    def boom(provider, server="", **kw):
         raise RuntimeError("emulation does not run here")
     monkeypatch.setattr("modstaller.apple.anisette.build", boom)
 
