@@ -183,8 +183,9 @@ def test_config_toml_has_the_last_word(remote):
 def test_a_device_provisioned_as_another_mac_is_provisioned_anew(remote):
     """1.4.0 provisioned as the server's 10.12.6 Mac and kept no client
     info - Apple has to meet the current Mac from the provisioning on."""
-    anisette.REMOTE_STATE_FILE.write_text(json.dumps(
-        {SERVER: {"identifier": "AAAAAAAAAAAAAAAAAAAAAA==", "adi_pb": "b2xk"}}))
+    anisette.write_secret(anisette.REMOTE_STATE_FILE, json.dumps(
+        {SERVER: {"identifier": "AAAAAAAAAAAAAAAAAAAAAA==",
+                  "adi_pb": "b2xk"}}).encode())
     remote.headers()
     assert len(remote.sockets) == 1
     state = json.loads(anisette.REMOTE_STATE_FILE.read_text())[SERVER]
